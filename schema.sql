@@ -13,10 +13,35 @@
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------
--- portfolios: una fila por experimento. El presupuesto vive aqui.
+-- profiles: un experimento. Es el padre de todo lo demas.
+--
+-- Existe separada de `portfolios` a proposito, aunque la relacion sea 1:1:
+-- `profiles` es la identidad del experimento (nombre, estado, parametros) y
+-- `portfolios` es la entidad contable (presupuesto, modo). Mantenerlas aparte
+-- deja intacto todo el codigo del ciclo, que trabaja con portfolio_id.
+--
+-- Borrar un perfil arrastra su cartera, y con ella ciclos, decisiones, ordenes,
+-- posiciones y curva de capital: todas cuelgan de portfolios con cascade.
+-- ---------------------------------------------------------------------------
+create table if not exists profiles (
+    id          text primary key,
+    name        text not null unique,
+    description text,
+    status      text not null default 'draft'
+                check (status in ('draft', 'active', 'paused', 'archived')),
+    created_at  text not null,
+    updated_at  text not null,
+    archived_at text
+);
+
+create index if not exists profiles_status_idx on profiles (status);
+
+-- ---------------------------------------------------------------------------
+-- portfolios: la contabilidad de un experimento. El presupuesto vive aqui.
 -- ---------------------------------------------------------------------------
 create table if not exists portfolios (
     id             text primary key,
+    profile_id     text references profiles (id) on delete cascade,
     name           text not null unique,
     mode           text not null check (mode in ('paper', 'live')),
     initial_budget real not null check (initial_budget > 0),
@@ -24,6 +49,11 @@ create table if not exists portfolios (
     notes          text,
     created_at     text not null
 );
+
+-- Una cartera por perfil. Es un indice y no una restriccion de columna para que
+-- las carteras heredadas, sin perfil todavia, no choquen entre si por NULL.
+create unique index if not exists portfolios_one_per_profile
+    on portfolios (profile_id) where profile_id is not null;
 
 -- ---------------------------------------------------------------------------
 -- cycles: una fila por ejecucion del agente. Es la unidad de auditoria.
@@ -42,6 +72,10 @@ create table if not exists cycles (
     market_open          integer,
     symbols_scanned_json text,
     llm_model            text,
+    -- Copia de los parametros con los que corrio este ciclo. Sin esto, un
+    -- experimento cuyos ajustes se editan a mitad deja de ser interpretable:
+    -- no se sabria que configuracion produjo cada decision.
+    settings_json        text,
     error                text
 );
 
@@ -294,6 +328,158 @@ create table if not exists sim_fills (
 );
 
 create index if not exists sim_fills_account_idx on sim_fills (account_id, filled_at desc);
+
+-- ===========================================================================
+-- Parametros del agente, por experimento
+--
+-- Sustituyen a las variables de entorno: cada perfil lleva los suyos y son
+-- editables en caliente desde la interfaz. `src/config.py` queda solo para
+-- infraestructura (rutas, nivel de log).
+--
+-- Los limites duros del risk manager son NULL a proposito: NULL significa
+-- "derivalo de risk_profile y diversification". Solo se rellenan cuando el
+-- usuario activa el modo avanzado y los fija a mano. Asi mover un slider sigue
+-- surtiendo efecto sin tener que recalcular y reescribir nueve columnas.
+-- ===========================================================================
+
+create table if not exists agent_settings (
+    profile_id             text primary key references profiles (id) on delete cascade,
+
+    -- Modelo
+    llm_provider           text not null default 'nvidia'
+                           check (llm_provider in ('nvidia', 'anthropic', 'openai')),
+    llm_model              text not null default 'meta/llama-3.3-70b-instruct',
+    llm_api_key            text,
+    llm_temperature        real not null default 0.2
+                           check (llm_temperature between 0 and 2),
+    llm_timeout_seconds    real not null default 120 check (llm_timeout_seconds >= 5),
+    llm_max_retries        integer not null default 3
+                           check (llm_max_retries between 1 and 10),
+    analyst_persona        text,
+
+    -- Estrategia. Estos dos mandan sobre los limites de abajo.
+    risk_profile           integer not null default 5
+                           check (risk_profile between 1 and 10),
+    diversification        integer not null default 5
+                           check (diversification between 1 and 10),
+    horizon_days           integer not null default 10 check (horizon_days > 0),
+    screener_mode          text not null default 'score'
+                           check (screener_mode in ('score', 'random')),
+    screener_top_n         integer not null default 20
+                           check (screener_top_n between 1 and 200),
+    allow_shorts           integer not null default 0,
+    excluded_sectors_json  text not null default '[]',
+    cash_reserve_pct       real not null default 0
+                           check (cash_reserve_pct between 0 and 100),
+    benchmark              text not null default 'SPY',
+
+    -- Ejecucion
+    broker                 text not null default 'sim'
+                           check (broker in ('sim', 'alpaca')),
+    initial_budget         real not null default 10000 check (initial_budget > 0),
+    bar_interval           text not null default '1d'
+                           check (bar_interval in ('1m', '1h', '1d')),
+    cycle_times            text not null default '22:15',
+    cycle_tz               text not null default 'Europe/Madrid',
+    sim_slippage_bps       real not null default 5 check (sim_slippage_bps >= 0),
+    sim_commission         real not null default 0 check (sim_commission >= 0),
+    dry_run                integer not null default 0,
+
+    -- Limites duros. NULL = derivado de los sliders (ver comentario de arriba).
+    advanced_overrides     integer not null default 0,
+    risk_per_trade_pct     real,
+    max_position_pct       real,
+    max_total_exposure_pct real,
+    max_open_positions     integer,
+    max_daily_loss_pct     real,
+    min_conviction         integer,
+    stop_atr_multiple      real,
+    min_reward_risk        real,
+    min_order_notional     real,
+
+    extra_json             text not null default '{}',
+    updated_at             text not null
+);
+
+-- Quien cambio que y cuando. Se pide poder editar los parametros en cualquier
+-- momento; sin este registro, comparar dos experimentos deja de tener sentido
+-- porque no se sabe con que ajustes corrio cada tramo.
+create table if not exists agent_settings_history (
+    id         integer primary key autoincrement,
+    profile_id text not null references profiles (id) on delete cascade,
+    field      text not null,
+    old_value  text,
+    new_value  text,
+    source     text,            -- ui | api | cli
+    changed_at text not null
+);
+
+create index if not exists agent_settings_history_profile_idx
+    on agent_settings_history (profile_id, changed_at desc);
+
+-- Universo a vigilar por perfil. La union de todos los perfiles activos es lo
+-- que el ingestor pide cada minuto.
+create table if not exists profile_universe (
+    profile_id text not null references profiles (id) on delete cascade,
+    symbol     text not null,
+    added_at   text not null,
+    primary key (profile_id, symbol)
+);
+
+create index if not exists profile_universe_symbol_idx on profile_universe (symbol);
+
+-- ===========================================================================
+-- Datos de mercado en vivo (ingestor, cada minuto)
+--
+-- Separadas de `bar_cache` a proposito: `bar_cache` es la despensa del agente
+-- para calcular indicadores, se llena a demanda y puede podarse sin perder
+-- nada. Estas dos son el registro de lo que el mercado hizo minuto a minuto, y
+-- son la materia prima del backtesting futuro.
+-- ===========================================================================
+
+-- Ultimo precio conocido de cada simbolo. Una fila por simbolo: el ingestor
+-- hace `insert or replace`, asi que la tabla no crece.
+create table if not exists quotes_live (
+    symbol     text primary key,
+    price      real not null,
+    prev_close real,
+    change_pct real,
+    volume     real,
+    as_of      text not null,   -- inicio de la barra, ISO-8601 UTC
+    updated_at text not null    -- cuando lo escribimos nosotros
+);
+
+-- Historico minuto a minuto. La clave primaria hace el refresco idempotente,
+-- que importa porque la barra del minuto en curso cambia mientras se consulta.
+create table if not exists bars_1m (
+    symbol text not null,
+    ts     text not null,       -- inicio de la barra, ISO-8601 UTC
+    open   real not null,
+    high   real not null,
+    low    real not null,
+    close  real not null,
+    volume real not null default 0,
+    primary key (symbol, ts)
+);
+
+create index if not exists bars_1m_symbol_ts_idx on bars_1m (symbol, ts desc);
+create index if not exists bars_1m_ts_idx on bars_1m (ts);
+
+-- Una fila por tick del ingestor. Es lo que permite ver en la interfaz si la
+-- ingesta esta sana, y lo que responde a "por que falta el precio de las 15:42".
+create table if not exists ingest_runs (
+    id                integer primary key autoincrement,
+    started_at        text not null,
+    finished_at       text,
+    symbols_requested integer not null default 0,
+    symbols_ok        integer not null default 0,
+    symbols_failed    integer not null default 0,
+    latency_ms        integer,
+    rate_limited      integer not null default 0,
+    error             text
+);
+
+create index if not exists ingest_runs_started_idx on ingest_runs (started_at desc);
 
 -- ===========================================================================
 -- Vistas de analisis. `python run.py report` las consulta.

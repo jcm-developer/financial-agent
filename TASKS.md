@@ -128,27 +128,35 @@ reescribir el analista.
 
 ### F1 — Esquema SQLite limpio
 
-- [ ] **F1.1** **Borrado total**: eliminar `data/trading.db` y el volumen
-      (`docker compose down -v`). Se arranca de cero, sin migrar nada.
-- [ ] **F1.2** Tablas nuevas del modelo multi-experimento (detalle en F5 y F6):
-      `profiles`, `agent_settings`, `agent_settings_history`, `profile_universe`.
-- [ ] **F1.3** Tablas nuevas de mercado en vivo (detalle en F2):
-      - `quotes_live (symbol primary key, price, change_pct, volume, as_of, updated_at)`
-      - `bars_1m (symbol, ts, open, high, low, close, volume, primary key (symbol, ts))`
-      - `ingest_runs (id, started_at, symbols, ok, failed, latency_ms, error)`
-- [ ] **F1.4** Re-parentar: `portfolios` cuelga de `profiles`; `cycles`, `decisions`,
-      `orders`, `positions`, `risk_events` y `equity_snapshots` llevan `profile_id`, para
-      filtrar y borrar un experimento entero de una vez.
-- [ ] **F1.5** Mantener las 4 vistas de análisis existentes, adaptadas a `profile_id`.
-- [ ] **F1.6** Índices: `bars_1m (symbol, ts desc)`, `cycles (profile_id, started_at desc)`,
-      `decisions (profile_id, created_at desc)`.
-- [ ] **F1.7** `schema.sql` sigue siendo idempotente y aplicándose al abrir la conexión —
-      esa propiedad ya funciona bien, no se toca.
-- [ ] **F1.8** Ampliar [src/db.py](src/db.py) con los métodos de perfiles, parámetros y
-      cotizaciones.
-- [ ] **F1.9** Retención: tarea diaria que consolida `bars_1m` de más de N días en `bars_1d`
-      y borra el minuto. N configurable, por defecto 90 días.
-- [ ] **F1.10** Tests de [tests/test_db.py](tests/test_db.py) ampliados a las tablas nuevas.
+- [x] **F1.1** **Borrado total**: la base anterior (40 ciclos, 166 decisiones) se aparta en
+      `backup/trading.db.pre-F1-20260808` en lugar de borrarse — recuperarla luego sería
+      imposible. `backup/` está en `.gitignore`; bórrala cuando quieras. Falta tirar el
+      volumen de Docker: `docker compose down -v`.
+- [x] **F1.2** `profiles`, `agent_settings`, `agent_settings_history`, `profile_universe`.
+      Los límites duros del risk manager nacen **NULL a propósito**: NULL significa "derívalo
+      de los sliders". Si nacieran con números, mover el slider de riesgo no cambiaría nada.
+- [x] **F1.3** `quotes_live` (una fila por símbolo, se reemplaza), `bars_1m` (histórico, clave
+      `(symbol, ts)` para que el refresco sea idempotente) e `ingest_runs`.
+- [x] **F1.4** ⚠️ **Simplificado respecto a lo planificado.** Solo `portfolios.profile_id`.
+      Poner `profile_id` en las otras seis tablas era denormalizar sin ganar nada: `cycles`,
+      `decisions`, `orders`, `positions`, `risk_events` y `equity_snapshots` ya cuelgan de
+      `portfolios` con `on delete cascade`, así que borrar un perfil ya arrastra todo. La
+      versión original obligaba además a tocar `cycle.py`, `dashboard.py` y los 15 módulos de
+      test; esta no toca ninguno.
+- [x] **F1.5** Las 4 vistas se quedan **sin cambios** — consecuencia de F1.4: siguen
+      agrupando por `portfolio_id`, que sigue siendo el vínculo real.
+- [x] **F1.6** Índices puestos (21 en total), incluidos `bars_1m (symbol, ts desc)` y
+      `bars_1m (ts)` para la poda.
+- [x] **F1.7** Idempotencia verificada: aplicar `schema.sql` dos veces sobre la misma base no
+      falla.
+- [x] **F1.8** [src/db.py](src/db.py) ampliado: perfiles, parámetros con historial, universo,
+      cotizaciones, barras de minuto, salud del ingestor y poda.
+- [x] **F1.9** ⚠️ **Simplificado**: solo poda, sin consolidación a `bars_1d`. Las barras
+      diarias ya las mantiene `bar_cache`, que es de donde el agente calcula indicadores;
+      una segunda tabla diaria sería un duplicado con dos fuentes que podrían discrepar.
+      `prune_bars_1m(keep_days=90)` y se acabó. Falta engancharla a una tarea diaria (F2.10).
+- [x] **F1.10** [tests/test_profiles.py](tests/test_profiles.py): 23 tests. **Suite completa
+      en verde: 307 pasan.**
 
 ### F2 — Ingesta de precios cada minuto
 

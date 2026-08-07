@@ -23,7 +23,7 @@ import json
 import logging
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +48,15 @@ def _new_id() -> str:
 
 def _dumps(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, default=str)
+
+
+def _text(value: Any) -> str | None:
+    """Valor legible para el historial de parametros. None se conserva.
+
+    El historial se lee a ojo, asi que se guarda el texto y no un JSON: interesa
+    ver "5 -> 8", no '{"v": 8}'.
+    """
+    return None if value is None else str(value)
 
 
 class Database:
@@ -149,9 +158,228 @@ class Database:
             raise DatabaseError("La base esta abierta en solo lectura.")
         return self._execute(sql, params).rowcount
 
+    def _executemany(self, sql: str, rows: list[tuple]) -> int:
+        if not rows:
+            return 0
+        try:
+            return self._conn.executemany(sql, rows).rowcount
+        except sqlite3.Error as exc:
+            raise DatabaseError(
+                f"Fallo la escritura por lotes ({exc}). SQL: {sql.strip()[:160]}"
+            ) from exc
+
+    def _columns(self, table: str) -> set[str]:
+        """Columnas reales de una tabla.
+
+        Se usa para validar los nombres de campo que llegan de fuera antes de
+        interpolarlos en el SQL: los valores van parametrizados, pero los nombres
+        de columna no pueden ir en un placeholder.
+        """
+        return {row["name"] for row in self.query(f"pragma table_info({table})")}
+
+    # -- Perfiles / experimentos -------------------------------------------
+
+    def create_profile(
+        self, *, name: str, description: str = "", settings: dict[str, Any] | None = None
+    ) -> str:
+        """Crea un perfil con sus parametros por defecto y su cartera.
+
+        Las tres cosas se crean juntas porque un perfil sin parametros o sin
+        cartera no es utilizable, y dejarlo a medias solo daria errores mas
+        adelante y mas lejos del origen.
+        """
+        name = name.strip()
+        if not name:
+            raise DatabaseError("El perfil necesita un nombre.")
+
+        existing = self._execute(
+            "select id from profiles where name = ? limit 1", (name,)
+        ).fetchone()
+        if existing is not None:
+            raise DatabaseError(f"Ya existe un perfil llamado {name!r}.")
+
+        profile_id = _new_id()
+        now = _now()
+        self._insert(
+            "profiles",
+            {
+                "id": profile_id,
+                "name": name,
+                "description": description or None,
+                "status": "draft",
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        self._insert("agent_settings", {"profile_id": profile_id, "updated_at": now})
+
+        if settings:
+            self.update_settings(profile_id, settings, source="create")
+
+        current = self.get_settings(profile_id)
+        self.ensure_portfolio(
+            name=name,
+            mode="paper" if current["broker"] == "sim" else "paper",
+            initial_budget=float(current["initial_budget"]),
+            profile_id=profile_id,
+        )
+        log.info("Perfil %r creado.", name)
+        return profile_id
+
+    def list_profiles(self, *, include_archived: bool = False) -> list[dict[str, Any]]:
+        sql = (
+            "select p.*, pf.id as portfolio_id, pf.initial_budget "
+            "from profiles p left join portfolios pf on pf.profile_id = p.id "
+        )
+        if not include_archived:
+            sql += "where p.status != 'archived' "
+        sql += "order by p.created_at desc"
+        return self.query(sql)
+
+    def get_profile(self, profile_id: str) -> dict[str, Any] | None:
+        rows = self.query(
+            "select p.*, pf.id as portfolio_id from profiles p "
+            "left join portfolios pf on pf.profile_id = p.id where p.id = ?",
+            (profile_id,),
+        )
+        return rows[0] if rows else None
+
+    def get_profile_by_name(self, name: str) -> dict[str, Any] | None:
+        rows = self.query(
+            "select p.*, pf.id as portfolio_id from profiles p "
+            "left join portfolios pf on pf.profile_id = p.id where p.name = ?",
+            (name.strip(),),
+        )
+        return rows[0] if rows else None
+
+    def set_profile_status(self, profile_id: str, status: str) -> None:
+        valid = {"draft", "active", "paused", "archived"}
+        if status not in valid:
+            raise DatabaseError(f"Estado invalido: {status!r}. Validos: {sorted(valid)}.")
+        payload: dict[str, Any] = {"status": status, "updated_at": _now()}
+        if status == "archived":
+            payload["archived_at"] = _now()
+        self._update("profiles", profile_id, payload)
+
+    def delete_profile(self, profile_id: str) -> None:
+        """Borra el perfil y, en cascada, su cartera y todo su historico."""
+        self._execute("delete from profiles where id = ?", (profile_id,))
+
+    # -- Parametros del agente ---------------------------------------------
+
+    def get_settings(self, profile_id: str) -> dict[str, Any]:
+        rows = self.query(
+            "select * from agent_settings where profile_id = ?", (profile_id,)
+        )
+        if not rows:
+            raise DatabaseError(f"El perfil {profile_id} no tiene parametros.")
+        return rows[0]
+
+    def update_settings(
+        self, profile_id: str, changes: dict[str, Any], *, source: str = "api"
+    ) -> list[str]:
+        """Actualiza parametros y deja constancia de cada cambio.
+
+        Devuelve los campos que cambiaron de verdad. Los que llegan con el mismo
+        valor que ya tenian no se registran: el historial esta para explicar un
+        cambio de comportamiento, y una fila que no cambia nada solo estorba.
+        """
+        if not changes:
+            return []
+
+        allowed = self._columns("agent_settings") - {"profile_id", "updated_at"}
+        unknown = set(changes) - allowed
+        if unknown:
+            raise DatabaseError(
+                f"Parametros desconocidos: {', '.join(sorted(unknown))}. "
+                f"Validos: {', '.join(sorted(allowed))}."
+            )
+
+        current = self.get_settings(profile_id)
+        applied: dict[str, Any] = {}
+        for field, value in changes.items():
+            if current.get(field) != value:
+                applied[field] = value
+
+        if not applied:
+            return []
+
+        now = _now()
+        payload = dict(applied)
+        payload["updated_at"] = now
+        assignments = ", ".join(f"{field} = :{field}" for field in payload)
+        params = dict(payload)
+        params["__pid"] = profile_id
+        self._execute(
+            f"update agent_settings set {assignments} where profile_id = :__pid", params
+        )
+
+        self._executemany(
+            "insert into agent_settings_history "
+            "(profile_id, field, old_value, new_value, source, changed_at) "
+            "values (?, ?, ?, ?, ?, ?)",
+            [
+                (profile_id, field, _text(current.get(field)), _text(value), source, now)
+                for field, value in applied.items()
+            ],
+        )
+        log.info(
+            "Perfil %s: %d parametro(s) actualizado(s) (%s).",
+            profile_id, len(applied), ", ".join(sorted(applied)),
+        )
+        return sorted(applied)
+
+    def settings_history(
+        self, profile_id: str, *, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        return self.query(
+            "select * from agent_settings_history where profile_id = ? "
+            "order by changed_at desc, id desc limit ?",
+            (profile_id, limit),
+        )
+
+    # -- Universo por perfil -----------------------------------------------
+
+    def set_profile_universe(self, profile_id: str, symbols: list[str]) -> None:
+        clean = sorted({s.strip().upper() for s in symbols if s.strip()})
+        self._execute("delete from profile_universe where profile_id = ?", (profile_id,))
+        now = _now()
+        self._executemany(
+            "insert into profile_universe (profile_id, symbol, added_at) values (?, ?, ?)",
+            [(profile_id, symbol, now) for symbol in clean],
+        )
+
+    def get_profile_universe(self, profile_id: str) -> list[str]:
+        return [
+            row["symbol"]
+            for row in self.query(
+                "select symbol from profile_universe where profile_id = ? order by symbol",
+                (profile_id,),
+            )
+        ]
+
+    def active_universe(self) -> list[str]:
+        """Simbolos que el ingestor debe seguir cada minuto.
+
+        Es la union de los universos de los perfiles activos y de los simbolos
+        con posicion abierta. Lo segundo importa: una posicion no deja de
+        necesitar precio porque su simbolo salga del universo del screener.
+        """
+        rows = self.query(
+            "select symbol from profile_universe u "
+            "  join profiles p on p.id = u.profile_id "
+            " where p.status = 'active' "
+            "union "
+            "select symbol from positions where status = 'open'"
+        )
+        return sorted({row["symbol"] for row in rows})
+
     # -- Carteras ----------------------------------------------------------
 
-    def ensure_portfolio(self, *, name: str, mode: str, initial_budget: float) -> str:
+    def ensure_portfolio(
+        self, *, name: str, mode: str, initial_budget: float,
+        profile_id: str | None = None,
+    ) -> str:
         """Devuelve el id de la cartera, creandola la primera vez."""
         row = self._execute(
             "select id, mode from portfolios where name = ? limit 1", (name,)
@@ -173,6 +401,7 @@ class Database:
             "portfolios",
             {
                 "id": portfolio_id,
+                "profile_id": profile_id,
                 "name": name,
                 "mode": mode,
                 "initial_budget": round(initial_budget, 2),
@@ -519,6 +748,91 @@ class Database:
         )
 
     # -- Reconciliacion ----------------------------------------------------
+
+    # -- Datos de mercado en vivo (ingestor) -------------------------------
+
+    def upsert_quotes(self, quotes: list[dict[str, Any]]) -> int:
+        """Ultimo precio de cada simbolo. Una fila por simbolo, se reemplaza."""
+        now = _now()
+        return self._executemany(
+            "insert or replace into quotes_live "
+            "(symbol, price, prev_close, change_pct, volume, as_of, updated_at) "
+            "values (?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    q["symbol"], float(q["price"]),
+                    q.get("prev_close"), q.get("change_pct"), q.get("volume"),
+                    q["as_of"], now,
+                )
+                for q in quotes
+            ],
+        )
+
+    def latest_quotes(self, symbols: list[str] | None = None) -> dict[str, dict[str, Any]]:
+        if symbols:
+            marks = ", ".join("?" for _ in symbols)
+            rows = self.query(
+                f"select * from quotes_live where symbol in ({marks})", tuple(symbols)
+            )
+        else:
+            rows = self.query("select * from quotes_live")
+        return {row["symbol"]: row for row in rows}
+
+    def upsert_bars_1m(self, bars: list[dict[str, Any]]) -> int:
+        """Barras de un minuto.
+
+        `insert or replace` y no `insert or ignore`: la barra del minuto en curso
+        cambia mientras el mercado sigue abierto, asi que hay que poder pisarla.
+        """
+        return self._executemany(
+            "insert or replace into bars_1m "
+            "(symbol, ts, open, high, low, close, volume) values (?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    b["symbol"], b["ts"], float(b["open"]), float(b["high"]),
+                    float(b["low"]), float(b["close"]), float(b.get("volume") or 0.0),
+                )
+                for b in bars
+            ],
+        )
+
+    def start_ingest_run(self, *, symbols_requested: int) -> int:
+        cursor = self._insert(
+            "ingest_runs",
+            {"started_at": _now(), "symbols_requested": symbols_requested},
+        )
+        return int(cursor.lastrowid or 0)
+
+    def finish_ingest_run(
+        self, run_id: int, *, symbols_ok: int, symbols_failed: int,
+        latency_ms: int, rate_limited: bool = False, error: str | None = None,
+    ) -> None:
+        self._execute(
+            "update ingest_runs set finished_at = ?, symbols_ok = ?, symbols_failed = ?, "
+            "latency_ms = ?, rate_limited = ?, error = ? where id = ?",
+            (_now(), symbols_ok, symbols_failed, latency_ms,
+             int(rate_limited), error, run_id),
+        )
+
+    def ingest_health(self, *, limit: int = 60) -> list[dict[str, Any]]:
+        """Ultimos ticks del ingestor, para pintar el estado en la interfaz."""
+        return self.query(
+            "select * from ingest_runs order by started_at desc limit ?", (limit,)
+        )
+
+    def prune_bars_1m(self, *, keep_days: int) -> int:
+        """Borra barras de un minuto mas viejas que `keep_days`.
+
+        No hay consolidacion a diario porque no hace falta: las barras diarias ya
+        las mantiene `bar_cache`, que es de donde el agente calcula indicadores.
+        Esto solo evita que el fichero crezca sin fin.
+        """
+        if keep_days < 1:
+            raise DatabaseError("keep_days debe ser al menos 1.")
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=keep_days)
+        ).isoformat()
+        return self._execute("delete from bars_1m where ts < ?", (cutoff,)).rowcount
 
     def reconcile(
         self,
