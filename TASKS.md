@@ -175,26 +175,35 @@ reescribir el analista.
       vale si el dato es de hace un minuto. Si Yahoo sirve el feed con 15 minutos de desfase,
       el ingestor se construye igual pero cambia lo que se puede concluir del experimento.
       Medir también `--threads` para cerrar la duda de D3.
-- [ ] **F2.2** `tools/ingestor.py`: bucle que despierta al inicio de cada minuto.
-- [ ] **F2.3** Filtro de calendario con [src/market_calendar.py](src/market_calendar.py), que
-      **ya existe y tiene tests**: festivos NYSE, medias sesiones, 9:30–16:00 ET, DST. Con el
-      mercado cerrado, duerme hasta la próxima apertura sin pedir nada.
-- [ ] **F2.4** Resolver los símbolos a seguir: unión de los universos de los perfiles activos
-      (`profile_universe`) más las posiciones abiertas. Se relee cada N minutos por si se
-      activa un perfil nuevo.
-- [ ] **F2.5** Descarga en lote con `yf.download(..., interval="1m")`, con reintentos y
-      backoff exponencial ante 429.
-- [ ] **F2.6** Escritura: `insert or replace` en `quotes_live` (una fila por símbolo) y en
-      `bars_1m` por `(symbol, ts)` — idempotente, que es lo que importa porque la barra del
-      minuto en curso cambia mientras se consulta.
-- [ ] **F2.7** Registrar cada tick en `ingest_runs`, para poder ver en la UI si la ingesta
-      está sana.
-- [ ] **F2.8** Aviso cuando fallan K minutos seguidos, en el log y en la UI.
-- [ ] **F2.9** **Medir la contención de escritura** entre ingestor y ciclo: registrar esperas
-      por `busy_timeout` y confirmar que no se acumulan (ver D4).
-- [ ] **F2.10** Consolidación al cierre: completar huecos del día y volcar a `bars_1d`.
-- [ ] **F2.11** Tests: calendario, idempotencia del upsert, comportamiento ante 429 y ante
-      símbolo desconocido.
+- [x] **F2.2** Lógica en [src/ingest.py](src/ingest.py), bucle en
+      [tools/ingestor.py](tools/ingestor.py). Separados para que los tests no necesiten red ni
+      esperar minutos reales. Despierta unos segundos **después** del cambio de minuto: la
+      barra de un minuto no existe hasta que ese minuto ha terminado.
+- [x] **F2.3** Filtro con [src/market_calendar.py](src/market_calendar.py), que ya existía con
+      sus tests. Con el mercado cerrado duerme hasta la apertura en tramos de 20 s, para que
+      `docker stop` responda en segundos.
+- [x] **F2.4** `active_universe()`: unión de perfiles activos más posiciones abiertas. Lo
+      segundo importa — una posición no deja de necesitar precio porque su símbolo salga del
+      screener. Se relee cada `INGEST_REFRESH_MIN`.
+- [x] **F2.5** Reintentos con backoff exponencial y *jitter*, solo ante rate limit; un error de
+      red normal falla rápido y lo reintenta el minuto siguiente.
+- [x] **F2.6** Escritura incremental: solo lo nuevo **más la última barra conocida**, porque la
+      del minuto en curso sigue cambiando. Verificado en real: 1.950 filas el primer tick,
+      5 el segundo.
+- [x] **F2.7** Una fila en `ingest_runs` por tick, con latencia de descarga y de escritura
+      separadas.
+- [x] **F2.8** Contador de fallos seguidos; a los `INGEST_MAX_FAILURES` sube a error y sugiere
+      qué mirar.
+- [x] **F2.9** Medida de contención **por coste de fila**, no por tiempo total. La primera
+      versión avisaba por tiempo absoluto y saltaba en la carga inicial (1.950 filas, 2,2 s)
+      sin que hubiera contención ninguna: un aviso que cría lobos se acaba ignorando. Base
+      medida: ~1,1 ms/fila sin competencia; avisa a partir de 5.
+- [ ] **F2.10** ⚠️ **A medias.** La poda diaria sí está (se ejecuta al cerrar el mercado). Falta
+      el relleno de huecos al cierre: si el ingestor estuvo caído media sesión, el hueco se
+      queda. El solape de 3 barras solo cubre caídas de pocos minutos.
+- [x] **F2.11** [tests/test_ingest.py](tests/test_ingest.py): 23 tests con proveedor de
+      mentira, sin red. **Suite completa: 330 en verde.**
+- [x] **F2.12** Servicio `ingestor` en [docker-compose.yml](docker-compose.yml) (adelanta F7.3).
 
 ### F3 — API backend (FastAPI)
 

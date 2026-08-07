@@ -50,6 +50,33 @@ services:
       start_period: 5s
 
   # ---------------------------------------------------------------------------
+  # Ingestor: un tick por minuto mientras la bolsa US esta abierta.
+  #
+  # No necesita credenciales: solo Yahoo y la base. Con el mercado cerrado no
+  # pide nada, duerme hasta la proxima apertura y aprovecha para podar.
+  #
+  # Es un servicio aparte y no un hilo del dashboard a proposito: si Yahoo se
+  # cuelga o empieza a devolver 429, la interfaz y el agente siguen a lo suyo.
+  # ---------------------------------------------------------------------------
+  ingestor:
+    <<: *app
+    command: ["python", "tools/ingestor.py"]
+    environment:
+      DB_PATH: /app/data/trading.db
+      INGEST_ENABLED: "${INGEST_ENABLED:-true}"
+      INGEST_REFRESH_MIN: "${INGEST_REFRESH_MIN:-5}"
+      INGEST_KEEP_DAYS: "${INGEST_KEEP_DAYS:-90}"
+      INGEST_MAX_FAILURES: "${INGEST_MAX_FAILURES:-5}"
+      INGEST_OFFSET_SECONDS: "${INGEST_OFFSET_SECONDS:-5}"
+      # Paralelizar la descarga es ~5x mas rapido, pero la cache interna de
+      # yfinance ha dado "database is locked" devolviendo simbolos vacios sin
+      # avisar. Queda apagado hasta medirlo en sesion real (F2.1c).
+      INGEST_THREADS: "${INGEST_THREADS:-false}"
+    restart: unless-stopped
+    # Corto: un tick dura segundos, no hay nada largo que esperar.
+    stop_grace_period: 15s
+
+  # ---------------------------------------------------------------------------
   # Planificador: lanza `run.py cycle` a las horas de CYCLE_TIMES.
   # Si faltan credenciales, sale con un mensaje claro en lugar de reintentar.
   # ---------------------------------------------------------------------------
