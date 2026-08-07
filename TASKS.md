@@ -54,11 +54,28 @@ cruzada.** El trabajo real pasa a ser el esquema nuevo, el ingestor, la API y el
 
 ### D3 — Datos de mercado: `yfinance`, ya integrado ✅
 
-`yf.download(simbolos, period="1d", interval="1m")` trae todos los símbolos en **una sola
-llamada** y `yfinance` ya resuelve por dentro la cookie y el *crumb* que Yahoo exige desde
-2023. Esto elimina el riesgo grande del plan anterior (llamar a la API no oficial de Yahoo a
-mano desde un Worker). Sigue pudiendo devolver 429, así que hace falta backoff y registrar
-fallos por símbolo — el patrón que ya usa `bar_cache_state`.
+`yf.download(simbolos, period="1d", interval="1m")` y `yfinance` resuelve por dentro la
+cookie y el *crumb* que Yahoo exige desde 2023. Eso elimina el riesgo grande del plan
+anterior (hablar con la API no oficial de Yahoo a mano desde un Worker).
+
+⚠️ **Corrección tras el spike (F2.1): no es una petición en lote.** yfinance pide **un
+endpoint por símbolo**, así que 50 símbolos son 50 peticiones HTTP a Yahoo por minuto.
+Medido el 2026-08-07 con 50 símbolos:
+
+| Configuración | Tiempo | Cobertura |
+|---|---|---|
+| `threads=False` (lo que usa hoy [src/market_data.py](src/market_data.py)) | 8,4 s | 50/50 |
+| `threads=True` | 1,5 s | 50/50 |
+
+Consecuencias: cabe de sobra en el minuto con 50 símbolos, pero **escala mal** — en serie son
+~170 ms/símbolo, así que ~200 símbolos agotarían el minuto. Y la exposición al rate limit es
+50 peticiones/minuto, no 1 (ver R2).
+
+Sobre `threads`: [src/market_data.py](src/market_data.py) fuerza `threads=False` porque la
+caché SQLite interna de yfinance da "database is locked" en Windows y **devuelve símbolos
+vacíos sin avisar**. En las pruebas del spike `threads=True` dio 50/50 igual, pero es un fallo
+intermitente y unas pocas pasadas en verde no lo descartan. Además vamos a correr en Docker
+(Linux), donde probablemente ni aplique. **Decidir el lunes con datos de sesión** (F2.1).
 
 Yahoo sirve unos **30 días de histórico en intervalo de 1 minuto**; para más atrás hay que
 acumularlo nosotros, que es justo lo que hace el ingestor.
@@ -135,10 +152,21 @@ reescribir el analista.
 
 ### F2 — Ingesta de precios cada minuto
 
-- [ ] **F2.1** ⚠️ **Spike primero**: script que pide 50 símbolos a `yfinance` cada minuto
-      durante una sesión entera. Medir 429s, latencia y **cuánto retraso real trae el dato**
-      — "cada minuto" solo vale si el dato es de hace un minuto. Todo lo demás depende de
-      que esto salga bien.
+- [x] **F2.1a** Spike escrito: [tools/spike_1m.py](tools/spike_1m.py). Mide retraso del dato,
+      latencia, 429s y símbolos vacíos; escribe JSONL línea a línea para que un corte no se
+      lleve lo medido.
+- [x] **F2.1b** Validado el mecanismo contra la sesión del 2026-08-07 (mercado cerrado):
+      50/50 símbolos, sin errores, marcas de tiempo correctas. Resultado lateral: la descarga
+      **no es en lote** — ver la corrección en D3.
+- [ ] **F2.1c** ⚠️ **Pendiente y bloqueante: medir en sesión real.** El lunes 2026-08-10 desde
+      las 15:30 UTC (9:30 ET), una sesión entera:
+      ```
+      python tools/spike_1m.py --minutes 390 --out spike_lunes.jsonl
+      ```
+      La pregunta que hay que responder es **el retraso real del dato**: "cada minuto" solo
+      vale si el dato es de hace un minuto. Si Yahoo sirve el feed con 15 minutos de desfase,
+      el ingestor se construye igual pero cambia lo que se puede concluir del experimento.
+      Medir también `--threads` para cerrar la duda de D3.
 - [ ] **F2.2** `tools/ingestor.py`: bucle que despierta al inicio de cada minuto.
 - [ ] **F2.3** Filtro de calendario con [src/market_calendar.py](src/market_calendar.py), que
       **ya existe y tiene tests**: festivos NYSE, medias sesiones, 9:30–16:00 ET, DST. Con el
@@ -346,9 +374,13 @@ lo demás. F3 y F4 pueden solaparse en cuanto los endpoints estén definidos.
 - **R1 — Latencia real del dato.** "Cada minuto" solo vale si el dato es de hace un minuto.
   Hay que **medirlo** (F2.1), no asumirlo. Si Yahoo trae 15 minutos de retraso en 1m, el
   diseño no cambia pero la interpretación del experimento sí.
-- **R2 — Yahoo puede limitar por IP.** Es una API no oficial. Mitigado por la descarga en
-  lote (una petición por minuto, no 50) y por el backoff. Plan B: Alpaca IEX, gratis y ya
-  integrado en el repo.
+- **R2 — Yahoo puede limitar por IP.** Es una API no oficial, y el spike desmontó la
+  mitigación que yo daba por buena: **son ~50 peticiones por minuto, no 1** (ver D3). En una
+  sesión son ~19.500 peticiones al día desde la misma IP doméstica. No apareció ningún 429 en
+  las pruebas, pero fueron pasadas sueltas con el mercado cerrado; el riesgo real solo se ve
+  sosteniendo el ritmo una sesión entera (F2.1). Palancas si aparece: bajar el número de
+  símbolos, espaciar las peticiones dentro del minuto en vez de lanzarlas de golpe, o pasar al
+  plan B (Alpaca IEX, gratis y ya integrado).
 - **R3 — Contención de escritura en SQLite.** Dos escritores (ingestor y ciclo) sobre el
   mismo fichero. WAL y `busy_timeout` ya lo cubren a este volumen, pero hay que medirlo
   (F2.9) antes de dar por hecho que escala a más perfiles.
