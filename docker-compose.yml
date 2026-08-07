@@ -1,0 +1,85 @@
+# =============================================================================
+# financial-bot
+#
+#   docker compose up -d                     dashboard + planificador
+#   docker compose logs -f scheduler         seguir los ciclos programados
+#   docker compose run --rm bot <comando>    comandos puntuales
+#
+# La base de datos vive en un volumen con nombre, no en un bind mount al disco
+# de Windows: SQLite necesita bloqueo de fichero fiable y los bind mounts de
+# Docker Desktop en Windows no lo garantizan. Para sacar el fichero:
+#
+#   docker compose cp dashboard:/app/data/trading.db ./data/trading.db
+# =============================================================================
+name: financial-bot
+
+x-app: &app
+  build: .
+  image: financial-bot:latest
+  env_file:
+    # Opcional a proposito: el dashboard no necesita credenciales, asi que
+    # `docker compose up dashboard` funciona sin haber creado el .env todavia.
+    - path: .env
+      required: false
+  environment:
+    # Gana sobre el .env: dentro del contenedor la base esta en el volumen.
+    DB_PATH: /app/data/trading.db
+  volumes:
+    - trading-data:/app/data
+
+services:
+  # ---------------------------------------------------------------------------
+  # Dashboard. No hace llamadas a Alpaca ni al modelo: solo lee la base en modo
+  # solo lectura, asi que funciona aunque el .env este a medio rellenar.
+  # ---------------------------------------------------------------------------
+  dashboard:
+    <<: *app
+    command: ["python", "run.py", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      # Publicado solo en el localhost del anfitrion: son datos de una cuenta de
+      # inversion y el dashboard no tiene autenticacion. Para abrirlo al resto
+      # de la red cambia a "8000:8000", sabiendo lo que implica.
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # Planificador: lanza `run.py cycle` a las horas de CYCLE_TIMES.
+  # Si faltan credenciales, sale con un mensaje claro en lugar de reintentar.
+  # ---------------------------------------------------------------------------
+  scheduler:
+    <<: *app
+    command: ["python", "tools/scheduler.py"]
+    environment:
+      DB_PATH: /app/data/trading.db
+      # 22:15 en hora peninsular: poco despues del cierre de Nueva York, cuando
+      # las barras diarias ya estan completas.
+      CYCLE_TIMES: "${CYCLE_TIMES:-22:15}"
+      CYCLE_TZ: "${CYCLE_TZ:-Europe/Madrid}"
+      RUN_ON_START: "${RUN_ON_START:-false}"
+    restart: on-failure
+    # Margen para que un ciclo en curso termine antes del SIGKILL.
+    stop_grace_period: 90s
+
+  # ---------------------------------------------------------------------------
+  # Comandos puntuales. El perfil `manual` lo mantiene fuera de `compose up`.
+  #
+  #   docker compose run --rm bot python run.py check
+  #   docker compose run --rm bot python run.py cycle --dry-run
+  #   docker compose run --rm bot python run.py report
+  #   docker compose run --rm bot python tools/seed_demo.py
+  #   docker compose run --rm bot python -m pytest tests -q
+  # ---------------------------------------------------------------------------
+  bot:
+    <<: *app
+    command: ["python", "run.py", "check"]
+    profiles: ["manual"]
+
+volumes:
+  trading-data:

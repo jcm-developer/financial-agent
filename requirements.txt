@@ -1,0 +1,15 @@
+# Dependencias del camino por defecto: BROKER=sim, DATA_PROVIDER=yahoo.
+# Con esto el experimento funciona con una sola clave de API, la del modelo.
+
+# Datos de mercado (arrastra pandas y numpy).
+yfinance>=0.2.50
+# Cliente HTTP para NVIDIA NIM.
+httpx>=0.27.0
+python-dotenv>=1.0.1
+# zoneinfo necesita la base de datos de zonas horarias: las imagenes slim de
+# Python y Windows no la traen del sistema.
+tzdata>=2024.1
+pytest>=8.3.0
+
+# Para operar contra Alpaca (BROKER=alpaca o DATA_PROVIDER=alpaca):
+#     pip install -r requirements-alpaca.txt

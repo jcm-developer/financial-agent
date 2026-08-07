@@ -1,0 +1,4 @@
+# Solo necesario para BROKER=alpaca o DATA_PROVIDER=alpaca.
+# El camino por defecto (broker simulado + Yahoo) no lo usa.
+-r requirements.txt
+alpaca-py>=0.33.0

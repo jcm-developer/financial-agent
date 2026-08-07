@@ -1,0 +1,15 @@
+# Credenciales. NUNCA subir.
+.env
+
+# Base de datos y sus ficheros auxiliares de WAL.
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/

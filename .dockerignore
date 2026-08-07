@@ -1,0 +1,18 @@
+# Credenciales: se pasan en tiempo de ejecucion con env_file, nunca dentro de
+# la imagen (quedarian grabadas en una capa para siempre).
+.env
+
+# La base de datos vive en un volumen, no en la imagen.
+data/
+*.db
+*.db-wal
+*.db-shm
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.git/
+.gitignore
+README.md
