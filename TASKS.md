@@ -246,8 +246,9 @@ reescribir el analista.
 
 ### F5 — Pantalla de perfiles / experimentos
 
-- [ ] **F5.1** Tabla `profiles`: `id`, `name`, `description`, `status`
-      (`draft|active|paused|archived`), `created_at`, `archived_at`.
+- [x] **F5.1** Tabla `profiles` — hecha en F1.2, con sus métodos en
+      [src/db.py](src/db.py) (`create_profile`, `list_profiles`, `set_profile_status`,
+      `delete_profile`) y tests de cascada.
 - [ ] **F5.2** Listado en tarjetas con las métricas clave: capital, P&L total y del día, nº
       de posiciones, win rate, último ciclo.
 - [ ] **F5.3** Alta de perfil: nombre, descripción, capital inicial, universo y parámetros
@@ -262,13 +263,13 @@ reescribir el analista.
 
 ### F6 — Parámetros del agente
 
-- [ ] **F6.1** Tabla `agent_settings` (1:1 con `profiles`): columnas tipadas para lo que se
-      consulta, `extra_json` para el resto.
-- [ ] **F6.2** **Historial de cambios** (`agent_settings_history`): qué cambió y cuándo. Sin
-      esto, un experimento cuyos parámetros se editan a mitad no es interpretable — y se pide
-      que sean editables en cualquier momento.
-- [ ] **F6.3** Cada `cycle` guarda un **snapshot de los parámetros usados**, para atribuir
-      cada decisión a su configuración exacta.
+- [x] **F6.1** Tabla `agent_settings` — hecha en F1.2, con `get_settings` / `update_settings`
+      y validación de nombres de campo contra las columnas reales.
+- [x] **F6.2** **Historial de cambios** — hecho en F1.2. Registra solo los cambios reales:
+      reescribir el mismo valor no ensucia el historial.
+- [ ] **F6.3** ⚠️ **A medias**: la columna `cycles.settings_json` existe, pero **nadie la
+      escribe todavía**. Hasta que el ciclo vuelque ahí sus parámetros, un experimento cuyos
+      ajustes se editen a mitad no será interpretable. Va junto con F6.4.
 - [ ] **F6.4** El ciclo lee de aquí, no del `.env`. [src/config.py](src/config.py) queda solo
       para infraestructura (rutas, claves, log level).
 - [ ] **F6.5** Función determinista `risk_profile (1–10) + diversification (1–10)` → límites
@@ -335,8 +336,8 @@ reescribir el analista.
       ```
 - [ ] **F7.2** [Dockerfile](Dockerfile) multietapa: etapa Node que hace `npm run build`, etapa
       Python que copia `app/dist` y arranca uvicorn. **Una imagen, un puerto.**
-- [ ] **F7.3** Servicio `ingestor` en [docker-compose.yml](docker-compose.yml), con
-      `restart: unless-stopped` y `stop_grace_period` corto.
+- [x] **F7.3** Servicio `ingestor` en [docker-compose.yml](docker-compose.yml) — hecho en
+      F2.12, con `restart: unless-stopped` y `stop_grace_period: 15s`.
 - [ ] **F7.4** Renombrar `dashboard` → `api` con el comando de uvicorn, manteniendo la
       publicación en `127.0.0.1:8000` y el healthcheck.
 - [ ] **F7.5** Conservar el volumen con nombre para la base (ver D4) y el comando documentado
@@ -353,7 +354,8 @@ reescribir el analista.
 - [ ] **F8.2** Borrar `web/index.html` y `web/server.py` cuando F3 y F4 estén verdes.
 - [ ] **F8.3** Podar [.env.example](.env.example): solo infraestructura. Las ~35 variables de
       estrategia pasan a `agent_settings`.
-- [ ] **F8.4** `.gitignore`: añadir `node_modules/`, `app/dist/`, `.vite/`.
+- [ ] **F8.4** `.gitignore`: falta `node_modules/`, `app/dist/`, `.vite/` (cuando exista el
+      frontend). Ya añadidos `backup/` y `spike_*.jsonl`.
 - [ ] **F8.5** ⚠️ **Hay un `.env` con claves reales en el directorio.** Está en `.gitignore`,
       pero conviene confirmar que nunca llegó a subirse.
 - [ ] **F8.6** Suite de tests entera en verde: `docker compose run --rm bot python -m pytest tests -q`.
