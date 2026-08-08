@@ -22,6 +22,9 @@ export function Layout() {
 
   return (
     <div className="min-h-dvh">
+      <a className="salto" href="#contenido">
+        Saltar al contenido
+      </a>
       <header className="border-b border-border">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-3">
           <Link to="/" className="text-[15px] font-semibold tracking-tight">
@@ -44,7 +47,7 @@ export function Layout() {
           <BarraLateral perfil={perfil?.name ?? referencia} />
         </aside>
 
-        <main className="min-w-0 flex-1 pb-16">
+        <main id="contenido" tabIndex={-1} className="min-w-0 flex-1 pb-16">
           {noEncontrado ? <PerfilInexistente referencia={referencia!} /> : <Outlet />}
         </main>
       </div>

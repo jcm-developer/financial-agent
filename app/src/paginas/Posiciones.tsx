@@ -14,6 +14,7 @@ import {
 } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { usePerfilActivo } from "@/perfil/usePerfilActivo";
+import { useTitulo } from "@/layout/useTitulo";
 
 const LIMITE = 50;
 
@@ -27,6 +28,7 @@ const LIMITE = 50;
  */
 export function Posiciones() {
   const { perfil, referencia } = usePerfilActivo();
+  useTitulo("Posiciones", perfil?.name);
   const [desplazamiento, setDesplazamiento] = useState(0);
 
   const abiertas = usePositions(referencia, { status: "open", limit: 200 });

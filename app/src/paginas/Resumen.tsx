@@ -14,6 +14,7 @@ import {
 } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { usePerfilActivo } from "@/perfil/usePerfilActivo";
+import { useTitulo } from "@/layout/useTitulo";
 
 /**
  * Resumen del experimento (F4.7).
@@ -26,11 +27,12 @@ import { usePerfilActivo } from "@/perfil/usePerfilActivo";
  */
 export function Resumen() {
   const { perfil, referencia, cargando, error } = usePerfilActivo();
+  useTitulo("Resumen", perfil?.name);
   const posiciones = usePositions(referencia, { status: "open", limit: 100 });
   const ciclos = useCycles(referencia, { limit: 5 });
 
   if (cargando) return <p className="text-[13px] text-text-muted">Cargando…</p>;
-  if (error) return <p className="text-[13px] text-negative">{error.message}</p>;
+  if (error) return <p className="text-[13px] text-negative-ink">{error.message}</p>;
   if (!perfil) return null;
 
   return (

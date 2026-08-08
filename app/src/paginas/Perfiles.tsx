@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { useProfiles } from "@/api/hooks";
 import type { ProfileSummary } from "@/api/types";
 import { Seccion } from "@/components/Seccion";
+import { useTitulo } from "@/layout/useTitulo";
 
 /**
  * Lista de experimentos.
@@ -12,6 +13,7 @@ import { Seccion } from "@/components/Seccion";
  * F5.3 y F5.4, y llegan en el tramo D con `shadcn`.
  */
 export function Perfiles() {
+  useTitulo("Experimentos");
   const perfiles = useProfiles();
 
   return (

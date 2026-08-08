@@ -7,6 +7,7 @@ import { Cabecera, Fila, Paginacion, Tabla, Td, Th, Vacio } from "@/components/T
 import { cantidad, dinero, fechaHora } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { usePerfilActivo } from "@/perfil/usePerfilActivo";
+import { useTitulo } from "@/layout/useTitulo";
 
 const LIMITE = 50;
 
@@ -20,6 +21,7 @@ const LIMITE = 50;
  */
 export function Ordenes() {
   const { perfil, referencia } = usePerfilActivo();
+  useTitulo("Órdenes", perfil?.name);
   const [desplazamiento, setDesplazamiento] = useState(0);
   const [simboloFiltro, setSimboloFiltro] = useState("");
 
@@ -107,7 +109,7 @@ function FilaOrden({ fila, simbolo }: { fila: OrderRow; simbolo: string }) {
         <span className="font-medium">{fila.symbol}</span>
       </Td>
       <Td>
-        <span className={fila.side === "buy" ? "text-positive" : "text-negative"}>
+        <span className={fila.side === "buy" ? "text-positive-ink" : "text-negative-ink"}>
           {fila.side === "buy" ? "compra" : "venta"}
         </span>
       </Td>

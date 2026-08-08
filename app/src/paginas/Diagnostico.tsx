@@ -2,6 +2,7 @@ import { useIngestStatus, useMarkets, useQuotes } from "@/api/hooks";
 import { antiguedadReal, useQuotesRecibidasEn } from "@/api/stream";
 import type { MarketInfo, QuoteRow } from "@/api/types";
 import { Seccion } from "@/components/Seccion";
+import { useTitulo } from "@/layout/useTitulo";
 
 /**
  * Estado de la ingesta y de las bolsas.
@@ -15,6 +16,7 @@ import { Seccion } from "@/components/Seccion";
  * No depende de ningún perfil: es infraestructura, no experimento.
  */
 export function Diagnostico() {
+  useTitulo("Ingesta");
   const mercados = useMarkets();
   const ingesta = useIngestStatus();
   const cotizaciones = useQuotes();

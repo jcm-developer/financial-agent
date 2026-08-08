@@ -14,6 +14,7 @@ import { Seccion } from "@/components/Seccion";
 import { Cabecera, Fila, Paginacion, Tabla, Td, Th, Vacio } from "@/components/Tabla";
 import { claseSigno, dineroConSigno, duracion, fechaHora } from "@/lib/formato";
 import { usePerfilActivo } from "@/perfil/usePerfilActivo";
+import { useTitulo } from "@/layout/useTitulo";
 
 const LIMITE = 30;
 
@@ -26,6 +27,7 @@ const LIMITE = 30;
  */
 export function Ciclos() {
   const { perfil, referencia } = usePerfilActivo();
+  useTitulo("Ciclos", perfil?.name);
   const [desplazamiento, setDesplazamiento] = useState(0);
   const [parametros, setParametros] = useSearchParams();
   const seleccionado = parametros.get("ciclo");
@@ -183,7 +185,7 @@ function Control({
       </div>
 
       {fallo && (
-        <p className="mt-3 rounded-md border border-negative/40 p-2 text-[13px] text-negative">
+        <p className="mt-3 rounded-md border border-negative/40 p-2 text-[13px] text-negative-ink">
           {fallo.message}
         </p>
       )}
@@ -282,7 +284,7 @@ function Detalle({ id, onCerrar }: { id: string; onCerrar: () => void }) {
             </dl>
 
             {ciclo.error && (
-              <p className="mt-3 rounded-md border border-negative/40 p-2 text-[13px] text-negative">
+              <p className="mt-3 rounded-md border border-negative/40 p-2 text-[13px] text-negative-ink">
                 {ciclo.error}
               </p>
             )}

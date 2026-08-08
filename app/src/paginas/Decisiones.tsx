@@ -7,6 +7,7 @@ import { Cabecera, Fila, Paginacion, Tabla, Td, Th, Vacio } from "@/components/T
 import { dinero, fechaHora } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { usePerfilActivo } from "@/perfil/usePerfilActivo";
+import { useTitulo } from "@/layout/useTitulo";
 
 const LIMITE = 50;
 
@@ -20,6 +21,7 @@ const LIMITE = 50;
  */
 export function Decisiones() {
   const { perfil, referencia } = usePerfilActivo();
+  useTitulo("Decisiones", perfil?.name);
   const [desplazamiento, setDesplazamiento] = useState(0);
   const [simboloFiltro, setSimboloFiltro] = useState("");
   const [accion, setAccion] = useState("");
@@ -165,8 +167,8 @@ function FilaDecision({ fila, simbolo }: { fila: DecisionRow; simbolo: string })
         <span
           className={cn(
             "font-medium",
-            fila.action === "buy" && "text-positive",
-            fila.action === "sell" && "text-negative",
+            fila.action === "buy" && "text-positive-ink",
+            fila.action === "sell" && "text-negative-ink",
             fila.action === "hold" && "text-text-muted",
           )}
         >

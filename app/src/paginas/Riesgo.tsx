@@ -6,6 +6,7 @@ import { Seccion } from "@/components/Seccion";
 import { Cabecera, Fila, Paginacion, Tabla, Td, Th, Vacio } from "@/components/Tabla";
 import { cantidad, dinero, fechaHora } from "@/lib/formato";
 import { usePerfilActivo } from "@/perfil/usePerfilActivo";
+import { useTitulo } from "@/layout/useTitulo";
 
 const LIMITE = 50;
 
@@ -24,6 +25,7 @@ const LIMITE = 50;
  */
 export function Riesgo() {
   const { perfil, referencia } = usePerfilActivo();
+  useTitulo("Riesgo", perfil?.name);
   const [desplazamiento, setDesplazamiento] = useState(0);
   const [veredicto, setVeredicto] = useState("rejected");
 

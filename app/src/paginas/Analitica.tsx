@@ -4,6 +4,7 @@ import { CurvaCapital, Drawdown } from "@/components/graficas/CurvaCapital";
 import { PnlPorSimbolo, RechazosPorRegla } from "@/components/graficas/PorSimbolo";
 import { Seccion } from "@/components/Seccion";
 import { usePerfilActivo } from "@/perfil/usePerfilActivo";
+import { useTitulo } from "@/layout/useTitulo";
 
 /**
  * Las seis gráficas del experimento (F4.6).
@@ -18,6 +19,7 @@ import { usePerfilActivo } from "@/perfil/usePerfilActivo";
  */
 export function Analitica() {
   const { perfil, referencia } = usePerfilActivo();
+  useTitulo("Analítica", perfil?.name);
   const consulta = useAnalytics(referencia);
   const simbolo = perfil?.currency_symbol ?? "";
 

@@ -34,7 +34,7 @@ export function Seccion<T>({ titulo, consulta, children }: Props<T>) {
 
 export function AvisoDeError({ error }: { error: Error }) {
   return (
-    <p className="rounded-md border border-negative/40 bg-card p-3 text-[13px] text-negative">
+    <p className="rounded-md border border-negative/40 bg-card p-3 text-[13px] text-negative-ink">
       {error.message}
       <br />
       <span className="text-text-muted">

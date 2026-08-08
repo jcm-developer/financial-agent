@@ -834,7 +834,37 @@ diez sesiones en silencio.
       diez días, y un texto genérico obliga a ir a mirar la base para saber cuál es. El de
       posiciones cerradas explica además que el horizonte en días no cierra nada por sí solo,
       que es la pregunta que salió al revisar `mandatory_exits`.
-- [ ] **F4.9** Responsive y accesible: foco visible, contraste AA, tablas navegables.
+- [x] **F4.9** Repaso de accesibilidad y responsive.
+
+      ⚠️ **El tema claro tenía tres fallos reales de contraste, y se midieron en vez de
+      mirarse.** Sobre la tarjeta (`#fcfcfb`), con el 4,5:1 que pide AA para texto normal:
+
+      | Token | Antes | Ahora |
+      |---|---|---|
+      | `text-muted` | **3,50:1** | 4,55:1 |
+      | `warning` | **1,79:1** | 4,53:1 |
+      | `positive` / `negative` como texto | **4,30 / 3,85** | 4,55 / 5,50 |
+
+      El ámbar era el peor y estaba justo en los avisos —antigüedad del precio, «SIN
+      RESPUESTA», «reconectando»—, o sea ilegible exactamente donde hay que leer. El tema
+      oscuro pasaba todo.
+
+      **El arreglo respeta la separación que la paleta ya hacía**: `delta-good`/`delta-bad`
+      existían aparte de `positive`/`negative` porque una cosa es una marca y otra es letra.
+      Se añaden `--positive-ink` / `--negative-ink` con el mismo criterio: un relleno de
+      gráfica cumple con 3:1 y una etiqueta necesita 4,5, así que los colores de las series
+      **no se tocan** —eso habría cambiado las gráficas— y el texto usa la tinta.
+
+      Lo demás del repaso:
+      - **Enlace de salto al contenido.** Sin él, llegar al contenido con teclado obliga a
+        recorrer la cabecera y las nueve entradas de la barra lateral en **cada** página.
+      - **`prefers-reduced-motion`**: el punto que late del indicador es decorativo —el texto
+        ya dice el estado— y a algunas personas les provoca mareo.
+      - **Título de documento por pantalla**, con el nombre del experimento. En una SPA no
+        cambia solo: un lector de pantalla anunciaría siempre lo mismo al navegar, y con
+        varias pestañas del mismo experimento todas se llamarían igual.
+      - Tablas con `scope`, `caption` para lectores de pantalla y desplazamiento horizontal
+        **dentro de su hueco**, sin arrastrar la página.
 - [x] **F4.10** Modo desarrollo: `npm run dev` con proxy de `/api` y recarga en caliente.
       Verificado contra la API de verdad.
 
