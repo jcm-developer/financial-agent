@@ -1,0 +1,139 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* shadcn/ui espera la variante `dark` como CLASE y no como media query: el
+   interruptor manual tiene que ganar a la preferencia del sistema en los dos
+   sentidos, que es exactamente lo que ya hacia web/index.html con
+   [data-theme]. */
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+   Paleta heredada del dashboard viejo, valor por valor. No es nostalgia:
+
+   * El par positivo/negativo es AZUL/ROJO y no verde/rojo a proposito. Es un
+     divergente con polo frio y polo calido, asi que se sigue leyendo sin
+     distinguir el verde del rojo. Cambiarlo aqui habria deshecho esa decision
+     sin que nadie lo notara hasta tenerlo delante.
+   * `delta-good`/`delta-bad` son APARTE de positive/negative: los usa el texto
+     de las variaciones, donde si hace falta el verde porque no compite con
+     ninguna serie de la grafica.
+   * Los neutros son calidos (#f9f9f7, no #ffffff), que es lo que evita el
+     aspecto de hoja de calculo.
+   --------------------------------------------------------------------------- */
+:root {
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --surface-sunken: #f2f2ef;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border-subtle: rgba(11, 11, 11, 0.1);
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --positive: #2a78d6;
+  --negative: #e34948;
+  --delta-good: #006300;
+  --delta-bad: #d03b3b;
+  --warning: #fab219;
+  --shadow-card: 0 1px 2px rgba(11, 11, 11, 0.04);
+  --radius: 0.5rem;
+}
+
+.dark {
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --surface-sunken: #222221;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --positive: #3987e5;
+  --negative: #e66767;
+  --delta-good: #0ca30c;
+  --delta-bad: #e66767;
+  --warning: #fab219;
+  --shadow-card: none;
+}
+
+/* Los nombres que espera shadcn/ui a la izquierda, la paleta de arriba a la
+   derecha. Asi los componentes que copie el CLI encajan sin retocarlos, y a la
+   vez no hay dos paletas compitiendo. */
+@theme inline {
+  --color-background: var(--page);
+  --color-foreground: var(--text-primary);
+
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text-primary);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text-primary);
+
+  --color-primary: var(--series-1);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--surface-sunken);
+  --color-secondary-foreground: var(--text-primary);
+
+  --color-muted: var(--surface-sunken);
+  --color-muted-foreground: var(--text-muted);
+  --color-accent: var(--surface-sunken);
+  --color-accent-foreground: var(--text-primary);
+
+  --color-destructive: var(--negative);
+  --color-destructive-foreground: #ffffff;
+
+  --color-border: var(--border-subtle);
+  --color-input: var(--border-subtle);
+  --color-ring: var(--series-1);
+
+  /* Vocabulario del dominio. Existe aparte porque una celda de P&L no es
+     "destructive": es negativa, que no significa lo mismo ni se colorea igual. */
+  --color-surface-sunken: var(--surface-sunken);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-delta-good: var(--delta-good);
+  --color-delta-bad: var(--delta-bad);
+  --color-warning: var(--warning);
+  --color-grid: var(--grid);
+  --color-axis: var(--axis);
+
+  /* Series para Recharts (F4.6), en el orden en que deben usarse. */
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* Foco visible en todo lo que reciba foco: es la mitad de F4.9 y cuesta una
+     regla ponerlo desde el principio en lugar de repasarlo al final. */
+  :focus-visible {
+    @apply outline-2 outline-offset-1 outline-ring;
+  }
+
+  /* Las cifras en tablas se comparan en vertical, asi que necesitan ancho fijo
+     por digito. Sin esto las columnas de dinero bailan y la vista no puede
+     recorrerlas de un salto. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}

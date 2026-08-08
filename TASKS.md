@@ -615,9 +615,14 @@ esperan a que F4 tenga frontend que servir.
 ### F4 — Frontend React + Tailwind
 
 **Orden de ataque (decidido 2026-08-08).** Seis tramos, y el primero va solo porque es el que
-falla: **A** andamiaje y toolchain (F4.1, F4.2, F4.10) → **B** capa de datos (F4.4, F4.5) →
+falla: **A** andamiaje y toolchain (F4.1, F4.2, F4.10) ✅ → **B** capa de datos (F4.4, F4.5) →
 **C** layout y selector de perfil (F4.3, F5.5) → **D** pantallas (F4.7, F4.8) → **E** gráficas
 (F4.6) → **F** cierre (F4.9, F4.11, F7.2, F7.4).
+
+El tramo A termina en una página que pinta `/api/markets` con los tipos generados. Es
+deliberadamente un cartel de "estoy vivo" y no una pantalla: demuestra las cuatro cosas que
+tenían que quedar funcionando —React compila, Tailwind aplica la paleta, el proxy alcanza la
+API y los tipos de F3.6 encajan con lo que responde el servidor— y desaparece en el tramo D.
 
 **F4 se construye mientras el experimento corre**, no antes. El dashboard viejo funciona y la
 API abre el histórico en modo `ro` (D5), así que desarrollar contra la base del experimento en
@@ -640,11 +645,33 @@ diez sesiones en silencio.
   este proyecto se dedica a no confundir dos experimentos, y un selector en memoria es la
   forma más fácil de mirar el equivocado.
 
-- [ ] **F4.1** Andamiaje **Vite + React + TypeScript** en `app/`. El directorio ya existe:
-      F3.6 dejó ahí `app/src/api/types.ts`, los tipos generados del OpenAPI. El build tiene
-      que salir en `app/dist`, que es donde lo busca la API (F3.7).
-- [ ] **F4.2** Tailwind CSS v4 + tema propio (dark por defecto) y **shadcn/ui** para tablas,
-      diálogos, selects y toasts.
+- [x] **F4.1** Andamiaje **Vite 8 + React 19 + TypeScript 7** en [app/](app/). El build sale
+      en `app/dist`, donde lo busca `APP_DIST` de [api/deps.py](api/deps.py). Comprobado de
+      punta a punta: `npm run build` y la API sirviendo **el bundle de verdad** (no la página
+      de "falta el frontend"), con el 404 de `/api/...` todavía en JSON y la vuelta a
+      `index.html` funcionando para las rutas de la SPA.
+
+      Dos cosas que salieron al montarlo:
+      - **TypeScript 7 ha eliminado `baseUrl`.** Ahora `paths` se resuelve relativo al propio
+        `tsconfig.json`, que es lo que hacía falta de todas formas; el alias `@/…` que espera
+        shadcn funciona igual.
+      - **`__dirname` no existe en un config ESM** y `new URL(...).pathname` deja una barra
+        delante de la letra de unidad en Windows. Se resuelve con `fileURLToPath`, y aquí
+        importa: se desarrolla en Windows y se despliega en Linux dentro de Docker.
+- [x] **F4.2** Tailwind CSS v4 (plugin de Vite, sin `tailwind.config.js`) y `components.json`
+      listo para que el CLI de **shadcn/ui** copie componentes sin retoques.
+
+      **La paleta es la del dashboard viejo, valor por valor**, mapeada a los nombres que
+      espera shadcn en un `@theme inline`. No es nostalgia: el par positivo/negativo es
+      **azul/rojo y no verde/rojo a propósito** —un divergente con polo frío y polo cálido se
+      sigue leyendo sin distinguir el verde del rojo— y los `delta-good`/`delta-bad` son
+      aparte porque el texto de las variaciones sí puede usar verde, donde no compite con
+      ninguna serie de la gráfica. Coger la paleta por defecto de shadcn habría deshecho esa
+      decisión sin que nadie lo notara hasta tenerlo delante.
+
+      Tema oscuro por defecto, con la clase en `<html>` puesta por un script en línea antes
+      de pintar: sin eso hay un fogonazo del tema equivocado en cada carga. El interruptor
+      manual gana a la preferencia del sistema en los dos sentidos, igual que el viejo.
 - [ ] **F4.3** `react-router` y layout: barra lateral con Perfiles, Dashboard, Posiciones,
       Decisiones, Órdenes, Ajustes.
 - [ ] **F4.4** Datos con **TanStack Query** contra la API.
@@ -665,7 +692,22 @@ diez sesiones en silencio.
       `age_seconds` de las cotizaciones, que es la medición de F2.1c puesta donde se ve.
 - [ ] **F4.8** Estados de carga, vacío y error decentes en cada pantalla (hoy no existen).
 - [ ] **F4.9** Responsive y accesible: foco visible, contraste AA, tablas navegables.
-- [ ] **F4.10** Modo desarrollo: `vite dev` con proxy a la API, recarga en caliente.
+- [x] **F4.10** Modo desarrollo: `npm run dev` con proxy de `/api` y recarga en caliente.
+      Verificado contra la API de verdad.
+
+      ⚠️ **El 8000 está ocupado, y no por la API.** Es el default de `run.py api` pero
+      también el del dashboard viejo (`run.py serve`), y los dos no caben —lo decía F3.1—.
+      Durante el experimento eso deja de ser teórico: **las dos semanas se vigilan con el
+      dashboard viejo mientras esto se construye**. Por eso el destino del proxy es
+      configurable en lugar de estar fijo:
+
+      ```
+      python run.py api --port 8001
+      VITE_API_TARGET=http://127.0.0.1:8001 npm run dev
+      ```
+
+      Detalle de Windows que cuesta un rato: **Vite escucha en `localhost` (`::1`), no en
+      `127.0.0.1`**, así que un `curl` a la IP no responde aunque el servidor esté arriba.
 - [ ] **F4.11** Retirar `web/index.html` y `web/server.py`.
 
 ### F5 — Pantalla de perfiles / experimentos

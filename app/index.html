@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>financial-bot · operativa</title>
+    <script>
+      // Se aplica antes de pintar para que no haya un fogonazo del tema
+      // equivocado. La clase ya viene puesta en <html> porque el tema por
+      // defecto es oscuro (F4.2); esto solo la quita si hay preferencia
+      // guardada de lo contrario.
+      //
+      // El interruptor manual gana a la preferencia del sistema en los dos
+      // sentidos, igual que hacia el dashboard viejo.
+      try {
+        const guardado = localStorage.getItem("tema");
+        const oscuro = guardado ? guardado === "dark" : true;
+        document.documentElement.classList.toggle("dark", oscuro);
+        document.documentElement.style.colorScheme = oscuro ? "dark" : "light";
+      } catch {
+        /* localStorage bloqueado: se queda el tema por defecto. */
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
