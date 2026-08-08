@@ -46,6 +46,66 @@ Mira `git log` antes de escribir. La convención es propia y conviene respetarla
 
 ---
 
+## Idioma: el código en inglés, lo que se lee en español
+
+Hay **tres cubos** y confundirlos es el error fácil, porque la regla no es «todo en un
+idioma» sino «cada cosa en el idioma de quien la lee».
+
+| Qué | Idioma | Alcance exacto |
+|---|---|---|
+| **Código** | **Inglés, estrictamente** | Identificadores (variables, funciones, clases, componentes, props, hooks, columnas, endpoints), **nombres de fichero y de carpeta**, comentarios, docstrings, nombres de test, mensajes de log y de excepción, claves de JSON internas |
+| **Texto de la interfaz** | **Español** | Todo lo que aparece en pantalla: rótulos, estados vacíos, avisos, `aria-label`, `title`, títulos de página. Es el idioma del producto, no del código |
+| **Documentación y commits** | **Español** | La prosa de los cuatro documentos y los mensajes de commit, con la convención de acentos de arriba |
+
+Nunca se mezclan los dos primeros en una misma línea. El caso típico es una constante de
+copy: el **nombre** va en inglés y el **valor** en español.
+
+```tsx
+const EMPTY_POSITIONS = "No hay posiciones abiertas en este experimento";
+```
+
+**Por qué el código en inglés y no en español, si el proyecto es de un solo autor:** porque
+la mitad del vocabulario ya lo impone el dominio y no se puede traducir sin mentir —`stop`,
+`fill`, `drawdown`, `equity`, `screener`, y los nombres de columna de `schema.sql`—, así que
+un código en español acaba siendo código en dos idiomas con la frontera puesta donde tocó.
+`ordenes` junto a `filled_qty` no es español: es ruido.
+
+**Por qué la documentación se queda en español:** es el registro de trabajo, se lee entero y
+de una sentada, y traducirlo no le añadiría nada a nadie. Es una decisión distinta de la de
+arriba, no una excepción a ella.
+
+⚠️ **Hoy el proyecto no cumple la primera fila.** El frontend entero está en español
+(`paginas/`, `Tabla`, `Boton`, `piezas.tsx`) y todos los comentarios de Python también. La
+regla es **para el código nuevo**; la migración de lo que ya hay es **F8.8**, y se hace de una
+vez o no se hace: a medias deja exactamente el código en dos idiomas que la regla evita.
+
+---
+
+## Nomenclatura de ficheros y carpetas
+
+La regla que las une todas: **un fichero se llama como lo que exporta.** Si al renombrar el
+export no hace falta renombrar el fichero, el nombre está mal puesto.
+
+| Qué | Convención | Ejemplos |
+|---|---|---|
+| Carpetas | minúsculas, una sola palabra, sin guiones ni `camelCase` | `src`, `api`, `tools`, `tests`, `universe`, `api/routes`, `app/src/components` |
+| Módulos Python | `snake_case.py` | `market_calendar.py`, `sim_broker.py`, `bar_cache.py` |
+| Tests Python | `test_<módulo>.py`, con el nombre exacto del módulo que prueban | `test_risk.py` ← `src/risk.py` |
+| Fichero que exporta **un** componente React | `PascalCase.tsx`, idéntico al componente | `Tabla.tsx` → `<Tabla>`, `SelectorPerfil.tsx` → `<SelectorPerfil>` |
+| Fichero que agrupa **varios** exports | `camelCase.tsx` / `.ts`, con nombre de colección | `piezas.tsx`, `graficas/base.tsx`, `formato.ts`, `keys.ts` |
+| Hooks | `useAlgo.ts`, idéntico al hook | `useTitulo.ts`, `usePerfilActivo.ts` |
+| Tests de TypeScript | `<fichero>.test.ts`, al lado del que prueban | `stream.test.ts` ← `stream.ts` |
+| Documentos de raíz | `MAYUSCULAS.md` | `README.md`, `TASKS.md`, `DESIGN.md` |
+
+**Sin sufijos de tipo en el nombre:** ni `TablaComponent.tsx`, ni `utilsHelper.ts`, ni
+`risk_module.py`. La carpeta ya dice qué es y la extensión ya dice con qué está escrito.
+
+**Una carpeta por concepto, no por variante.** Se añade una carpeta cuando hay algo que
+agrupar de verdad (`components/graficas/`, `api/routes/`), no para separar dos ficheros que
+se parecen.
+
+---
+
 ## Comandos
 
 ### Backend (Python 3.12)
@@ -206,6 +266,9 @@ resto junto.
 - **El símbolo de divisa se pasa siempre, nunca se asume** (FE.8): un presupuesto europeo
   escrito con `$` invita a compararlo con otro como si fuera la misma unidad.
 - **El color nunca es el único portador del significado**: siempre con texto o `title`.
+- **El código va en inglés y el texto de pantalla en español**, sin mezclarlos en la misma
+  línea. Los nombres de fichero y de carpeta son código, así que van en inglés y siguen la
+  tabla de nomenclatura de arriba.
 - **Los estados vacíos se redactan caso por caso.** «No hay posiciones» y «no hay decisiones»
   significan cosas distintas, y un texto genérico obliga a ir a mirar la base de datos.
 - **Los comentarios explican por qué, y qué se descartó**, no qué hace el código. Es el

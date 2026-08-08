@@ -24,6 +24,39 @@ en Analítica. Sin Framer Motion, sin fuentes externas.
 
 ---
 
+## Idioma y nombres
+
+La pantalla habla **español** y el código que la dibuja se escribe **en inglés**.
+No es una contradicción: son dos audiencias distintas y la frontera está en el
+signo de igual.
+
+```tsx
+const EMPTY_POSITIONS = "No hay posiciones abiertas en este experimento";
+```
+
+Va en inglés todo lo que no se ve: nombres de componente, props, hooks, variables,
+comentarios, **nombres de fichero y de carpeta**. Va en español todo lo que se lee:
+rótulos, estados vacíos, textos de aviso, `aria-label`, `title` y títulos de
+página. Un `aria-label` es texto de pantalla aunque no se pinte: lo dice un lector
+de pantalla en voz alta, y decirlo en otro idioma que el resto de la página es el
+mismo fallo, solo que sin verlo.
+
+Los nombres siguen la tabla de [CLAUDE.md](CLAUDE.md). Lo que afecta a `app/`:
+
+- **Un componente por fichero → `PascalCase.tsx` con su nombre exacto**
+  (`Tabla.tsx`, `IndicadorEnVivo.tsx`). Renombrar el componente obliga a renombrar
+  el fichero; si no, el nombre estaba mal.
+- **Una colección de exports → `camelCase.tsx`** (`piezas.tsx`, `graficas/base.tsx`).
+  La minúscula inicial es la señal: dentro no hay «el» componente que da nombre al
+  fichero, sino un juego de piezas del que se importa lo que haga falta.
+- **Hooks → `useAlgo.ts`**, y las carpetas en minúscula y una sola palabra.
+
+⚠️ **Hoy `app/` está entero en español**, empezando por `paginas/` y `piezas.tsx`.
+La regla vale para lo que se escriba de ahora en adelante; renombrar lo que ya hay
+es **F8.8** y toca las rutas, así que va de una vez y con su propio commit.
+
+---
+
 ## Colores
 
 ### Tokens de tema

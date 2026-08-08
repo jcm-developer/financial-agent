@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F4 cerrada: F4.11 retira `web/` y `/api/dashboard`; F8.2 con ella)
+Última actualización: 2026-08-09 (F8.9 limpia el directorio; queda escrita la convención de idioma y nomenclatura, y F8.8 abre la deuda de migrar el código existente)
 
 ---
 
@@ -210,8 +210,8 @@ otra forma y pide su SDK, así que queda en F9.1.
 
 - [x] **F1.1** **Borrado total**: la base anterior (40 ciclos, 166 decisiones) se aparta en
       `backup/trading.db.pre-F1-20260808` en lugar de borrarse — recuperarla luego sería
-      imposible. `backup/` está en `.gitignore`; bórrala cuando quieras. Falta tirar el
-      volumen de Docker: `docker compose down -v`.
+      imposible. `backup/` estaba en `.gitignore` y **se borró en F8.9** (2026-08-09). Falta
+      tirar el volumen de Docker: `docker compose down -v`.
 - [x] **F1.2** `profiles`, `agent_settings`, `agent_settings_history`, `profile_universe`.
       Los límites duros del risk manager nacen **NULL a propósito**: NULL significa "derívalo
       de los sliders". Si nacieran con números, mover el slider de riesgo no cambiaría nada.
@@ -1205,7 +1205,9 @@ diez sesiones en silencio.
 - [x] **F8.1** Base a cero (2026-08-08): `data/trading.db` apartada en
       `backup/trading.db.pre-F6-20260808` (mismo criterio que F1.1: borrarla sería
       irreversible) y `docker compose down -v` ejecutado, volumen `trading-data` eliminado.
-      Bórralos de `backup/` cuando quieras.
+      **`backup/` borrado el 2026-08-09** en F8.9, por decisión explícita y sabiendo que es
+      irreversible: son copias de esquemas anteriores a F6, o sea de antes de que existiera
+      el experimento que se está midiendo.
 - [x] **F8.2** Hecho en **F4.11**, donde está el registro. Eran la misma tarea vista desde F4
       («cerrar el frontend») y desde F8 («limpiar»), y se cerraron juntas.
 - [ ] **F8.3** ⚠️ **A medias.** Las variables de estrategia ya **no las lee el ciclo** (F6.4)
@@ -1240,6 +1242,48 @@ diez sesiones en silencio.
       universo— pero toca esquema, `db.py`, `profile_settings.py`, `config.py`, el screener
       y sus tests, así que conviene hacerlo de una vez y no a medias. FE.11 ya usa el
       nombre bueno en `Market.min_turnover`, así que hoy el código convive con los dos.
+- [ ] **F8.8** Pasar el código existente al inglés. La convención quedó escrita el
+      2026-08-09 en [CLAUDE.md](CLAUDE.md) («El código va en inglés, lo que se lee en
+      español») y en [DESIGN.md](DESIGN.md), y **rige para el código nuevo desde ya**; esta
+      tarea es la deuda de lo que ya estaba escrito.
+
+      **Qué toca:** `app/src/paginas/` → `pages/`, `perfil/` → `profile/`,
+      `components/graficas/` → `charts/`, `piezas.tsx` → `pieces.tsx`, y con ellos los ~20
+      componentes (`Tabla`, `Boton`, `Insignia`, `BarraLateral`, `SelectorPerfil`…), sus
+      props y `lib/formato.ts`. En Python no hay identificadores que cambiar —ya están en
+      inglés— pero sí **todos los comentarios y docstrings**, que son varios miles de líneas
+      y son el registro real del proyecto: traducirlos mal cuesta más que dejarlos.
+
+      **Lo que NO se toca, y es la mitad del trabajo:** el texto de pantalla se queda en
+      español. Un renombrado ciego que traduzca también los literales convierte la interfaz
+      al inglés sin que nadie lo haya pedido.
+
+      ⚠️ **Cambia las rutas de la URL** (`/p/europa-01/posiciones` → `/positions`), que es
+      estado que el navegador recuerda en marcadores e historial. Es la razón de peso para
+      hacerlo **de una vez y en un commit propio**: a medias deja el código en dos idiomas,
+      que es exactamente lo que la convención evita.
+- [x] **F8.9** Limpieza de lo que sobraba en el directorio (2026-08-09).
+
+      **Basura en disco, ninguna en el repositorio:** `SERSJAUMEAPPDATAocaltemp/f64smoke/`
+      —una carpeta nacida de una ruta mal expandida en una consola durante el smoke de
+      F6.4, no de ningún código: no hay una sola lectura de `TEMP` ni de `APPDATA` en el
+      proyecto—, `backup/` (ver F8.1), `.pytest_cache/` y los cinco `__pycache__/`.
+
+      **Dos dependencias de npm que nadie importaba**, ambas restos del `shadcn init`:
+      `class-variance-authority` (cero apariciones en `app/src`) y `tw-animate-css`, que sí
+      se importaba en `index.css` pero solo aporta las utilidades `animate-in`/`fade-in` de
+      shadcn, y la única animación del proyecto es `animate-pulse`, que es de Tailwind. Se
+      quedan `clsx` y `tailwind-merge`, que son lo que hay debajo de `cn()`.
+
+      **Se conserva `app/components.json`** aunque hoy no haya ni un componente de shadcn:
+      es la configuración que hace que traerse uno sea un comando y no una tarde, que es
+      justamente el plan que documenta DESIGN.md.
+
+      **No se encontró código muerto**, y se buscó: los 21 módulos de `src/` y `tools/`
+      tienen quien los importe, los 34 ficheros de `app/src` tienen quien los use, y las
+      siete dependencias de `requirements.txt` están todas en uso. `src/dashboard.py`
+      parecía huérfano tras F4.11 y no lo es: lo usa `run.py report`, que es la analítica de
+      consola.
 
 ### F9 — Futuro (no bloquea)
 

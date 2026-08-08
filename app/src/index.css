@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "tw-animate-css";
 
 /* shadcn/ui espera la variante `dark` como CLASE y no como media query: el
    interruptor manual tiene que ganar a la preferencia del sistema en los dos
