@@ -98,6 +98,32 @@ def test_borrar_perfil_arrastra_su_historico(db):
     assert cycle_id  # el ciclo existio antes del borrado
 
 
+def test_borrar_perfil_arrastra_el_libro_del_broker_simulado(db):
+    """`sim_accounts` no cuelga de `portfolios` con FK: su id **es** el
+    portfolio_id, pero sin `references`, asi que la cascada no lo alcanza sola.
+
+    Se comprueba aparte porque el sintoma es mudo: el perfil desaparece de todas
+    las pantallas y su efectivo, sus posiciones simuladas y sus ejecuciones
+    siguen ahi ocupando sitio, sin nada que los relacione con nadie.
+    """
+    from src.sim_broker import SimBroker
+
+    profile_id = db.create_profile(name="a-borrar")
+    portfolio_id = db.get_profile(profile_id)["portfolio_id"]
+    SimBroker(
+        database=db, portfolio_id=portfolio_id, initial_cash=10_000.0,
+        slippage_bps=0.0, commission_per_order=0.0,
+    ).get_account_state()
+
+    assert db.query("select count(1) n from sim_accounts")[0]["n"] == 1
+
+    db.delete_profile(profile_id)
+
+    for tabla in ("sim_accounts", "sim_positions", "sim_fills"):
+        restantes = db.query(f"select count(1) n from {tabla}")[0]["n"]
+        assert restantes == 0, f"{tabla} conservo filas huerfanas: {restantes}"
+
+
 def test_estado_invalido_se_rechaza(db):
     profile_id = db.create_profile(name="p")
     with pytest.raises(DatabaseError, match="Estado invalido"):

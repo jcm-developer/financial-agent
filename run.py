@@ -43,6 +43,10 @@ from dataclasses import replace
 from src.config import ConfigError, DashboardSettings, Infra, Settings
 from src.cycle import TradingCycle
 from src.llm import LLMClient, LLMError
+#: El tope de simbolos seguidos en vivo vive en `profile_settings` porque el
+#: `POST /api/profiles` de F3.3 aplica la misma regla. Aqui solo se usa para el
+#: texto de --help.
+from src.profile_settings import MAX_LIVE_SYMBOLS as MAX_UNIVERSO_SEGUIDO
 
 
 def setup_logging(level: str) -> None:
@@ -567,6 +571,18 @@ def command_serve(dash: DashboardSettings, *, host: str, port: int) -> int:
     )
 
 
+def command_api(dash: DashboardSettings, *, host: str, port: int) -> int:
+    """La API de F3. Convive con `serve` hasta que F4 tenga frontend.
+
+    Son dos servidores del mismo puerto por defecto, asi que no se levantan a la
+    vez; `serve` sigue existiendo porque `web/index.html` es hoy la unica
+    interfaz que hay, y se retira en F8.2 cuando la de React la sustituya.
+    """
+    from api.main import serve as serve_api
+
+    return serve_api(host=host, port=port, db_path=dash.db_path)
+
+
 # ----------------------------------------------------------------------
 # Perfiles de experimento
 # ----------------------------------------------------------------------
@@ -645,12 +661,6 @@ def command_import_profile(infra: Infra, *, name: str, env_file: str | None) -> 
     return 0
 
 
-#: Por encima de esto, seguir el universo entero minuto a minuto deja de ser
-#: razonable: son peticiones a Yahoo por minuto desde una IP domestica (R2). El
-#: S&P 500 cae de este lado; el europeo de 89, no.
-MAX_UNIVERSO_SEGUIDO = 120
-
-
 def command_new_profile(
     infra: Infra, *, name: str, market: str, watch: int, budget: float
 ) -> int:
@@ -660,84 +670,39 @@ def command_new_profile(
     describe el experimento americano heredado. Sin este comando, montar un
     perfil europeo exigia abrir la base a mano.
 
-    Deja el perfil en `draft`: activarlo es un paso aparte y explicito, igual que
-    elegir contra que perfil se opera. Un perfil que naciera activo empezaria a
-    consumir ingesta antes de que nadie hubiera revisado sus parametros.
+    La logica vive en `src/profile_settings.create_market_profile`, que comparte
+    con el `POST /api/profiles` de F3.3: aqui solo quedan la impresion y los
+    codigos de salida.
     """
-    from src import market_calendar
     from src.db import Database, DatabaseError
-    from src.screener import load_universe
-
-    try:
-        mercado = market_calendar.get_market(market)
-    except market_calendar.UnknownMarket as exc:
-        print(f"  {exc}", file=sys.stderr)
-        return 2
-
-    if not name:
-        print("  new-profile necesita --name <nombre>.", file=sys.stderr)
-        return 2
-
-    try:
-        universo = load_universe(mercado.universe_file)
-    except Exception as exc:  # noqa: BLE001 - load_universe lanza tipos variados
-        print(f"  No se pudo leer {mercado.universe_file}: {exc}", file=sys.stderr)
-        return 1
-
-    forasteros = mercado.foreign_symbols(universo)
-    if forasteros:
-        # Si el fichero del mercado trae simbolos de otra bolsa, el perfil no
-        # llegaria ni a resolverse. Mejor decirlo aqui que en el primer ciclo.
-        print(f"  {mercado.universe_file} tiene simbolos que no son de "
-              f"{mercado.code}: {', '.join(forasteros[:8])}", file=sys.stderr)
-        return 1
-
-    seguidos = universo
-    if watch > 0:
-        seguidos = universo[:watch]
-    elif len(universo) > MAX_UNIVERSO_SEGUIDO:
-        print(
-            f"  {mercado.universe_file} tiene {len(universo)} simbolos y el "
-            f"ingestor pide uno por peticion cada minuto.\n"
-            f"  Elige cuantos seguir en vivo:  --watch 50\n"
-            f"  (el screener sigue cribando el universo entero para el ciclo)",
-            file=sys.stderr,
-        )
-        return 2
+    from src.profile_settings import UniverseError, create_market_profile
 
     with Database(path=infra.db_path) as database:
         try:
-            profile_id = database.create_profile(
-                name=name,
-                description=f"Mercado {mercado.code}: {mercado.label}",
-                settings={
-                    "market": mercado.code,
-                    "benchmark": mercado.benchmark,
-                    "universe_file": mercado.universe_file,
-                    # El suelo de liquidez sale del mercado, no del default del
-                    # esquema (FE.11). Antes esto era un aviso impreso que habia
-                    # que aplicar a mano abriendo la base, y un aviso que exige
-                    # trabajo manual es un fallo esperando: con los 20 M de 'us'
-                    # el screener europeo descarta en silencio 15 de los 89.
-                    "screener_min_dollar_volume": mercado.min_turnover,
-                    "initial_budget": budget,
-                },
+            created = create_market_profile(
+                database, name=name, market=market, watch=watch, budget=budget
             )
-            # El universo en vivo es lo que el ingestor sigue minuto a minuto;
-            # `universe_file` es lo que criba el screener para el ciclo. Son dos
-            # cosas distintas y por eso se rellenan las dos: un perfil con solo
-            # fichero no aparece en `active_universe_by_market` y se queda sin
-            # precios en vivo sin que nada lo diga.
-            database.set_profile_universe(profile_id, seguidos)
+        except ConfigError as exc:
+            # "Elige tu otra cosa": mercado desconocido, sin nombre, universo
+            # demasiado grande para seguirlo entero.
+            print(f"  {exc}", file=sys.stderr)
+            return 2
+        except UniverseError as exc:
+            # El fichero del repositorio esta mal; no es una eleccion del usuario.
+            print(f"  {exc}", file=sys.stderr)
+            return 1
         except DatabaseError as exc:
             print(f"  No se pudo crear el perfil: {exc}", file=sys.stderr)
             return 1
 
+    mercado = created.market
+
     _print_header(f"Perfil {name!r} creado en {mercado.label}")
     print(f"  Divisa: {mercado.currency}   "
           f"sesion {mercado.open_time:%H:%M}-{mercado.close_time:%H:%M} hora local")
-    print(f"  Screener sobre {mercado.universe_file} ({len(universo)} simbolos)")
-    print(f"  Ingesta en vivo de {len(seguidos)} simbolos")
+    print(f"  Screener sobre {mercado.universe_file} "
+          f"({created.universe_size} simbolos)")
+    print(f"  Ingesta en vivo de {created.watched} simbolos")
     print(f"  Presupuesto inicial: {mercado.currency_symbol}{budget:,.2f}")
     print(f"  Benchmark: {mercado.benchmark}")
     # La cifra va en la divisa del mercado pese al nombre de la columna (F8.7):
@@ -772,11 +737,12 @@ def main(argv: list[str] | None = None) -> int:
         "command",
         nargs="?",
         default="check",
-        choices=["check", "status", "cycle", "report", "serve",
+        choices=["check", "status", "cycle", "report", "serve", "api",
                  "profiles", "new-profile", "import-profile", "activate"],
         help="check: diagnostico (por defecto). status: estado de la cuenta. "
              "cycle: ejecutar un ciclo. report: analitica en consola. "
-             "serve: dashboard web. profiles: listar experimentos. "
+             "serve: dashboard web (el antiguo). api: API REST + frontend. "
+             "profiles: listar experimentos. "
              "new-profile: crear un perfil para un mercado. "
              "import-profile: crear un perfil a partir del .env. "
              "activate: marcar un perfil como activo.",
@@ -820,14 +786,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    # `report` y `serve` solo leen la base: no se les exigen credenciales, para
-    # poder revisar la operativa con el .env a medio rellenar.
-    if args.command in {"report", "serve"}:
+    # `report`, `serve` y `api` solo leen la base -o escriben configuracion-: no
+    # se les exigen credenciales, para poder revisar la operativa con el .env a
+    # medio rellenar.
+    if args.command in {"report", "serve", "api"}:
         dash = DashboardSettings.load(env_file=args.env_file)
         setup_logging((os.getenv("LOG_LEVEL") or "INFO").strip().upper())
         try:
             if args.command == "serve":
                 return command_serve(dash, host=args.host, port=args.port)
+            if args.command == "api":
+                return command_api(dash, host=args.host, port=args.port)
             return command_report(dash)
         except KeyboardInterrupt:
             print("\nInterrumpido por el usuario.", file=sys.stderr)

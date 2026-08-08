@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-08 (tarde: mercado europeo + FE.11 + F2.10)
+Última actualización: 2026-08-08 (noche: F3 completa — API FastAPI)
 
 ---
 
@@ -18,7 +18,9 @@ commits y conversaciones. Marcar `[x]` al cerrarla.
 - Configuración por perfil en `agent_settings`; del `.env` solo sale la
   infraestructura ([src/config.py](src/config.py)).
 - Dashboard: HTML de 1.500 líneas ([web/index.html](web/index.html)) servido por
-  `http.server` ([web/server.py](web/server.py)).
+  `http.server` ([web/server.py](web/server.py)). **Ya conviven con la API de F3**
+  ([api/](api/), FastAPI): `python run.py serve` levanta el viejo y `python run.py api`
+  el nuevo. `web/` se retira en F8.2, cuando F4 tenga frontend.
 - Datos de mercado con `yfinance`, barras 1d/1h, caché en `bar_cache`.
 - Docker ya montado ([docker-compose.yml](docker-compose.yml)): `dashboard`, `scheduler`, `bot`.
 - **Dos bolsas**: cada perfil elige la suya en `agent_settings.market` (`eu` o `us`).
@@ -175,6 +177,13 @@ es una garantía real de que la interfaz no puede corromper el histórico. Con p
 editables desde la UI, la API necesita escribir. Mitigación (F3.3): la API solo escribe en
 las tablas de configuración (`profiles`, `agent_settings`); el histórico de operaciones
 sigue siendo de solo lectura para ella, con un test que lo verifica.
+
+✅ **Resuelto en F3.3, y mejor de lo planificado.** Lo que se ha puesto no es un test que
+compruebe que los endpoints se portan bien, sino el **autorizador de SQLite**
+([api/guard.py](api/guard.py)): las escrituras fuera de las tablas de configuración fallan
+con "not authorized" al compilar la sentencia. La garantía vuelve a ser una imposibilidad
+del motor y no una costumbre del código, que es lo que se había perdido. Los endpoints de
+lectura siguen abriendo la base en modo `ro`, o sea que esa mitad no ha cambiado nada.
 
 ### D6 — Tiempo real en la UI: SSE ✅
 
@@ -430,28 +439,184 @@ Ver D8. Cerrado salvo lo que depende de la sesión del lunes (F2.1c) y el tope p
       europeo no trae ninguno. Mismo bloqueo que F6.5 (no hay dato de sector por símbolo);
       solo conviene saber que aquí no hay ni el apaño del comentario.
 
-### F3 — API backend (FastAPI)
+### F3 — API backend (FastAPI) ✅ (2026-08-08)
 
-- [ ] **F3.1** `api/` con FastAPI + uvicorn; `requirements.txt` actualizado.
-- [ ] **F3.2** Endpoints de lectura: `/api/profiles`, `/api/dashboard`, `/api/positions`,
-      `/api/decisions`, `/api/orders`, `/api/risk-events`, `/api/cycles`, `/api/quotes`,
-      `/api/ingest-status`.
-- [ ] **F3.3** Endpoints de escritura, **limitados a las tablas de configuración**:
-      `POST/PATCH/DELETE /api/profiles`, `PATCH /api/profiles/{id}/settings`. Con un test que
-      verifique que la API no puede escribir en el histórico de operaciones (ver D5).
-- [ ] **F3.4** Control de ciclos: `POST /api/cycles/run` y `/stop`, reaprovechando el patrón
-      de subproceso de `CycleRunner` en [web/server.py](web/server.py), que ya está resuelto.
-- [ ] **F3.5** `GET /api/stream` (SSE): precios en vivo y estado del ciclo en curso.
-- [ ] **F3.6** Modelos Pydantic para request y response, y tipos TypeScript generados desde
-      el OpenAPI que FastAPI publica solo — así el frontend no repite las definiciones.
-- [ ] **F3.7** Servir el build de React como estáticos, con *fallback* a `index.html` para
-      que funcionen las rutas del SPA.
-- [ ] **F3.8** Escuchar solo en loopback por defecto, como ahora. Sin autenticación: es local.
-- [ ] **F3.9** Tests de la API con `httpx` + `TestClient`.
+Arranca con `python run.py api` (o `uvicorn api.main:app`). Documentación
+interactiva en `/docs`; el esquema OpenAPI, en `/openapi.json`.
+
+- [x] **F3.1** Paquete [api/](api/): `deps.py` (configuración y dependencias),
+      `guard.py` (la conexión acotada), `queries.py` (lecturas), `models.py`
+      (Pydantic), `runner.py` (subproceso del ciclo) y `routes/`.
+      `requirements.txt` con `fastapi` y `uvicorn`.
+
+      **Comando nuevo, `run.py api`,** que convive con `serve`. No se ha
+      renombrado el servicio de Docker: eso es F7.4, y hacerlo ahora dejaría
+      `docker compose up` sirviendo la página de "falta el frontend" en lugar
+      del dashboard que hoy funciona.
+- [x] **F3.2** Los nueve endpoints de la lista, más los que hacían falta para
+      que la interfaz no tenga que deducir nada: detalle de perfil, de ajustes,
+      de límites, historial de parámetros, detalle de ciclo y **`/api/markets`**.
+      Este último no estaba pedido y se ha añadido porque sin él la interfaz
+      tendría que cablear la divisa, el horario y el suelo de liquidez de cada
+      bolsa, que es justo lo que D8 sacó a un registro.
+
+      Dos cosas que salieron al escribirlos:
+      - **Las posiciones se valoran con `quotes_live` y se dice de dónde sale el
+        precio** (`price_source`: `live` o `cycle`). El dashboard viejo usaba
+        solo `market_snapshots`, o sea el precio que vio el analista en su
+        último ciclo. Sumar una posición valorada con el cierre de anteayer y
+        otra con el precio de hace un minuto sin saberlo da un P&L que no
+        significa nada.
+      - **`/api/quotes` publica `age_seconds`.** Es la medición de F2.1c puesta
+        donde se ve: "cada minuto" solo vale si el dato es de hace un minuto.
+- [x] **F3.3** ⚠️ **No es una convención: lo impide SQLite.** El plan decía
+      "limitados a las tablas de configuración, con un test que lo verifique".
+      Un test así comprueba que los endpoints de hoy se portan bien, no que los
+      de mañana no puedan portarse mal, y la garantía que D5 daba por perdida
+      era del segundo tipo.
+
+      [api/guard.py](api/guard.py) usa el **autorizador de SQLite**
+      (`set_authorizer`), que se consulta al compilar cada sentencia. Un
+      `insert into decisions` no falla por educación: falla con "not
+      authorized" antes de tocar el fichero. Escribibles: `profiles`,
+      `agent_settings`, `agent_settings_history`, `profile_universe` y
+      `portfolios`.
+
+      Cuatro decisiones que costaron pensarlo:
+      - **El autorizador también se dispara en los borrados en cascada.** Se
+        comprobó antes de escribir nada: al borrar un perfil, SQLite pide
+        permiso para cada `delete` que la cascada provoca en `cycles`,
+        `decisions`, `positions`… Con la lista de tablas a secas,
+        `DELETE /api/profiles` habría fallado a medias. De ahí una ventana que
+        abre **un solo método** para **una sola sentencia**, y que se cierra en
+        un `finally`; hay un test que comprueba que después vuelve a estar
+        cerrada.
+      - **`portfolios` admite INSERT y DELETE pero no UPDATE.** Crear un perfil
+        crea su cartera y borrarlo la borra, pero nada tiene por qué
+        *modificarla*: la única columna interesante es `initial_budget`, y
+        cambiarla con la curva de capital ya empezada reescribiría en silencio
+        la referencia contra la que se mide el experimento entero.
+      - **La API no ejecuta SQL libre.** `Database.execute` está para las
+        herramientas de `tools/`; desde la API lanza error. Si pudiera
+        construir SQL a mano, el autorizador sería la única barrera.
+      - **La lista de pragmas es blanca y no negra.** `pragma writable_schema`
+        deja sin efecto todo lo demás de ese módulo.
+
+      Tres tests sostienen la garantía: uno recorre **el esquema real** y
+      comprueba que no se puede borrar de ninguna tabla de histórico (una tabla
+      nueva entra sola en la prueba), otro es estructural —ninguna ruta de
+      escritura recibe una conexión sin acotar— y el tercero ejercita todas las
+      escrituras de la API de punta a punta y compara los recuentos del
+      histórico antes y después.
+
+      Endpoints: `POST/PATCH/DELETE /api/profiles`, `PATCH .../settings`,
+      `PUT .../universe` y `POST .../duplicate`. El duplicado no estaba en la
+      lista de F3.3 y se ha incluido porque F5.4 lo llama el gesto central del
+      experimento y es una escritura de configuración como las demás.
+
+      **Borrar exige repetir el nombre del perfil** (`?confirm=`). Es la única
+      llamada de la API que destruye datos que costó semanas generar.
+- [x] **F3.4** `POST /api/cycles/run` y `/stop`, más `GET /api/cycles/control/status`.
+      El `CycleRunner` se ha **copiado** a [api/runner.py](api/runner.py) en vez
+      de importarse de [web/server.py](web/server.py): ese fichero se borra en
+      F8.2 y una dependencia apuntando a un módulo con fecha de caducidad es un
+      fallo esperando al día señalado.
+
+      Se comprueban **las dos** fuentes de "ya hay un ciclo": el subproceso
+      propio y la tabla `cycles`, porque el planificador puede tener uno
+      corriendo del que este proceso no sabe nada.
+
+      Con F3.3 el subproceso pasa de prudente a necesario: la API no puede
+      escribir en `orders` ni en `positions` ni queriendo, así que operar tenía
+      que salir del proceso de todas formas.
+- [x] **F3.5** `GET /api/stream`, con eventos `quotes`, `ingest`, `cycle` y `bye`.
+
+      ⚠️ **Dicho sin adornos: por dentro sondea.** El ingestor corre en otro
+      proceso (D1), así que no hay forma de que avise; no hay bus de eventos ni
+      se va a montar uno para tres procesos que comparten un fichero. Lo que
+      hace SSE aquí es **mover el sondeo del navegador al servidor**: en lugar
+      de N pestañas pidiendo `/api/quotes` cada dos segundos por HTTP, hay un
+      bucle por conexión mirando un fichero SQLite local, y solo se manda algo
+      cuando cambia. Esa es la ganancia real, y conviene tenerla escrita para no
+      acabar creyendo que hay empuje de verdad.
+
+      Del ciclo se mandan **solo las líneas nuevas** con su índice: reenviar las
+      400 del buffer cada dos segundos convertiría el "en vivo" en un goteo de
+      megabytes.
+
+      **Las conexiones caducan** (`API_STREAM_MAX_SECONDS`, 15 min). No es una
+      limitación: `EventSource` reconecta solo —que es la razón de elegir SSE en
+      D6— así que cortar de vez en cuando devuelve los recursos del servidor sin
+      que el cliente se entere, y de paso obliga a releer la lista de símbolos,
+      que en un stream eterno se quedaría congelada. Salió de un test que se
+      colgaba, y resultó ser un fallo de diseño y no del test.
+- [x] **F3.6** Modelos en [api/models.py](api/models.py) y generador propio en
+      [tools/gen_api_types.py](tools/gen_api_types.py) → `app/src/api/types.ts`
+      (32 tipos). `--check` falla si están desfasados, para engancharlo a F8.6.
+
+      Dos límites asumidos a propósito:
+      - **No se usa `openapi-typescript`**, que es la herramienta estándar y lo
+        haría mejor, porque necesita Node y hoy no hay ni `package.json`: el
+        frontend llega en F4 y los tipos hacen falta **antes**, que es cuando se
+        monta F4.1. Cambiar a la herramienta buena será sustituir un fichero.
+      - **`/api/dashboard` no tiene modelo Pydantic** y sale como objeto libre.
+        Su cuerpo lo arma `build_dashboard`, que es un ensamblado de doce
+        consultas y ya es la definición de esa forma; escribirla otra vez sería
+        tener dos condenadas a discrepar. El frontend lo verá como
+        `Record<string, unknown>`.
+
+      `SettingsUpdate` enumera las 41 columnas de `agent_settings` una a una,
+      con sus rangos, porque es el formulario de F6.8 y un `dict` genérico no
+      ayuda en una pantalla de cuarenta campos. **Un test compara esa lista con
+      las columnas reales de la tabla**, así que una columna nueva no puede
+      quedarse fuera de la interfaz sin que salte.
+- [x] **F3.7** El build de `app/dist` se sirve con vuelta a `index.html`.
+      Mientras F4 no exista, ese hueco lo ocupa una página que dice que falta
+      —un 404 pelado se leería como una avería—.
+
+      **La vuelta a `index.html` no se traga los 404 de la API**: cualquier ruta
+      bajo `/api/` que no exista responde 404 en JSON. Sin esa excepción, una
+      errata en una URL devolvería el HTML de la aplicación con un 200 y el
+      síntoma sería un `JSON.parse` fallando tres capas más abajo. Tampoco se
+      usa `StaticFiles(html=True)` montado en `/` por lo mismo: se traga el
+      enrutado entero.
+- [x] **F3.8** `127.0.0.1` por defecto y sin autenticación. Los controles de
+      ciclo se apagan con `API_CONTROLS=false`, y **no se deducen de la
+      dirección de escucha**: dentro de Docker hay que escuchar en `0.0.0.0`
+      para que el mapeo de puertos funcione, así que el host no dice nada sobre
+      quién puede llegar. Si se escucha fuera de loopback con los controles
+      puestos, el arranque lo avisa por pantalla.
+- [x] **F3.9** [tests/test_api.py](tests/test_api.py): 52 tests con `TestClient`,
+      sin abrir sockets ni red. **Suite completa: 596 en verde.**
+
+**Tres cambios de fuera de `api/` que trajo F3:**
+
+- **`create_market_profile` y `duplicate_profile` viven ahora en
+  [src/profile_settings.py](src/profile_settings.py)**, y `run.py new-profile`
+  los usa. Antes la creación de perfiles solo existía dentro del comando; con
+  `POST /api/profiles` habría habido dos copias, y la primera regla en divergir
+  habría sido la de FE.11 —el suelo de liquidez sale del mercado—, con el
+  síntoma de que un perfil creado desde la interfaz descartaría en silencio 15
+  valores que el creado desde la consola sí analiza.
+- **`db.update_profile()`**, para que la API no construya el `UPDATE` a mano:
+  la conexión acotada niega el SQL libre, así que toda escritura pasa por un
+  método con nombre.
+- ⚠️ **Corregido un huérfano de `delete_profile` que venía de antes.**
+  `sim_accounts.id` **es** el `portfolio_id` pero sin `references`, así que la
+  cascada de `portfolios` no lo alcanzaba: borrar un perfil dejaba atrás su
+  efectivo, sus posiciones simuladas y sus ejecuciones. Existía desde F1.4 y no
+  se había notado porque borrar un perfil requería abrir la base a mano; con un
+  botón en la interfaz, pasa a ser el camino normal. Tiene test propio.
+
+**No hecho, y es de otra fase:** renombrar el servicio `dashboard` a `api` en
+[docker-compose.yml](docker-compose.yml) (F7.4) y retirar `web/` (F8.2). Las dos
+esperan a que F4 tenga frontend que servir.
 
 ### F4 — Frontend React + Tailwind
 
-- [ ] **F4.1** Andamiaje **Vite + React + TypeScript** en `app/`.
+- [ ] **F4.1** Andamiaje **Vite + React + TypeScript** en `app/`. El directorio ya existe:
+      F3.6 dejó ahí `app/src/api/types.ts`, los tipos generados del OpenAPI. El build tiene
+      que salir en `app/dist`, que es donde lo busca la API (F3.7).
 - [ ] **F4.2** Tailwind CSS v4 + tema propio (dark por defecto) y **shadcn/ui** para tablas,
       diálogos, selects y toasts.
 - [ ] **F4.3** `react-router` y layout: barra lateral con Perfiles, Dashboard, Posiciones,
@@ -642,8 +807,10 @@ Ver D8. Cerrado salvo lo que depende de la sesión del lunes (F2.1c) y el tope p
       y [.env.example](.env.example) está partido en dos mitades rotuladas: infraestructura
       arriba, heredadas abajo. La mitad de abajo sigue ahí porque `run.py import-profile` la
       necesita; se borra cuando ya no haya ningún `.env` que migrar.
-- [ ] **F8.4** `.gitignore`: falta `node_modules/`, `app/dist/`, `.vite/` (cuando exista el
-      frontend). Ya añadidos `backup/` y `spike_*.jsonl`.
+- [x] **F8.4** `.gitignore` con `node_modules/`, `app/dist/` y `.vite/`, añadidos en F3
+      porque `app/` ya existe: ahí deja `tools/gen_api_types.py` los tipos del frontend.
+      **`app/src/api/types.ts` sí se sube**, para que el frontend compile sin tener que
+      ejecutar Python antes. Ya estaban `backup/` y `spike_*.jsonl`.
 - [ ] **F8.5** ⚠️ **Hay un `.env` con claves reales en el directorio.** Está en `.gitignore`,
       pero conviene confirmar que nunca llegó a subirse.
 - [ ] **F8.6** Suite de tests entera en verde: `docker compose run --rm bot python -m pytest tests -q`.
@@ -691,6 +858,12 @@ FE se coló delante de F3 porque cambiaba el esquema (`agent_settings.market`) y
 reescribía la pregunta de F2.1c: medir la sesión americana ya no era lo que interesaba.
 Hacerlo después habría significado rehacer los endpoints de F3 y la medición del lunes.
 
+**Dónde estamos (2026-08-08, noche):** F1, F2 (salvo F2.1c), FE, F6 (salvo F6.8) y **F3**
+cerradas. Lo siguiente es **F4**, y ya tiene contra qué programar: los endpoints están
+publicados en `/openapi.json` y sus tipos de TypeScript, generados en
+`app/src/api/types.ts`. Sigue bloqueante y sin fecha propia **F2.1c**, que se mide el lunes
+por la mañana y puede cambiar la respuesta a la decisión pendiente nº 2.
+
 ---
 
 ## 4. Riesgos y puntos a vigilar
@@ -729,8 +902,13 @@ Hacerlo después habría significado rehacer los endpoints de F3 y la medición 
   europeo** (89 símbolos × 510 barras) y ~165 MB con los dos; con la poda de 90 días el
   fichero se estabiliza sobre 350–500 MB. Sigue siendo asumible, pero ya no es
   despreciable: mirarlo antes de añadir un tercer perfil.
-- **R5 — La API pasa a poder escribir.** Se pierde la garantía de solo lectura del dashboard
-  actual. Acotado a las tablas de configuración y verificado con un test (F3.3).
+- **R5 — La API pasa a poder escribir.** ✅ **Cubierto (F3.3).** No se ha perdido la
+  garantía: se ha movido. Las lecturas siguen abriendo SQLite en modo `ro` y las escrituras
+  van por una conexión con **autorizador**, que rechaza cualquier `INSERT`/`UPDATE`/`DELETE`
+  fuera de `profiles`, `agent_settings`, `agent_settings_history`, `profile_universe` y
+  `portfolios`. No es una convención que haya que recordar al escribir el siguiente
+  endpoint: lo impide el motor. La única excepción es borrar un perfil, que arrastra su
+  histórico a propósito y exige repetir el nombre para confirmar.
 - **R6 — Parámetros editables en caliente.** ✅ **Cubierto.** `agent_settings_history`
   registra cada cambio real (F6.2) y cada ciclo guarda copia de los parámetros con los que
   corrió en `cycles.settings_json` (F6.3). Queda un hueco pequeño: el ciclo hace la copia

@@ -300,6 +300,30 @@ class Database:
         )
         return rows[0] if rows else None
 
+    def update_profile(
+        self, profile_id: str, *, name: str | None = None,
+        description: str | None = None,
+    ) -> list[str]:
+        """Renombra o redescribe un perfil. Devuelve lo que cambio.
+
+        Existe para que la API no tenga que construir el UPDATE a mano: la
+        conexion acotada de `api/guard.py` niega el SQL libre a proposito, asi
+        que toda escritura pasa por un metodo con nombre donde se ve que toca.
+        """
+        payload: dict[str, Any] = {}
+        if name is not None:
+            name = name.strip()
+            if not name:
+                raise DatabaseError("El perfil necesita un nombre.")
+            payload["name"] = name
+        if description is not None:
+            payload["description"] = description or None
+        if not payload:
+            return []
+        payload["updated_at"] = _now()
+        self._update("profiles", profile_id, payload)
+        return sorted(key for key in payload if key != "updated_at")
+
     def set_profile_status(self, profile_id: str, status: str) -> None:
         valid = {"draft", "active", "paused", "archived"}
         if status not in valid:
@@ -310,7 +334,20 @@ class Database:
         self._update("profiles", profile_id, payload)
 
     def delete_profile(self, profile_id: str) -> None:
-        """Borra el perfil y, en cascada, su cartera y todo su historico."""
+        """Borra el perfil y, en cascada, su cartera y todo su historico.
+
+        El libro del broker simulado hay que borrarlo a mano: `sim_accounts.id`
+        **es** el portfolio_id, pero sin `references`, asi que la cascada de
+        `portfolios` no lo alcanza. Sin esta linea, borrar un perfil dejaba
+        atras su efectivo, sus posiciones simuladas y sus ejecuciones —
+        `sim_positions` y `sim_fills` si cuelgan de `sim_accounts`— y el fichero
+        crecia con contabilidad de experimentos que ya no existen.
+        """
+        self._execute(
+            "delete from sim_accounts where id in "
+            "(select id from portfolios where profile_id = ?)",
+            (profile_id,),
+        )
         self._execute("delete from profiles where id = ?", (profile_id,))
 
     # -- Parametros del agente ---------------------------------------------

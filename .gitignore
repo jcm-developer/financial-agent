@@ -15,3 +15,10 @@ __pycache__/
 venv/
 spike_*.jsonl
 backup/
+
+# Frontend (F4). `app/src/api/types.ts` SI se sube: lo genera
+# tools/gen_api_types.py y tenerlo en el repositorio permite compilar el
+# frontend sin ejecutar Python antes.
+node_modules/
+app/dist/
+.vite/

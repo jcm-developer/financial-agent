@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from . import llm, market_calendar, risk_presets
@@ -279,6 +280,159 @@ def load_for_cycle(
     with Database(path=infra.db_path) as db:
         profile_id = select_profile(db, name=profile_name or infra.default_profile)
         return profile_id, resolve_settings(db, profile_id, infra=infra)
+
+
+# ----------------------------------------------------------------------
+# Creacion de perfiles
+# ----------------------------------------------------------------------
+
+#: Por encima de esto, seguir el universo entero minuto a minuto deja de ser
+#: razonable: son peticiones a Yahoo por minuto desde una IP domestica (R2). El
+#: S&P 500 cae de este lado; el europeo de 89, no.
+MAX_LIVE_SYMBOLS = 120
+
+
+class UniverseError(RuntimeError):
+    """El fichero de universo del mercado no se puede usar tal cual.
+
+    Separada de `ConfigError` porque son dos problemas distintos para quien lo
+    sufre: `ConfigError` es "elige tu otra cosa" y esta es "el fichero del
+    repositorio esta mal". La CLI las traduce a codigos de salida distintos.
+    """
+
+
+@dataclass(frozen=True)
+class CreatedProfile:
+    """Lo que hay que contar despues de crear un perfil.
+
+    Se devuelve en lugar de solo el id porque los dos frontales lo enseñan —la
+    consola lo imprime y la API lo devuelve en el cuerpo— y sin esto cada uno
+    tendria que volver a leer el fichero de universo para contar lo mismo.
+    """
+
+    profile_id: str
+    market: market_calendar.Market
+    universe_size: int   # simbolos que criba el screener
+    watched: int         # simbolos que el ingestor sigue minuto a minuto
+
+
+def create_market_profile(
+    db: Database,
+    *,
+    name: str,
+    market: str,
+    watch: int = 0,
+    budget: float = 10_000.0,
+    description: str = "",
+) -> CreatedProfile:
+    """Crea un perfil desde cero para un mercado, con su universo ya puesto.
+
+    Vive aqui y no en `run.py` porque tiene **dos frontales**: el comando
+    `new-profile` y el `POST /api/profiles` de F3.3. Con una copia en cada uno,
+    la primera regla en divergir seria la de FE.11 —el suelo de liquidez sale
+    del mercado— y el sintoma seria un perfil creado desde la interfaz que
+    descarta en silencio 15 valores que el creado desde la consola si analiza.
+
+    Deja el perfil en `draft`: activarlo es un paso aparte y explicito. Un perfil
+    que naciera activo empezaria a consumir ingesta antes de que nadie hubiera
+    revisado sus parametros.
+    """
+    from .screener import load_universe
+
+    name = (name or "").strip()
+    if not name:
+        raise ConfigError("El perfil necesita un nombre.")
+
+    try:
+        mercado = market_calendar.get_market(market)
+    except market_calendar.UnknownMarket as exc:
+        raise ConfigError(str(exc)) from exc
+
+    try:
+        universo = load_universe(mercado.universe_file)
+    except Exception as exc:  # noqa: BLE001 - load_universe lanza tipos variados
+        raise UniverseError(
+            f"No se pudo leer {mercado.universe_file}: {exc}"
+        ) from exc
+
+    forasteros = mercado.foreign_symbols(universo)
+    if forasteros:
+        # Si el fichero del mercado trae simbolos de otra bolsa, el perfil no
+        # llegaria ni a resolverse. Mejor decirlo aqui que en el primer ciclo.
+        raise UniverseError(
+            f"{mercado.universe_file} tiene simbolos que no son de "
+            f"{mercado.code}: {', '.join(forasteros[:8])}"
+        )
+
+    if watch > 0:
+        seguidos = universo[:watch]
+    elif len(universo) > MAX_LIVE_SYMBOLS:
+        raise ConfigError(
+            f"{mercado.universe_file} tiene {len(universo)} simbolos y el "
+            f"ingestor pide uno por peticion cada minuto.\n"
+            f"  Elige cuantos seguir en vivo:  --watch 50\n"
+            f"  (el screener sigue cribando el universo entero para el ciclo)"
+        )
+    else:
+        seguidos = universo
+
+    profile_id = db.create_profile(
+        name=name,
+        description=description or f"Mercado {mercado.code}: {mercado.label}",
+        settings={
+            "market": mercado.code,
+            "benchmark": mercado.benchmark,
+            "universe_file": mercado.universe_file,
+            # El suelo de liquidez sale del mercado, no del default del esquema
+            # (FE.11): con los 20 M de 'us' el screener europeo descarta en
+            # silencio 15 de los 89.
+            "screener_min_dollar_volume": mercado.min_turnover,
+            "initial_budget": budget,
+        },
+    )
+    # El universo en vivo es lo que el ingestor sigue minuto a minuto;
+    # `universe_file` es lo que criba el screener para el ciclo. Son dos cosas
+    # distintas y por eso se rellenan las dos: un perfil con solo fichero no
+    # aparece en `active_universe_by_market` y se queda sin precios en vivo sin
+    # que nada lo diga.
+    db.set_profile_universe(profile_id, seguidos)
+    return CreatedProfile(
+        profile_id=profile_id,
+        market=mercado,
+        universe_size=len(universo),
+        watched=len(seguidos),
+    )
+
+
+def duplicate_profile(
+    db: Database, source_id: str, *, name: str, description: str = ""
+) -> str:
+    """Clona un perfil con sus parametros y su universo, en `draft`.
+
+    Es el gesto central del experimento (F5.4): clonar y cambiar **un solo**
+    parametro es la unica forma de saber a que se debe una diferencia de
+    resultados. Lo que no se clona es el historico: la copia empieza de cero con
+    el presupuesto inicial del original, porque heredar la curva de capital de
+    otro experimento haria incomparables los dos.
+    """
+    origen = db.get_profile(source_id)
+    if origen is None:
+        raise ConfigError(f"El perfil {source_id} no existe.")
+
+    row = dict(db.get_settings(source_id))
+    # `profile_id` y `updated_at` los pone la fila nueva; el resto se copia tal
+    # cual, incluida la clave del modelo: un clon que perdiera la clave fallaria
+    # en su primer ciclo por un motivo que nadie relacionaria con la copia.
+    row.pop("profile_id", None)
+    row.pop("updated_at", None)
+
+    profile_id = db.create_profile(
+        name=name,
+        description=description or f"Copia de {origen['name']}.",
+        settings=row,
+    )
+    db.set_profile_universe(profile_id, db.get_profile_universe(source_id))
+    return profile_id
 
 
 # ----------------------------------------------------------------------
