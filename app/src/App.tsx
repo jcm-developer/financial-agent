@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 
 import { Layout } from "@/layout/Layout";
@@ -11,6 +12,18 @@ import { Pendiente } from "@/paginas/Pendiente";
 import { Perfiles } from "@/paginas/Perfiles";
 import { Posiciones } from "@/paginas/Posiciones";
 import { Resumen } from "@/paginas/Resumen";
+
+/**
+ * La analitica se carga aparte y solo al abrirla.
+ *
+ * Recharts pesa casi tanto como el resto de la aplicacion junta (el paquete pasaba
+ * de 350 a 733 KB al incluirlo), y es la unica pantalla que lo usa. Cargarlo en el
+ * arranque haria esperar por seis graficas a quien solo viene a mirar si el ciclo
+ * de las 11:20 abrio algo.
+ */
+const Analitica = lazy(() =>
+  import("@/paginas/Analitica").then((m) => ({ default: m.Analitica })),
+);
 import { Riesgo } from "@/paginas/Riesgo";
 
 /**
@@ -38,6 +51,16 @@ export function App() {
           <Route path="p/:perfil">
             <Route index element={<Navigate to="resumen" replace />} />
             <Route path="resumen" element={<Resumen />} />
+            <Route
+              path="analitica"
+              element={
+                <Suspense
+                  fallback={<p className="text-[13px] text-text-muted">Cargando gráficas…</p>}
+                >
+                  <Analitica />
+                </Suspense>
+              }
+            />
             <Route path="posiciones" element={<Posiciones />} />
             <Route path="decisiones" element={<Decisiones />} />
             <Route path="ordenes" element={<Ordenes />} />

@@ -35,6 +35,7 @@ export const keys = {
   cycles: (profile: string) => ["cycles", profile] as const,
   cycle: (id: string) => ["cycles", "detail", id] as const,
 
+  analytics: (profile: string) => ["analytics", profile] as const,
   positions: (profile: string) => ["positions", profile] as const,
   decisions: (profile: string) => ["decisions", profile] as const,
   orders: (profile: string) => ["orders", profile] as const,
@@ -56,4 +57,5 @@ export const PREFIJOS_HISTORICO = [
   ["orders"],
   ["risk-events"],
   ["cycles"],
+  ["analytics"],
 ] as const;

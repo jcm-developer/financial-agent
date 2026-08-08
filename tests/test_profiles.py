@@ -324,3 +324,37 @@ def test_escrituras_vacias_no_rompen(db):
     calma, o todos los simbolos fallidos)."""
     assert db.upsert_quotes([]) == 0
     assert db.upsert_bars_1m([]) == 0
+
+
+# ----------------------------------------------------------------------
+# La demo, que es la puerta de entrada del README
+# ----------------------------------------------------------------------
+
+def test_la_demo_crea_un_perfil_y_no_solo_una_cartera(tmp_path):
+    """Sin perfil, la interfaz de F4 no puede enseñarla.
+
+    `tools/seed_demo.py` llamaba solo a `ensure_portfolio`, que deja una cartera
+    huerfana. La consola la encontraba por nombre y el dashboard viejo la ofrecia
+    en su selector, asi que la demo parecia funcionar; pero la interfaz nueva
+    navega por perfil (`/p/demo/...`) y `/api/profiles` devolvia una lista vacia.
+    Es la primera cosa que dice el README que hagas, asi que se queda fijada.
+    """
+    import sys
+    from pathlib import Path
+
+    from src.db import Database
+
+    raiz = Path(__file__).resolve().parent.parent
+    if str(raiz / "tools") not in sys.path:
+        sys.path.insert(0, str(raiz / "tools"))
+    import seed_demo
+
+    with Database(path=tmp_path / "demo.db") as db:
+        seed_demo.seed(db)
+
+        perfil = db.get_profile_by_name(seed_demo.DEMO_NAME)
+        assert perfil is not None, "la demo tiene que existir como perfil"
+        assert perfil["status"] == "active"
+        assert perfil["portfolio_id"], "y su cartera tiene que colgar del perfil"
+        # Y con datos: una demo vacia no prueba nada.
+        assert db.query("select count(1) n from cycles")[0]["n"] > 0

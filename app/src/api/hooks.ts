@@ -4,6 +4,7 @@ import { api } from "@/api/client";
 import { keys } from "@/api/keys";
 import type {
   ActionResult,
+  Analytics,
   CycleControl,
   CycleDetail,
   IngestStatus,
@@ -88,6 +89,15 @@ export function useCycleControl() {
     queryFn: ({ signal }) =>
       api.get<CycleControl>("/api/cycles/control/status", undefined, signal),
     staleTime: Infinity,
+  });
+}
+
+export function useAnalytics(perfil: string | undefined) {
+  return useQuery({
+    queryKey: keys.analytics(perfil ?? ""),
+    queryFn: ({ signal }) =>
+      api.get<Analytics>("/api/analytics", { profile: perfil }, signal),
+    enabled: Boolean(perfil),
   });
 }
 

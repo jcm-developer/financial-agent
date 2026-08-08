@@ -12,6 +12,42 @@ export interface ActionResult {
 }
 
 /**
+ * Las cinco series de las graficas (F4.6), en un solo viaje.
+ *
+ * Juntas y no en cinco endpoints porque son una sola pantalla: cinco peticiones
+ * darian cinco estados de carga y cinco formas de fallar a medias para leer
+ * cinco agregados del mismo fichero local.
+ */
+export interface Analytics {
+  equity_curve?: Array<EquityPoint>;
+  calibration?: Array<CalibrationBucket>;
+  rejections?: Array<RejectionCount>;
+  by_symbol?: Array<SymbolPerformance>;
+  conviction_histogram?: Array<ConvictionBucket>;
+}
+
+/**
+ * Una barra del grafico que decide el experimento.
+ *
+ * Si el `win_rate_pct` no crece con el `conviction_bucket`, la conviccion que
+ * declara el modelo no informa de nada y se esta operando con ruido caro.
+ */
+export interface CalibrationBucket {
+  conviction_bucket: number;
+  trades: number;
+  avg_pnl?: number | null;
+  win_rate_pct?: number | null;
+}
+
+export interface ConvictionBucket {
+  bucket: number;
+  buys?: number;
+  holds?: number;
+  sells?: number;
+  total?: number;
+}
+
+/**
  * Estado del ciclo lanzado desde la interfaz.
  *
  * `enabled=False` significa que los controles estan apagados: la API sirve
@@ -122,6 +158,16 @@ export interface DerivedLimits {
   sector_cap?: number | null;
   derived_fields: Array<string>;
   summary: string;
+}
+
+export interface EquityPoint {
+  as_of: string;
+  equity: number;
+  cash?: number | null;
+  positions_value?: number | null;
+  open_positions?: number;
+  day_pnl_pct?: number | null;
+  drawdown_pct?: number;
 }
 
 export interface HTTPValidationError {
@@ -371,6 +417,12 @@ export interface QuoteRow {
   age_seconds?: number | null;
 }
 
+export interface RejectionCount {
+  rule: string;
+  rejections: number;
+  last_seen?: string | null;
+}
+
 export interface RiskEventRow {
   id: string;
   cycle_id: string;
@@ -459,6 +511,16 @@ export interface SettingsUpdate {
   extra_json?: string | null;
 }
 
+export interface SymbolPerformance {
+  symbol: string;
+  trades: number;
+  wins: number;
+  win_rate_pct?: number | null;
+  total_pnl?: number | null;
+  avg_pnl?: number | null;
+  avg_holding_days?: number | null;
+}
+
 export interface UniverseUpdate {
   symbols: Array<string>;
 }
@@ -473,6 +535,8 @@ export interface ValidationError {
 
 /** Operaciones de la API: 'METODO /ruta' -> tipo de la respuesta. */
 export interface ApiOperations {
+  /** Analytics */
+  "GET /api/analytics": Analytics;
   /** Cycles */
   "GET /api/cycles": Page_CycleRow;
   /** Control Status */

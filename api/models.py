@@ -407,6 +407,73 @@ class CycleDetail(CycleRow):
 # Datos de mercado e ingesta
 # ----------------------------------------------------------------------
 
+class EquityPoint(BaseModel):
+    as_of: str
+    equity: float
+    cash: float | None = None
+    positions_value: float | None = None
+    open_positions: int = 0
+    day_pnl_pct: float | None = None
+    #: Caida desde el maximo previo, en %. Negativo o cero, nunca positivo.
+    #:
+    #: Se calcula en el servidor a proposito: es la misma definicion que usa
+    #: `run.py report`, y tenerla tambien en TypeScript seria tenerla dos veces
+    #: y condenarlas a discrepar.
+    drawdown_pct: float = 0.0
+
+
+class CalibrationBucket(BaseModel):
+    """Una barra del grafico que decide el experimento.
+
+    Si el `win_rate_pct` no crece con el `conviction_bucket`, la conviccion que
+    declara el modelo no informa de nada y se esta operando con ruido caro.
+    """
+
+    conviction_bucket: int
+    trades: int
+    avg_pnl: float | None = None
+    win_rate_pct: float | None = None
+
+
+class RejectionCount(BaseModel):
+    rule: str
+    rejections: int
+    last_seen: str | None = None
+
+
+class SymbolPerformance(BaseModel):
+    symbol: str
+    trades: int
+    wins: int
+    win_rate_pct: float | None = None
+    total_pnl: float | None = None
+    avg_pnl: float | None = None
+    avg_holding_days: float | None = None
+
+
+class ConvictionBucket(BaseModel):
+    bucket: int
+    buys: int = 0
+    holds: int = 0
+    sells: int = 0
+    total: int = 0
+
+
+class Analytics(BaseModel):
+    """Las cinco series de las graficas (F4.6), en un solo viaje.
+
+    Juntas y no en cinco endpoints porque son una sola pantalla: cinco peticiones
+    darian cinco estados de carga y cinco formas de fallar a medias para leer
+    cinco agregados del mismo fichero local.
+    """
+
+    equity_curve: list[EquityPoint] = Field(default_factory=list)
+    calibration: list[CalibrationBucket] = Field(default_factory=list)
+    rejections: list[RejectionCount] = Field(default_factory=list)
+    by_symbol: list[SymbolPerformance] = Field(default_factory=list)
+    conviction_histogram: list[ConvictionBucket] = Field(default_factory=list)
+
+
 class QuoteRow(BaseModel):
     symbol: str
     price: float

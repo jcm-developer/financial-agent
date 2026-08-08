@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from src.config import Infra  # noqa: E402
 from src.db import Database  # noqa: E402
 from src.models import MarketSnapshot, Proposal, RiskVerdict  # noqa: E402
 
@@ -67,11 +68,32 @@ def backdate_cycle(db: Database, cycle_id: str, when: datetime) -> None:
     db.execute("update equity_snapshots set as_of = ? where cycle_id = ?", (stamp, cycle_id))
 
 
+def _demo_profile(db: Database) -> str:
+    """Crea el perfil de la demo y devuelve el id de su cartera.
+
+    **Hace falta desde F6.4**, y hasta F4 no se noto. Antes esto solo llamaba a
+    `ensure_portfolio`, que deja una cartera sin perfil: la consola la encontraba
+    por nombre y el dashboard viejo la ofrecia en su selector, asi que la demo
+    parecia funcionar. La interfaz nueva navega por perfil (`/p/demo/...`), asi
+    que una cartera huerfana es invisible: `/api/profiles` devolvia una lista
+    vacia y la demo del README no enseñaba nada.
+    """
+    existente = db.get_profile_by_name(DEMO_NAME)
+    if existente is not None:
+        return str(existente["portfolio_id"])
+
+    profile_id = db.create_profile(
+        name=DEMO_NAME, description="Datos sinteticos para probar la interfaz."
+    )
+    db.update_settings(profile_id, {"initial_budget": START_EQUITY}, source="seed_demo")
+    db.set_profile_universe(profile_id, list(SYMBOLS))
+    db.set_profile_status(profile_id, "active")
+    return str(db.get_profile(profile_id)["portfolio_id"])
+
+
 def seed(db: Database) -> None:
     rng = Deterministic()
-    portfolio_id = db.ensure_portfolio(
-        name=DEMO_NAME, mode="paper", initial_budget=START_EQUITY
-    )
+    portfolio_id = _demo_profile(db)
 
     base_price = {symbol: rng.between(80, 380) for symbol in SYMBOLS}
     equity = START_EQUITY
@@ -290,7 +312,13 @@ def reset(db: Database) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Genera datos de demostracion.")
-    parser.add_argument("--db", default="data/trading.db", help="Ruta de la base.")
+    # El default sale de `DB_PATH` como en el resto de comandos. Estaba escrito a
+    # mano —"data/trading.db"— y eso hacia que `DB_PATH=otra.db python
+    # tools/seed_demo.py` escribiera en la base de siempre sin decir nada: en
+    # Docker coincidia por casualidad, porque el directorio de trabajo es /app.
+    parser.add_argument(
+        "--db", default=Infra.load().db_path, help="Ruta de la base."
+    )
     parser.add_argument("--reset", action="store_true",
                         help="Borra la cartera demo antes de generarla.")
     args = parser.parse_args()
@@ -304,8 +332,8 @@ def main() -> int:
             return 0
         seed(db)
 
-    print(f"\n  Ahora:  python run.py serve")
-    print(f"  Y elige '{DEMO_NAME}' en el selector de cartera.\n")
+    print("\n  Ahora:  python run.py api")
+    print(f"  Y abre http://localhost:8000  (entra directo a '{DEMO_NAME}')\n")
     return 0
 
 

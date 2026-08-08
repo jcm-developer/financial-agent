@@ -3,6 +3,7 @@ import {
   Activity,
   ClipboardList,
   FlaskConical,
+  ChartLine,
   LayoutDashboard,
   Radio,
   ReceiptText,
@@ -24,6 +25,7 @@ import { cn } from "@/lib/utils";
 
 const DEL_PERFIL = [
   { a: "resumen", texto: "Resumen", Icono: LayoutDashboard },
+  { a: "analitica", texto: "Analítica", Icono: ChartLine },
   { a: "posiciones", texto: "Posiciones", Icono: Wallet },
   { a: "decisiones", texto: "Decisiones", Icono: ClipboardList },
   { a: "ordenes", texto: "Órdenes", Icono: ReceiptText },

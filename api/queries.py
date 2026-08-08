@@ -613,3 +613,76 @@ def _ingest_verdict(
     if seguidos:
         return True, f"{seguidos} pasada(s) sin datos; el siguiente tick reintenta."
     return True, "Ingesta al dia."
+
+
+# ----------------------------------------------------------------------
+# Series para las graficas (F4.6)
+# ----------------------------------------------------------------------
+
+def analytics(db: Database, portfolio_id: str) -> dict[str, Any]:
+    """Las cinco series que pintan las graficas, en un solo viaje.
+
+    Van juntas y no en cinco endpoints porque son **una sola pantalla**: cinco
+    peticiones para dibujarla darian cinco estados de carga y cinco formas de
+    fallar a medias, para leer cinco agregados del mismo fichero local.
+
+    Tres de ellas salen de vistas que ya existen en `schema.sql`
+    (`v_conviction_calibration`, `v_risk_rejections`, `v_performance_by_symbol`),
+    asi que la consola y la web no pueden acabar contando cosas distintas: es la
+    misma regla que llevo a reutilizar `build_dashboard` en `/api/dashboard`.
+    """
+    curva = db.query(
+        "select as_of, equity, cash, positions_value, open_positions, day_pnl_pct "
+        "from equity_snapshots where portfolio_id = ? order by as_of asc",
+        (portfolio_id,),
+    )
+    return {
+        "equity_curve": [{**fila, "drawdown_pct": dd} for fila, dd in
+                         zip(curva, _drawdown_series(curva))],
+        "calibration": db.query(
+            "select conviction_bucket, trades, avg_pnl, win_rate_pct "
+            "from v_conviction_calibration where portfolio_id = ?",
+            (portfolio_id,),
+        ),
+        "rejections": db.query(
+            "select rule, rejections, last_seen from v_risk_rejections "
+            "where portfolio_id = ?",
+            (portfolio_id,),
+        ),
+        "by_symbol": db.query(
+            "select symbol, trades, wins, win_rate_pct, total_pnl, avg_pnl, "
+            "       avg_holding_days "
+            "from v_performance_by_symbol where portfolio_id = ? "
+            "order by total_pnl desc",
+            (portfolio_id,),
+        ),
+        "conviction_histogram": db.query(
+            "select (cast(conviction / 10 as integer) * 10) as bucket, "
+            "       sum(case when action = 'buy' then 1 else 0 end) as buys, "
+            "       sum(case when action = 'hold' then 1 else 0 end) as holds, "
+            "       sum(case when action = 'sell' then 1 else 0 end) as sells, "
+            "       count(*) as total "
+            "from decisions where portfolio_id = ? group by bucket order by bucket",
+            (portfolio_id,),
+        ),
+    }
+
+
+def _drawdown_series(curva: list[dict[str, Any]]) -> list[float]:
+    """Caida desde el maximo previo, punto a punto.
+
+    Se calcula aqui y no en el navegador para que la grafica y el `max_drawdown`
+    de `run.py report` no puedan discrepar: es la misma definicion que
+    `dashboard._max_drawdown_pct`, y tenerla en dos lenguajes seria tenerla dos
+    veces.
+    """
+    pico: float | None = None
+    salida: list[float] = []
+    for fila in curva:
+        equity = fila.get("equity")
+        if not equity:
+            salida.append(0.0)
+            continue
+        pico = equity if pico is None else max(pico, equity)
+        salida.append(round((equity / pico - 1) * 100, 2) if pico > 0 else 0.0)
+    return salida

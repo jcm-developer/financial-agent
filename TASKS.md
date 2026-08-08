@@ -617,7 +617,7 @@ esperan a que F4 tenga frontend que servir.
 **Orden de ataque (decidido 2026-08-08).** Seis tramos, y el primero va solo porque es el que
 falla: **A** andamiaje y toolchain (F4.1, F4.2, F4.10) ✅ → **B** capa de datos (F4.4, F4.5,
 F4.12) ✅ → **C** layout y selector de perfil (F4.3, F5.5) ✅ → **D** pantallas (F4.7, F4.8) ✅
-→ **E** gráficas (F4.6) → **F** cierre (F4.9, F4.11, F7.2, F7.4).
+→ **E** gráficas (F4.6) ✅ → **F** cierre (F4.9, F4.11).
 
 El tramo A termina en una página que pinta `/api/markets` con los tipos generados. Es
 deliberadamente un cartel de "estoy vivo" y no una pantalla: demuestra las cuatro cosas que
@@ -741,15 +741,50 @@ diez sesiones en silencio.
       caché se congela: enseñarlo tal cual diría "hace 60 s" durante media hora. Se le suma el
       tiempo transcurrido desde que llegó el evento, que además no depende del reloj del
       navegador porque solo usa una diferencia local.
+- [x] **F4.13** **`GET /api/analytics`**, que no estaba en el plan. La curva de capital vive
+      en `equity_snapshots` y solo salía por `/api/dashboard`, el endpoint que F4 dejó como
+      legado; y la calibración necesita un cruce entre decisiones y operaciones cerradas que
+      en el navegador habría sido frágil. Tres de las cinco series salen de **vistas que ya
+      existían** en `schema.sql` (`v_conviction_calibration`, `v_risk_rejections`,
+      `v_performance_by_symbol`), así que la pantalla y `run.py report` no pueden acabar
+      contando cosas distintas. El drawdown se calcula en el servidor por lo mismo: tenerlo
+      también en TypeScript sería tener dos definiciones condenadas a discrepar.
 - [x] **F4.12** **Vitest** y 11 tests de la capa de datos
       ([app/src/api/stream.test.ts](app/src/api/stream.test.ts)). No estaba en el plan y se ha
       añadido porque el empalme de los eventos —la fusión parcial, el hueco en el log, la
       antigüedad corregida— es lógica con casos, y en un repositorio con 606 tests de Python
       escribirla a ojo era el sitio raro para empezar a confiar. `npm test`.
-- [ ] **F4.6** Gráficas con **Recharts** (decidido 2026-08-08): curva de capital, drawdown,
-      histograma de convicción, calibración. visx da más control, pero aquí las gráficas son
-      cuatro formas estándar y el trabajo de verdad está en F4.7; el comparador de F5.6
-      —varias series de equity en el mismo eje— es lo más exigente y Recharts lo cubre.
+- [x] **F4.6** Seis gráficas con **Recharts** en la pantalla de Analítica: calibración, curva
+      de capital, caída desde máximos, convicción declarada, P&L por activo y rechazos por
+      regla. Todas de **una sola petición** a `/api/analytics` (nuevo, F4.13).
+
+      **La paleta se validó, no se supuso.** El README afirmaba que era apta para daltonismo;
+      pasada por el validador, las dos series cumplen las seis comprobaciones en claro y en
+      oscuro, y el par azul/rojo separa con ΔE 21,6 en protanopía frente al mínimo de 8. El
+      trío compra/mantener/venta **falla** como paleta categórica —el gris de «mantener» no
+      tiene croma— y está bien que falle: es una escala **divergente**, no categórica, y el
+      gris es su punto medio.
+
+      Cuatro decisiones:
+      - **Los colores van como `var(--color-series-1)`, no como hexadecimal.** Los atributos
+        de presentación de SVG aceptan variables CSS, así que el interruptor de tema repinta
+        las gráficas solo; con hexadecimales habría que leerlos con `getComputedStyle` y
+        redibujar a mano en cada cambio.
+      - **Capital y caída son dos gráficas, nunca una con dos ejes.** Un eje doble deja que la
+        escala elegida decida cuál de las dos líneas parece dominar, y dos personas leen cosas
+        distintas del mismo dibujo.
+      - ⚠️ **Cada barra de la calibración lleva su `n=` y las de menos de cinco operaciones
+        salen atenuadas.** Sin eso la gráfica miente en su momento más peligroso: un tramo con
+        una sola operación ganadora dibuja una barra del 100 % idéntica a la de un tramo con
+        treinta, y es justo al principio —cuando hay pocas— cuando más ganas dan de concluir.
+        Verificado con la demo: tramos de n=1 y n=3 al 0 % junto a uno de n=5 al 40 %.
+      - **Cada gráfica conserva su botón de tabla**, como el dashboard viejo. No es un extra:
+        es lo que mantiene el dato disponible cuando el color no basta, y es como se comprueba
+        una cifra concreta —en una gráfica se estima, en una tabla se lee—.
+
+      **Recharts se carga aparte y solo al abrir Analítica**: pesa casi tanto como el resto de
+      la aplicación junta (350 → 733 KB), y es la única pantalla que lo usa. Quien viene a
+      mirar si el ciclo de las 11:20 abrió algo no debería esperar por seis gráficas.
 - [x] **F4.7** Portadas las seis pantallas: **Resumen** (ocho cifras + abiertas + últimos
       ciclos), **Posiciones**, **Decisiones** (con filtros de símbolo, acción y veredicto),
       **Órdenes**, **Riesgo** y **Ciclos** (con log en vivo, detalle y los controles de

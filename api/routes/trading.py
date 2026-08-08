@@ -22,6 +22,7 @@ from src.dashboard import build_dashboard
 from .. import queries
 from ..deps import ProfileQuery, ReadDb, resolve_portfolio
 from ..models import (
+    Analytics,
     CycleDetail,
     CycleRow,
     DecisionRow,
@@ -55,6 +56,18 @@ def dashboard(db: ReadDb, profile: ProfileQuery) -> dict[str, Any]:
     settings = db.get_settings(profile_row["id"])
     payload["market"] = queries.market_info(settings["market"])
     return payload
+
+
+@router.get("/analytics", response_model=Analytics)
+def analytics(db: ReadDb, profile: ProfileQuery):
+    """Las cinco series de las graficas (F4.6).
+
+    Tres salen de vistas que ya existen en `schema.sql`, asi que la consola y la
+    web no pueden acabar contando cosas distintas del mismo experimento: es la
+    misma regla por la que `/api/dashboard` reutiliza `build_dashboard`.
+    """
+    _, portfolio_id = resolve_portfolio(db, profile)
+    return queries.analytics(db, portfolio_id)
 
 
 @router.get("/positions", response_model=Page[PositionRow])
