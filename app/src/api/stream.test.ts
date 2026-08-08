@@ -153,6 +153,56 @@ describe("aplicarEvento", () => {
     expect(cliente.getQueryData(keys.quotesMeta())).toEqual({ recibidasEn: 1_700_000 });
   });
 
+  it("cuando el ciclo termina, invalida el historico", async () => {
+    // Es el unico momento en que el historico cambia de golpe: el ciclo acaba de
+    // escribir posiciones, decisiones y ordenes. Sin esto la pantalla seguiria
+    // enseñando lo de antes hasta que alguien recargara, y en un experimento que
+    // se vigila eso se confunde con "no ha hecho nada".
+    const cliente = new QueryClient();
+    const corriendo: CycleControl = {
+      enabled: true, running: true, stage: "analizando", lines: [],
+    };
+    cliente.setQueryData(keys.cycleControl(), corriendo);
+    cliente.setQueryData(keys.positions("europa-01"), { items: [], total: 0 });
+
+    aplicarEvento(
+      cliente,
+      "cycle",
+      { ...corriendo, running: false, stage: "inactivo", lines: [], from: 0 },
+      keys.quotes(undefined),
+    );
+
+    const posiciones = cliente
+      .getQueryCache()
+      .getAll()
+      .find((entrada) => entrada.queryKey[0] === "positions");
+    expect(posiciones?.state.isInvalidated).toBe(true);
+  });
+
+  it("mientras el ciclo sigue corriendo no invalida nada", () => {
+    // Invalidar en cada linea de log haria una tanda de peticiones cada dos
+    // segundos durante los veinte minutos que dura un ciclo.
+    const cliente = new QueryClient();
+    const corriendo: CycleControl = {
+      enabled: true, running: true, stage: "analizando", lines: ["uno"],
+    };
+    cliente.setQueryData(keys.cycleControl(), corriendo);
+    cliente.setQueryData(keys.positions("europa-01"), { items: [], total: 0 });
+
+    aplicarEvento(
+      cliente,
+      "cycle",
+      { ...corriendo, lines: ["dos"], from: 1 },
+      keys.quotes(undefined),
+    );
+
+    const posiciones = cliente
+      .getQueryCache()
+      .getAll()
+      .find((entrada) => entrada.queryKey[0] === "positions");
+    expect(posiciones?.state.isInvalidated).toBe(false);
+  });
+
   it("un evento desconocido no toca nada", () => {
     const cliente = new QueryClient();
     aplicarEvento(cliente, "inventado", { lo: "que sea" }, keys.quotes(undefined));

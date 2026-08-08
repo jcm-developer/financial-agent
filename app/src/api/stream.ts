@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
-import { keys } from "@/api/keys";
+import { keys, PREFIJOS_HISTORICO } from "@/api/keys";
 import type { CycleControl, IngestStatus, QuoteRow } from "@/api/types";
 
 /**
@@ -135,6 +135,15 @@ export function aplicarEvento(
       cliente.setQueryData(keys.cycleControl(), estado);
       if (hayHueco) {
         void cliente.invalidateQueries({ queryKey: keys.cycleControl() });
+      }
+      // El ciclo acaba de terminar: es el unico momento en que el historico
+      // cambia de golpe. Sin esto, la pantalla seguiria enseñando las posiciones
+      // de antes del ciclo hasta que alguien recargara a mano, y en un
+      // experimento que se vigila eso se confunde con "no ha hecho nada".
+      if (previo?.running && !estado.running) {
+        for (const prefijo of PREFIJOS_HISTORICO) {
+          void cliente.invalidateQueries({ queryKey: prefijo });
+        }
       }
       break;
     }

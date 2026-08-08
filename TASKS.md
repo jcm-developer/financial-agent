@@ -616,8 +616,8 @@ esperan a que F4 tenga frontend que servir.
 
 **Orden de ataque (decidido 2026-08-08).** Seis tramos, y el primero va solo porque es el que
 falla: **A** andamiaje y toolchain (F4.1, F4.2, F4.10) ✅ → **B** capa de datos (F4.4, F4.5,
-F4.12) ✅ → **C** layout y selector de perfil (F4.3, F5.5) ✅ → **D** pantallas (F4.7, F4.8) →
-**E** gráficas (F4.6) → **F** cierre (F4.9, F4.11, F7.2, F7.4).
+F4.12) ✅ → **C** layout y selector de perfil (F4.3, F5.5) ✅ → **D** pantallas (F4.7, F4.8) ✅
+→ **E** gráficas (F4.6) → **F** cierre (F4.9, F4.11, F7.2, F7.4).
 
 El tramo A termina en una página que pinta `/api/markets` con los tipos generados. Es
 deliberadamente un cartel de "estoy vivo" y no una pantalla: demuestra las cuatro cosas que
@@ -750,16 +750,55 @@ diez sesiones en silencio.
       histograma de convicción, calibración. visx da más control, pero aquí las gráficas son
       cuatro formas estándar y el trabajo de verdad está en F4.7; el comparador de F5.6
       —varias series de equity en el mismo eje— es lo más exigente y Recharts lo cubre.
-- [ ] **F4.7** Portar lo que hoy hace [web/index.html](web/index.html) —4 pestañas, 10 tablas
-      y 5 gráficas—: resumen con sus tarjetas, posiciones abiertas y cerradas, decisiones con
-      tesis y riesgos, órdenes, eventos de riesgo, ciclos y su log en vivo, más los filtros
-      por símbolo y por acción. Todo desde los endpoints tipados (ver la cabecera de F4).
+- [x] **F4.7** Portadas las seis pantallas: **Resumen** (ocho cifras + abiertas + últimos
+      ciclos), **Posiciones**, **Decisiones** (con filtros de símbolo, acción y veredicto),
+      **Órdenes**, **Riesgo** y **Ciclos** (con log en vivo, detalle y los controles de
+      lanzar/parar de F3.4). Todo desde los endpoints tipados; las gráficas son el tramo E.
 
-      **Dos cosas que el viejo no hace y hay que añadir**: el `price_source` de las
-      posiciones (`live` o `cycle`, F3.2 — sumar una posición valorada con el cierre de
-      anteayer y otra con el precio de hace un minuto da un P&L que no significa nada) y el
-      `age_seconds` de las cotizaciones, que es la medición de F2.1c puesta donde se ve.
-- [ ] **F4.8** Estados de carga, vacío y error decentes en cada pantalla (hoy no existen).
+      **Tres cosas que el viejo no enseñaba y ahora sí:**
+      - El **`price_source`** de cada posición (`VIVO` / `CICLO` / `SIN PRECIO`). Sumar una
+        posición valorada con el cierre de anteayer y otra con el precio de hace un minuto da
+        un P&L que no significa nada, así que se etiqueta cuál es cuál. Y «sin precio» se dice:
+        esa posición se valora a su precio de entrada, o sea que su P&L es cero por falta de
+        datos y no por no haberse movido.
+      - El **`age_seconds`** de las cotizaciones, en la pantalla de Ingesta, avisando en ámbar
+        a partir de 5 minutos. Es la medición de F2.1c puesta donde se ve todos los días.
+      - El **matiz de F6.9** en cada fila de ciclo: `SIN MODELO` cuando ninguna llamada obtuvo
+        respuesta, y `3/33 SIN RESPUESTA` cuando fallaron algunas. Un `failed` del analista y
+        uno del broker se leían igual.
+
+      Cuatro decisiones de detalle:
+      - **Toda cifra de dinero lleva el símbolo del perfil** (`lib/formato.ts` lo exige como
+        parámetro, no lo asume). Es FE.8: un presupuesto europeo escrito con `$` invita a
+        compararlo con otro experimento como si fuera la misma unidad.
+      - **Abiertas y cerradas son dos tablas, no una con filtro.** Las columnas que importan
+        son distintas —P&L no realizado y distancia al stop frente a precio de salida y
+        motivo— y juntarlas dejaría media tabla con guiones.
+      - **La tesis y los riesgos se leen en la propia fila**, no detrás de un clic. Un texto
+        que hay que ir a buscar no se lee, y entonces la pantalla que debía medir si el modelo
+        discrimina entre oportunidades mide otra cosa.
+      - **El log solo baja solo si ya estabas abajo.** Un log que se autodesplaza siempre es
+        imposible de leer: en cuanto subes a mirar una línea, la siguiente te devuelve al final.
+
+      Y una consecuencia que se resolvió aquí: **cuando el stream ve que un ciclo pasa de
+      corriendo a parado, invalida el histórico**. Es el único momento en que cambia de golpe,
+      y sin eso la pantalla seguiría enseñando las posiciones de antes del ciclo hasta que
+      alguien recargara — que en un experimento que se vigila se confunde con «no ha hecho
+      nada». Invalidar en cada línea de log, en cambio, serían peticiones cada dos segundos
+      durante veinte minutos; hay un test de cada mitad.
+
+      **`shadcn/ui` no se ha traído todavía, y es a propósito.** Su tabla son envoltorios sobre
+      `<table>` sin nada de Radix debajo, así que copiarla habría añadido un fichero y ninguna
+      capacidad — y estas ya tienen que llevar la paleta heredada y `tabular-nums`. Se traerá
+      cuando haga falta algo que sí necesita Radix: el diálogo de confirmación de F5.4 y los
+      avisos.
+- [x] **F4.8** Estados de carga, vacío y error en cada pantalla, con `components/Seccion.tsx`.
+
+      **El caso vacío se redacta pantalla por pantalla y no está en el componente**: «no hay
+      posiciones» y «no hay decisiones» significan cosas muy distintas en un experimento de
+      diez días, y un texto genérico obliga a ir a mirar la base para saber cuál es. El de
+      posiciones cerradas explica además que el horizonte en días no cierra nada por sí solo,
+      que es la pregunta que salió al revisar `mandatory_exits`.
 - [ ] **F4.9** Responsive y accesible: foco visible, contraste AA, tablas navegables.
 - [x] **F4.10** Modo desarrollo: `npm run dev` con proxy de `/api` y recarga en caliente.
       Verificado contra la API de verdad.

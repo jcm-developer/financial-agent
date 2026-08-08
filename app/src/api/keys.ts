@@ -40,3 +40,20 @@ export const keys = {
   orders: (profile: string) => ["orders", profile] as const,
   riskEvents: (profile: string) => ["risk-events", profile] as const,
 } as const;
+
+/**
+ * Prefijos de todo lo que un ciclo puede haber cambiado al terminar.
+ *
+ * Se invalidan cuando el stream ve que el ciclo pasa de corriendo a parado: en ese
+ * momento acaba de escribir posiciones, decisiones, ordenes y veredictos, y sin
+ * esto la pantalla seguiria enseñando lo de antes hasta que alguien recargara. Se
+ * invalida por prefijo para no tener que enumerar cada combinacion de filtros.
+ */
+export const PREFIJOS_HISTORICO = [
+  ["profiles"],
+  ["positions"],
+  ["decisions"],
+  ["orders"],
+  ["risk-events"],
+  ["cycles"],
+] as const;

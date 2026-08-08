@@ -1,11 +1,17 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 
 import { Layout } from "@/layout/Layout";
+import { Ciclos } from "@/paginas/Ciclos";
+import { Decisiones } from "@/paginas/Decisiones";
 import { Diagnostico } from "@/paginas/Diagnostico";
 import { Inicio } from "@/paginas/Inicio";
 import { NoEncontrado } from "@/paginas/NoEncontrado";
+import { Ordenes } from "@/paginas/Ordenes";
 import { Pendiente } from "@/paginas/Pendiente";
 import { Perfiles } from "@/paginas/Perfiles";
+import { Posiciones } from "@/paginas/Posiciones";
+import { Resumen } from "@/paginas/Resumen";
+import { Riesgo } from "@/paginas/Riesgo";
 
 /**
  * Enrutado (F4.3).
@@ -31,66 +37,12 @@ export function App() {
 
           <Route path="p/:perfil">
             <Route index element={<Navigate to="resumen" replace />} />
-            <Route
-              path="resumen"
-              element={
-                <Pendiente
-                  titulo="Resumen"
-                  tarea="F4.7"
-                  descripcion="Capital, P&L del día y total, posiciones abiertas, win rate y el último ciclo."
-                />
-              }
-            />
-            <Route
-              path="posiciones"
-              element={
-                <Pendiente
-                  titulo="Posiciones"
-                  tarea="F4.7"
-                  descripcion="Abiertas y cerradas, con su stop, su objetivo y de dónde sale el precio con el que se valoran (live o cycle)."
-                />
-              }
-            />
-            <Route
-              path="decisiones"
-              element={
-                <Pendiente
-                  titulo="Decisiones"
-                  tarea="F4.7"
-                  descripcion="Lo que propuso el analista, con su tesis, sus riesgos y su convicción, y el veredicto del Risk Manager al lado."
-                />
-              }
-            />
-            <Route
-              path="ordenes"
-              element={
-                <Pendiente
-                  titulo="Órdenes"
-                  tarea="F4.7"
-                  descripcion="Enviadas, ejecutadas y no ejecutadas, con el motivo de las que se quedaron sin ejecutar."
-                />
-              }
-            />
-            <Route
-              path="riesgo"
-              element={
-                <Pendiente
-                  titulo="Eventos de riesgo"
-                  tarea="F4.7"
-                  descripcion="Contra qué límite chocó cada propuesta rechazada, y los disparos del kill switch."
-                />
-              }
-            />
-            <Route
-              path="ciclos"
-              element={
-                <Pendiente
-                  titulo="Ciclos"
-                  tarea="F4.7"
-                  descripcion="Cada ejecución del agente con su log en vivo, y las llamadas del analista que se quedaron sin respuesta (F6.9)."
-                />
-              }
-            />
+            <Route path="resumen" element={<Resumen />} />
+            <Route path="posiciones" element={<Posiciones />} />
+            <Route path="decisiones" element={<Decisiones />} />
+            <Route path="ordenes" element={<Ordenes />} />
+            <Route path="riesgo" element={<Riesgo />} />
+            <Route path="ciclos" element={<Ciclos />} />
             <Route
               path="ajustes"
               element={
