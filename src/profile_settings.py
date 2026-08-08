@@ -25,7 +25,7 @@ import json
 import logging
 from typing import Any
 
-from . import llm, risk_presets
+from . import llm, market_calendar, risk_presets
 from .config import ConfigError, Infra, ScreenerSettings, Settings
 from .db import Database, DatabaseError
 
@@ -118,6 +118,8 @@ def resolve_settings(db: Database, profile_id: str, *, infra: Infra) -> Settings
             "hay historico suficiente para los indicadores largos."
         )
 
+    market = _resolve_market(row, label=label)
+
     universe_file = str(row["universe_file"] or "").strip()
     watchlist = tuple(db.get_profile_universe(profile_id))
     if not watchlist and not universe_file:
@@ -125,8 +127,10 @@ def resolve_settings(db: Database, profile_id: str, *, infra: Infra) -> Settings
             f"El perfil {label!r} no tiene nada que analizar: ni universo propio "
             "ni fichero de universo.\n"
             "  Anade simbolos al perfil o apunta universe_file a un fichero como "
-            "universe/sp500.txt."
+            f"{market.universe_file}."
         )
+
+    _check_symbols_match_market(watchlist, market, label=label)
 
     screener = ScreenerSettings(
         universe_file=universe_file,
@@ -164,11 +168,51 @@ def resolve_settings(db: Database, profile_id: str, *, infra: Infra) -> Settings
         dry_run=bool(row["dry_run"]),
         log_level=infra.log_level,
         bar_interval=bar_interval,
+        market=market.code,
         skip_when_market_closed=bool(row["skip_when_market_closed"]),
         risk=risk,
         screener=screener,
         profile_id=profile_id,
         risk_summary=risk_presets.describe(row),
+    )
+
+
+def _resolve_market(row: dict[str, Any], *, label: str) -> market_calendar.Market:
+    """La bolsa del perfil, ya resuelta a su `Market`.
+
+    Se resuelve aqui y no en cada consulta al calendario para que un codigo
+    invalido salte al arrancar, con el nombre del perfil delante, en lugar de
+    dentro del bucle del ingestor tres horas despues.
+    """
+    code = str(row.get("market") or market_calendar.DEFAULT_MARKET).strip().lower()
+    try:
+        return market_calendar.get_market(code)
+    except market_calendar.UnknownMarket as exc:
+        raise ConfigError(f"Perfil {label!r}: {exc}") from exc
+
+
+def _check_symbols_match_market(
+    symbols: tuple[str, ...], market: market_calendar.Market, *, label: str
+) -> None:
+    """Falla si el universo del perfil trae simbolos de otra bolsa.
+
+    Es un error y no un aviso porque el sintoma sin esta comprobacion es
+    silencioso y caro: los simbolos forasteros no revientan, simplemente no
+    tienen barra nueva mientras la bolsa del perfil esta abierta, asi que el
+    analista los ve con el precio del cierre anterior y decide sobre datos
+    rancios sin que nada en el log lo delate.
+    """
+    foreign = market.foreign_symbols(symbols)
+    if not foreign:
+        return
+    muestra = ", ".join(foreign[:8]) + ("..." if len(foreign) > 8 else "")
+    raise ConfigError(
+        f"El perfil {label!r} opera en {market.code} ({market.label}) pero su "
+        f"universo trae {len(foreign)} simbolo(s) de otra bolsa: {muestra}\n"
+        "  Un perfil cubre un solo mercado: de ahi salen el horario, el "
+        "calendario y la divisa,\n"
+        "  y el proyecto no convierte divisa en ningun sitio.\n"
+        "  Saca esos simbolos del perfil, o crea otro perfil con su mercado."
     )
 
 
@@ -257,7 +301,19 @@ def import_env_profile(
     risk = env_settings.risk
     screener = env_settings.screener
 
+    # El mercado se deduce de la watchlist en lugar de darlo por 'us'. Un `.env`
+    # heredado no tiene columna de mercado, y si alguien ya estaba siguiendo
+    # valores europeos a mano, importarlo como 'us' fallaria en la validacion de
+    # `resolve_settings` justo despues de crear el perfil.
+    market = market_calendar.US
+    if env_settings.watchlist and not market_calendar.EU.foreign_symbols(
+        env_settings.watchlist
+    ):
+        market = market_calendar.EU
+
     changes: dict[str, Any] = {
+        "market": market.code,
+        "benchmark": market.benchmark,
         "llm_provider": env_settings.llm_provider,
         "llm_model": env_settings.llm_model,
         "llm_temperature": env_settings.llm_temperature,

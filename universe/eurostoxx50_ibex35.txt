@@ -1,0 +1,134 @@
+# Universo de analisis: EURO STOXX 50 + IBEX 35, en notacion de Yahoo.
+#
+# 89 simbolos (los cuatro solapes -SAN.MC, BBVA.MC, IBE.MC, ITX.MC- van una vez).
+# Verificados contra Yahoo el 2026-08-08: los 89 devuelven barras y los 89
+# cotizan en EUR. La comprobacion importa mas aqui que con el S&P 500, porque el
+# sufijo de bolsa es facil de equivocar y un ticker mal escrito no falla: aparece
+# como simbolo vacio y desaparece del analisis sin ruido.
+#
+# TODO EN EUROS, y es un requisito, no una casualidad. El proyecto no convierte
+# divisa en ningun sitio: una cartera esta en la moneda de su mercado. Por eso no
+# hay Londres (cotiza en peniques, asi que min_order_notional significaria otra
+# cosa), ni Zurich (CHF), ni Estocolmo (SEK). Anadir cualquiera de esos exige
+# antes resolver la divisa de verdad.
+#
+# Horario: 09:00-17:30 CET/CEST, comun a las seis bolsas. Ver el mercado 'eu' en
+# src/market_calendar.py.
+#
+# BAJA screener_min_dollar_volume A 5.000.000 EN LOS PERFILES QUE USEN ESTE
+# FICHERO. El default de agent_settings son 20 M, pensado para el S&P 500, y
+# medido el 2026-08-08 sobre las ultimas 20 sesiones deja fuera 15 de los 89
+# —ANE.MC, LOG.MC, COL.MC, PUIG.MC, FDR.MC, ROVI.MC, SCYR.MC, MAP.MC...—, que
+# son precisamente las medianas espanolas por las que se anadio el IBEX. Con
+# 5 M pasan los 89: el menos liquido negocia 5,4 M EUR/dia.
+# Recuerda que la cifra esta en EUROS, no en dolares, pese al nombre de la
+# columna: el screener multiplica precio por volumen y no convierte nada.
+#
+# Composicion aproximada: la pertenencia exacta a los indices cambia varias veces
+# al ano y no se persigue. Lo que importa para el experimento es que sean valores
+# liquidos, en euros y con el mismo horario.
+#
+# Las lineas que empiezan por # y las vacias se ignoran.
+#
+# Reparto por bolsa:
+#     35  Madrid (.MC)          BME
+#     22  Paris (.PA)           Euronext
+#     16  Fraencfort (.DE)      Xetra
+#      7  Amsterdam (.AS)       Euronext
+#      6  Milan (.MI)           Borsa Italiana
+#      2  Helsinki (.HE)        Nasdaq Nordic
+#      1  Bruselas (.BR)        Euronext
+#
+# Ojo con dos pares que se parecen y no son lo mismo:
+#     SAN.MC = Banco Santander      SAN.PA = Sanofi
+#     AI.PA  = Air Liquide          AIR.PA = Airbus
+
+ABI.BR
+ACS.MC
+ACX.MC
+AD.AS
+ADS.DE
+ADYEN.AS
+AENA.MC
+AI.PA
+AIR.PA
+ALV.DE
+AMS.MC
+ANA.MC
+ANE.MC
+ASM.AS
+ASML.AS
+BAS.DE
+BAYN.DE
+BBVA.MC
+BKT.MC
+BMW.DE
+BN.PA
+BNP.PA
+CABK.MC
+CLNX.MC
+COL.MC
+CS.PA
+DB1.DE
+DG.PA
+DHL.DE
+DSY.PA
+DTE.DE
+EL.PA
+ELE.MC
+ENEL.MI
+ENG.MC
+ENGI.PA
+ENI.MI
+ENR.DE
+FDR.MC
+FER.MC
+G.MI
+GLE.PA
+GRF.MC
+IAG.MC
+IBE.MC
+IDR.MC
+IFX.DE
+INGA.AS
+ISP.MI
+ITX.MC
+KER.PA
+LOG.MC
+MAP.MC
+MBG.DE
+MC.PA
+MRL.MC
+MTS.MC
+MUV2.DE
+NDA-FI.HE
+NOKIA.HE
+NTGY.MC
+OR.PA
+PRX.AS
+PUIG.MC
+RACE.MI
+RED.MC
+REP.MC
+RI.PA
+RMS.PA
+ROVI.MC
+RWE.DE
+SAB.MC
+SAF.PA
+SAN.MC
+SAN.PA
+SAP.DE
+SCYR.MC
+SGO.PA
+SIE.DE
+SLR.MC
+STLAP.PA
+SU.PA
+TEF.MC
+TTE.PA
+UCG.MI
+UNI.MC
+VIE.PA
+VOW3.DE
+WKL.AS

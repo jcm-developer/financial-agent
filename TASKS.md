@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-08
+Última actualización: 2026-08-08 (tarde: mercado europeo)
 
 ---
 
@@ -21,6 +21,9 @@ commits y conversaciones. Marcar `[x]` al cerrarla.
   `http.server` ([web/server.py](web/server.py)).
 - Datos de mercado con `yfinance`, barras 1d/1h, caché en `bar_cache`.
 - Docker ya montado ([docker-compose.yml](docker-compose.yml)): `dashboard`, `scheduler`, `bot`.
+- **Dos bolsas**: cada perfil elige la suya en `agent_settings.market` (`eu` o `us`).
+  El universo europeo son 89 valores del EURO STOXX 50 + IBEX 35, todos en euros
+  ([universe/eurostoxx50_ibex35.txt](universe/eurostoxx50_ibex35.txt)).
 
 **Destino:** todo local en Docker, SQLite como base, precios refrescados cada minuto en
 horario de bolsa US, frontend React + Tailwind, perfiles de experimento con parámetros
@@ -87,6 +90,13 @@ intermitente y unas pocas pasadas en verde no lo descartan. Además vamos a corr
 Yahoo sirve unos **30 días de histórico en intervalo de 1 minuto**; para más atrás hay que
 acumularlo nosotros, que es justo lo que hace el ingestor.
 
+⚠️ **Con el perfil europeo la cuenta empeora, y hay que rehacerla (D8).** El universo son
+89 símbolos, no 50, y la sesión dura 510 minutos en vez de 390. Peor: entre las 16:00 y las
+17:30 CET **las dos bolsas están abiertas a la vez**, así que un perfil europeo y uno
+americano activos piden 139 símbolos en el mismo minuto. En serie son ~24 s del minuto
+disponible —cabe, pero el margen se ha reducido de 7× a 2,5×—. Eso convierte la duda de
+`threads` en algo que hay que cerrar (F2.1c) en lugar de dejar apuntado.
+
 ### D4 — SQLite con un escritor cada minuto ✅
 
 Ya está en WAL con `busy_timeout = 30000` ([src/db.py](src/db.py)), así que un escritor y
@@ -98,10 +108,56 @@ Volumen: 50 símbolos × 390 barras/día ≈ 19.500 filas/día, ~410.000 al mes,
 50 MB mensuales. SQLite lo lleva sin despeinarse, pero sin retención crece para siempre
 (F1.9).
 
+⚠️ **Recalculado con el perfil europeo (D8): 89 símbolos × 510 barras/día ≈ 45.400
+filas/día**, unas 2,3 veces la estimación anterior, ~115 MB al mes. Con los dos perfiles
+activos, ~65.000 filas/día y ~165 MB al mes; con la retención de 90 días de F1.9, el
+fichero se estabiliza en torno a **350–500 MB**. Sigue siendo cómodo para SQLite, pero ya
+no es "no te enteras": conviene mirarlo antes de subir el número de perfiles.
+
 **La base sigue en un volumen con nombre, no en un bind mount.** El comentario de
 [docker-compose.yml](docker-compose.yml) explica por qué: el bloqueo de ficheros de SQLite
 no es fiable sobre bind mounts de Docker Desktop en Windows. Con un escritor por minuto eso
 importa más, no menos.
+
+### D8 — El mercado es un parámetro del perfil ✅ (2026-08-08)
+
+**Motivo:** las sesiones europeas (09:00–17:30 CET) caen dentro del horario en que el
+ordenador está encendido; la americana (15:30–22:00 CET) no. Para un experimento que se
+quiere vigilar, eso decide más que cualquier consideración de mercado.
+
+La alternativa era sustituir US por Europa y ahorrar código. Se descartó porque contradice
+la premisa de F6: **todo lo que define un experimento vive en el perfil.** Con el mercado
+como columna, comparar el mismo criterio en Madrid y en Nueva York es crear un segundo
+perfil; con el mercado cableado, es un fork del repositorio.
+
+Lo que se ha llevado por delante:
+
+| Cableado a NYSE | Ahora |
+|---|---|
+| `market_calendar.py` con zona, horario y festivos en constantes | Registro `MARKETS` con `us` y `eu`, y un `Market` que lleva zona, horario, festivos, divisa, benchmark y sufijos de bolsa |
+| `active_universe()` devolvía una lista plana | `active_universe_by_market()` la reparte, y el ingestor pide solo lo de las bolsas abiertas |
+| Un solo universo (`sp500.txt`) | Más `eurostoxx50_ibex35.txt`, 89 valores verificados contra Yahoo |
+
+Tres decisiones con consecuencia:
+
+- **La tabla europea solo lleva los cierres comunes a sus seis bolsas.** Xetra cierra el
+  Lunes de Pentecostés y Milán la Epifanía, pero las demás abren. Marcar esos días como
+  festivo costaría la sesión entera a los otros 60 y pico símbolos; dejándolos como día de
+  mercado, los afectados aparecen como símbolos vacíos, que es un caso que el ingestor ya
+  sabe tratar. **Fallo visible y acotado antes que correcto y caro.**
+- ⚠️ **Un perfil cubre una sola bolsa, y es una restricción, no un descuido.** De ahí salen
+  el horario, el calendario **y la divisa**, y el proyecto no convierte divisa en ningún
+  sitio. Por eso el universo europeo es solo de la zona euro: Londres cotiza en peniques,
+  así que `min_order_notional=100` significaría cosas distintas según el símbolo sin que
+  nada avisara. `resolve_settings` rechaza un perfil cuyo universo mezcle bolsas, nombrando
+  los símbolos culpables.
+- **Nochebuena y Nochevieja se tratan como cierre completo**, aunque Euronext haga subasta
+  hasta las 14:05. Media sesión con liquidez de festivo produce barras que distorsionan los
+  indicadores más de lo que aportan.
+
+**Consecuencia que hay que asumir:** `screener_min_dollar_volume` sigue llamándose así pero
+la cifra está en la divisa del mercado. Renombrar la columna tocaría esquema, `db.py`,
+`profile_settings.py`, el screener y sus tests para no ganar nada funcional; queda en F8.7.
 
 ### D5 — API: FastAPI ✅
 
@@ -177,15 +233,29 @@ otra forma y pide su SDK, así que queda en F9.1.
 - [x] **F2.1b** Validado el mecanismo contra la sesión del 2026-08-07 (mercado cerrado):
       50/50 símbolos, sin errores, marcas de tiempo correctas. Resultado lateral: la descarga
       **no es en lote** — ver la corrección en D3.
-- [ ] **F2.1c** ⚠️ **Pendiente y bloqueante: medir en sesión real.** El lunes 2026-08-10 desde
-      las 15:30 UTC (9:30 ET), una sesión entera:
+- [ ] **F2.1c** ⚠️ **Pendiente y bloqueante: medir en sesión real.** Reescrito tras D8: la
+      medición que importa ahora es **la europea**, y se hace por la mañana en vez de por la
+      tarde. El lunes 2026-08-10 a partir de las 09:00 hora de Madrid, una sesión entera:
       ```
-      python tools/spike_1m.py --minutes 390 --out spike_lunes.jsonl
+      python tools/spike_1m.py --market eu --count 89 --out spike_eu_lunes.jsonl
       ```
+      [tools/spike_1m.py](tools/spike_1m.py) ya sabe de mercados: `--market` elige el
+      calendario y, de paso, el fichero de universo, y `--minutes` sin valor toma la sesión
+      entera del mercado (510 en `eu`). Comprobado el 2026-08-08 con el mercado cerrado:
+      3/3 símbolos y la última barra en 17:29 CEST, o sea que el feed europeo llega hasta
+      el cierre. Lo que eso **no** dice es con cuánto retraso llega en vivo.
+
       La pregunta que hay que responder es **el retraso real del dato**: "cada minuto" solo
-      vale si el dato es de hace un minuto. Si Yahoo sirve el feed con 15 minutos de desfase,
-      el ingestor se construye igual pero cambia lo que se puede concluir del experimento.
-      Medir también `--threads` para cerrar la duda de D3.
+      vale si el dato es de hace un minuto. Y aquí pesa más que antes: **Yahoo suele servir
+      las bolsas europeas con unos 15 minutos de desfase mientras da muchos valores
+      americanos en tiempo real.** Si se confirma, el ingestor y el histórico se construyen
+      igual —siguen valiendo para backtesting (F9.2)— pero **la ejecución intradía (F9.3)
+      deja de tener sentido en Europa** y el experimento se queda en ciclos diarios. Es el
+      riesgo que asume D8 y hay que medirlo antes de dar por buena la premisa.
+
+      Segunda pregunta, ahora obligatoria: **`--threads`**. Con 139 símbolos en la franja de
+      solape el margen dentro del minuto baja a 2,5× (ver D3), así que ya no vale con
+      dejarlo apuntado.
 - [x] **F2.2** Lógica en [src/ingest.py](src/ingest.py), bucle en
       [tools/ingestor.py](tools/ingestor.py). Separados para que los tests no necesiten red ni
       esperar minutos reales. Despierta unos segundos **después** del cambio de minuto: la
@@ -215,6 +285,68 @@ otra forma y pide su SDK, así que queda en F9.1.
 - [x] **F2.11** [tests/test_ingest.py](tests/test_ingest.py): 23 tests con proveedor de
       mentira, sin red. **Suite completa: 330 en verde.**
 - [x] **F2.12** Servicio `ingestor` en [docker-compose.yml](docker-compose.yml) (adelanta F7.3).
+
+### FE — Mercado europeo ✅ (2026-08-08)
+
+Ver D8. Todo cerrado salvo lo que depende de la sesión del lunes (F2.1c).
+
+- [x] **FE.1** [src/market_calendar.py](src/market_calendar.py) reescrito como registro:
+      `Market` (zona, horario, festivos, divisa, benchmark, sufijos de bolsa) y `MARKETS`
+      con `us` y `eu`. Las funciones aceptan `market=` de palabra clave con `us` por
+      defecto, y se conservan los alias de módulo (`EASTERN`, `HOLIDAYS`, `EARLY_CLOSES`,
+      `LAST_COVERED_YEAR`): **los 47 tests del calendario americano pasan sin tocar una
+      línea**, que era la forma de saber que el refactor no cambiaba la semántica.
+- [x] **FE.2** [universe/eurostoxx50_ibex35.txt](universe/eurostoxx50_ibex35.txt): 89
+      símbolos. **Verificados uno a uno contra Yahoo**: los 89 devuelven barras y los 89
+      cotizan en EUR. No es ceremonia — un sufijo mal escrito no da error, el símbolo
+      aparece vacío y desaparece del análisis en silencio.
+- [x] **FE.3** `agent_settings.market` con `check (market in ('us','eu'))`, más su entrada
+      en `ADDED_COLUMNS` para que la columna llegue también a una base ya creada.
+- [x] **FE.4** El mercado llega a `Settings` y por tanto a `cycles.settings_json`. Sin eso
+      un histórico no se puede interpretar: las mismas horas significan cosas distintas
+      según la bolsa.
+- [x] **FE.5** `resolve_settings` **rechaza un perfil cuyo universo mezcle bolsas**,
+      nombrando los símbolos. Es error y no aviso porque el síntoma sin la comprobación es
+      caro y mudo: el símbolo forastero no revienta, se queda con el cierre del día
+      anterior y el analista decide sobre datos rancios.
+- [x] **FE.6** `db.active_universe_by_market()` y bucle multi-mercado en
+      [tools/ingestor.py](tools/ingestor.py): cada tick pide solo los símbolos de las
+      bolsas abiertas, y duerme hasta la apertura más temprana de las que sigue.
+- [x] **FE.7** `python run.py new-profile --name X --market eu`. **Hacía falta**: hasta
+      ahora la única forma de crear un perfil era `import-profile` desde un `.env`, así que
+      el soporte europeo habría sido inalcanzable sin abrir la base a mano.
+
+      Dos detalles que salieron al probarlo:
+      - **Rellena `profile_universe` además de `universe_file`.** Son cosas distintas y es
+        una trampa heredada de F2.4: el fichero es lo que criba el screener para el ciclo,
+        la tabla es lo que el ingestor sigue minuto a minuto. Un perfil con solo lo primero
+        **no aparece en `active_universe_by_market` y se queda sin precios en vivo sin que
+        nada lo diga.** Hay un test que fija ese comportamiento.
+      - **Se niega a seguir el S&P 500 entero** (503 símbolos > 120) y exige `--watch N`.
+        Es R2: son peticiones por minuto desde una IP doméstica.
+- [x] **FE.8** El símbolo de moneda sale del mercado en `Settings.describe()` y en los
+      cuatro comandos que enseñan dinero: `profiles`, `check`, `status` y `report`. Un
+      presupuesto europeo escrito con `$` invita a compararlo con el de otro perfil como si
+      fuera la misma unidad, y con dos experimentos en paralelo eso pasa solo. `report` no
+      recibe `Settings` —mirar el histórico no debe exigir la clave del modelo—, así que
+      resuelve la divisa por la cartera; sin perfil cae al default, que es lo que esas
+      carteras eran.
+- [x] **FE.9** `tools/spike_1m.py` acepta `--market` y `--universe`, y `--minutes` sin
+      valor toma la sesión entera del mercado elegido. Sin esto, F2.1c no se podía medir el
+      lunes: el spike habría consultado el calendario de NYSE y habría dicho "mercado
+      cerrado" a las 9 de la mañana.
+- [x] **FE.10** [tests/test_markets.py](tests/test_markets.py): 67 tests. **Suite completa:
+      511 en verde.**
+- [ ] **FE.11** ⚠️ **Pendiente, y es lo único que queda:** bajar
+      `screener_min_dollar_volume` a 5.000.000 en el perfil europeo. Medido el 2026-08-08
+      sobre las últimas 20 sesiones, el default de 20 M (pensado para el S&P 500) deja
+      fuera 15 de los 89 — ANE.MC, LOG.MC, COL.MC, PUIG.MC, FDR.MC, ROVI.MC, SCYR.MC,
+      MAP.MC… — que son precisamente las medianas españolas por las que se añadió el IBEX.
+      Con 5 M pasan los 89: el menos líquido negocia 5,4 M €/día.
+- [ ] **FE.12** El tope por sector de F6.5 sigue sin aplicarse, y en Europa es **peor**:
+      `sp500.txt` al menos traía el reparto sectorial en un comentario, y el fichero
+      europeo no trae ninguno. Mismo bloqueo que F6.5 (no hay dato de sector por símbolo);
+      solo conviene saber que aquí no hay ni el apaño del comentario.
 
 ### F3 — API backend (FastAPI)
 
@@ -433,6 +565,11 @@ otra forma y pide su SDK, así que queda en F9.1.
 - [ ] **F8.5** ⚠️ **Hay un `.env` con claves reales en el directorio.** Está en `.gitignore`,
       pero conviene confirmar que nunca llegó a subirse.
 - [ ] **F8.6** Suite de tests entera en verde: `docker compose run --rm bot python -m pytest tests -q`.
+- [ ] **F8.7** Renombrar `screener_min_dollar_volume` → `screener_min_turnover`. Desde D8 la
+      cifra está en la divisa del mercado, así que el nombre miente en los perfiles
+      europeos. No es urgente —hay un comentario en el esquema y otro en el fichero de
+      universo— pero toca esquema, `db.py`, `profile_settings.py`, `config.py`, el screener
+      y sus tests, así que conviene hacerlo de una vez y no a medias.
 
 ### F9 — Futuro (no bloquea)
 
@@ -459,20 +596,29 @@ otra forma y pide su SDK, así que queda en F9.1.
 ```
 F2.1 (spike yfinance 1m)  ──┐
 F1 (esquema limpio) ────────┴─→ F2 (ingestor)  ─┐
-                             ├─→ F6 (parámetros) ┼─→ F3 (API) ─→ F4 (React) ─→ F7 → F8
+                             ├─→ F6 (parámetros) ┤
+                             ├─→ FE (mercado eu) ┼─→ F3 (API) ─→ F4 (React) ─→ F7 → F8
                              └─→ F5 (perfiles) ──┘
 ```
 
 El spike va primero: es lo único que puede invalidar una decisión ya tomada. F1 bloquea todo
 lo demás. F3 y F4 pueden solaparse en cuanto los endpoints estén definidos.
 
+FE se coló delante de F3 porque cambiaba el esquema (`agent_settings.market`) y porque
+reescribía la pregunta de F2.1c: medir la sesión americana ya no era lo que interesaba.
+Hacerlo después habría significado rehacer los endpoints de F3 y la medición del lunes.
+
 ---
 
 ## 4. Riesgos y puntos a vigilar
 
-- **R1 — Latencia real del dato.** "Cada minuto" solo vale si el dato es de hace un minuto.
-  Hay que **medirlo** (F2.1), no asumirlo. Si Yahoo trae 15 minutos de retraso en 1m, el
-  diseño no cambia pero la interpretación del experimento sí.
+- **R1 — Latencia real del dato.** ⚠️ **Ha subido de nivel con D8.** "Cada minuto" solo vale
+  si el dato es de hace un minuto, y **Yahoo suele servir las bolsas europeas con unos 15
+  minutos de retraso mientras da muchos valores americanos en tiempo real**. Hay que
+  **medirlo** (F2.1c), no asumirlo. Si se confirma: el ingestor y el histórico valen igual
+  —siguen sirviendo para backtesting (F9.2)— pero **la ejecución intradía (F9.3) deja de
+  tener sentido en Europa** y el experimento se queda en ciclos diarios. Es el precio que
+  paga D8 a cambio del horario, y conviene saberlo antes y no en octubre.
 - **R2 — Yahoo puede limitar por IP.** Es una API no oficial, y el spike desmontó la
   mitigación que yo daba por buena: **son ~50 peticiones por minuto, no 1** (ver D3). En una
   sesión son ~19.500 peticiones al día desde la misma IP doméstica. No apareció ningún 429 en
@@ -482,11 +628,19 @@ lo demás. F3 y F4 pueden solaparse en cuanto los endpoints estén definidos.
   ⚠️ **Ya no hay plan B de proveedor**: al quitar Alpaca, Yahoo es la única fuente. Si
   empieza a limitar de verdad, hay que integrar otra fuente, y eso es trabajo, no una
   variable de entorno.
+  ⚠️ **Y con D8 la exposición sube.** El universo europeo son 89 símbolos, no 50, y entre
+  las 16:00 y las 17:30 CET se solapa con el americano: **139 peticiones en el mismo
+  minuto** si hay un perfil activo de cada. Sigue cabiendo (~24 s en serie), pero el margen
+  pasa de 7× a 2,5×. Palanca inmediata si aparece un 429: `--watch` más bajo en el perfil
+  americano, que es el que menos aporta al experimento nuevo.
 - **R3 — Contención de escritura en SQLite.** Dos escritores (ingestor y ciclo) sobre el
   mismo fichero. WAL y `busy_timeout` ya lo cubren a este volumen, pero hay que medirlo
   (F2.9) antes de dar por hecho que escala a más perfiles.
 - **R4 — Crecimiento del fichero.** ~50 MB al mes sin retención. Cómodo durante un año, no
-  para siempre. Lo resuelve F1.9.
+  para siempre. Lo resuelve F1.9. ⚠️ **Con D8 son ~115 MB al mes solo con el perfil
+  europeo** (89 símbolos × 510 barras) y ~165 MB con los dos; con la poda de 90 días el
+  fichero se estabiliza sobre 350–500 MB. Sigue siendo asumible, pero ya no es
+  despreciable: mirarlo antes de añadir un tercer perfil.
 - **R5 — La API pasa a poder escribir.** Se pierde la garantía de solo lectura del dashboard
   actual. Acotado a las tablas de configuración y verificado con un test (F3.3).
 - **R6 — Parámetros editables en caliente.** ✅ **Cubierto.** `agent_settings_history`
@@ -506,7 +660,14 @@ lo demás. F3 y F4 pueden solaparse en cuanto los endpoints estén definidos.
 1. **Librería de gráficas**: Recharts (rápido de montar) o visx (más control).
 2. **Frecuencia de los ciclos del agente**: ¿se mantiene 1 al día tras el cierre, o se
    aprovechan los datos de 1 minuto para varios ciclos intradía? Afecta al gasto de modelo.
-3. **Tamaño del universo a seguir minuto a minuto**: 50 es el punto de partida; condiciona R2
-   y R4.
+   **Depende de F2.1c**: si el feed europeo llega con 15 minutos de retraso, la pregunta se
+   responde sola. Con `market=eu` el "tras el cierre" son las 18:00 de Madrid, no las 22:15.
+3. ~~**Tamaño del universo a seguir minuto a minuto**: 50 es el punto de partida.~~
+   **Resuelto para Europa: 89** (EURO STOXX 50 + IBEX 35, D8). Para el perfil americano
+   sigue abierto y ahora se elige explícitamente con `--watch`. Condiciona R2 y R4, que ya
+   están recalculados.
+5. **¿Se mantiene un perfil americano activo?** Con los dos, la franja de solape pide 139
+   símbolos por minuto y el fichero crece a ~165 MB/mes. Si el experimento europeo es el
+   que importa, pausar el americano quita las dos presiones de golpe.
 4. ~~¿Se conserva el broker simulado, o se pasa a Alpaca paper?~~ **Resuelto: solo
    simulador.** Alpaca fuera del proyecto.

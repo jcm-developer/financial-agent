@@ -1,8 +1,15 @@
 #!/usr/bin/env python
-"""Ingestor de precios: un tick por minuto mientras la bolsa US esta abierta.
+"""Ingestor de precios: un tick por minuto mientras haya alguna bolsa abierta.
 
 Es el proceso principal del contenedor `ingestor`. La logica vive en
 `src/ingest.py`; aqui solo esta el bucle, el reloj y el apagado limpio.
+
+**Sigue varias bolsas a la vez.** Desde que el mercado es un parametro del perfil
+(`agent_settings.market`), dos perfiles activos pueden operar en Madrid y en
+Nueva York, cuyas sesiones se solapan solo tres horas y media. Cada tick pide
+unicamente los simbolos de las bolsas que estan abiertas en ese instante: pedir
+un valor europeo a las 22:00 CET no da un error, da la barra rancia del cierre,
+que es peor porque parece un dato.
 
 Configuracion por entorno:
 
@@ -18,9 +25,9 @@ Sobre el reloj: se despierta unos segundos *despues* del cambio de minuto, no
 justo en el, porque la barra de un minuto no esta disponible hasta que ese minuto
 ha terminado. Pedirla en el segundo 0 devuelve la del minuto anterior a medias.
 
-Con el mercado cerrado no se pide nada: se duerme hasta la proxima apertura en
-tramos cortos, para que `docker stop` responda en segundos en vez de esperar al
-SIGKILL.
+Con todas las bolsas cerradas no se pide nada: se duerme hasta la proxima
+apertura -la mas temprana de las que se siguen- en tramos cortos, para que
+`docker stop` responda en segundos en vez de esperar al SIGKILL.
 """
 
 from __future__ import annotations
@@ -91,6 +98,17 @@ def next_tick(offset_seconds: int) -> datetime:
     return objetivo
 
 
+def _describe_universe(universos: dict[str, list[str]]) -> str:
+    """`eu: 89 (ABI.BR, ACS.MC...)  us: 3 (AAPL, MSFT, NVDA)`, para el log."""
+    if not universos:
+        return "ningun perfil activo con universo"
+    partes = []
+    for code, symbols in sorted(universos.items()):
+        muestra = ", ".join(symbols[:5]) + ("..." if len(symbols) > 5 else "")
+        partes.append(f"{code}: {len(symbols)} ({muestra})")
+    return "  ".join(partes)
+
+
 def podar(db: Database, keep_days: int) -> None:
     """Poda diaria de barras de 1 minuto.
 
@@ -133,9 +151,10 @@ def main() -> int:
         "Ingestor en marcha. base=%s universo cada %d min, retencion %d dias, "
         "paralelo=%s", db_path, refresh_min, keep_days, threads,
     )
-    log.info("Mercado: %s", market_calendar.describe())
+    for mercado in market_calendar.MARKETS.values():
+        log.info("Mercado %s: %s", mercado.code, market_calendar.describe(market=mercado))
 
-    symbols: list[str] = []
+    universos: dict[str, list[str]] = {}
     symbols_edad = 10**9        # fuerza relectura en el primer tick
     fallos_seguidos = 0
     ultima_poda: str | None = None
@@ -145,48 +164,71 @@ def main() -> int:
         log.info("Historico previo: %d simbolos con barras de 1m.", len(last_ts))
 
         while not _stopping:
-            if not market_calendar.is_session_open():
+            if symbols_edad >= refresh_min:
+                nuevos = db.active_universe_by_market()
+                # Un codigo de mercado que no este en el registro se descarta con
+                # un aviso en lugar de reventar: el CHECK del esquema deberia
+                # impedirlo, pero esto es un demonio que corre semanas y morir
+                # por una fila rara dejaria sin precios a los perfiles sanos.
+                desconocidos = set(nuevos) - set(market_calendar.MARKETS)
+                for code in sorted(desconocidos):
+                    log.error(
+                        "Mercado %r desconocido: sus %d simbolos no se seguiran. "
+                        "Revisa agent_settings.market.", code, len(nuevos[code]),
+                    )
+                    nuevos.pop(code)
+                if nuevos != universos:
+                    log.info("Universo: %s", _describe_universe(nuevos))
+                universos = nuevos
+                symbols_edad = 0
+
+            if not universos:
+                # Sin perfiles activos no hay nada que seguir. No es un error, y
+                # no se duerme hasta ninguna apertura: sin universo tampoco se
+                # sabe que bolsas mirar.
+                if not sleep_until(next_tick(offset)):
+                    break
+                symbols_edad += 1
+                continue
+
+            abiertos = [
+                code for code in universos
+                if market_calendar.is_session_open(market=code)
+            ]
+
+            if not abiertos:
                 # Aprovecha que no hay nada que hacer para podar, una vez al dia.
                 hoy = datetime.now(timezone.utc).date().isoformat()
                 if ultima_poda != hoy:
                     podar(db, keep_days)
                     ultima_poda = hoy
 
-                apertura = market_calendar.next_session_open().astimezone(timezone.utc)
+                apertura = min(
+                    market_calendar.next_session_open(market=code)
+                    for code in universos
+                ).astimezone(timezone.utc)
                 log.info(
-                    "Mercado cerrado. Proxima apertura: %s (en %.1f h).",
+                    "Todas las bolsas cerradas (%s). Proxima apertura: %s (en %.1f h).",
+                    ", ".join(sorted(universos)),
                     apertura.isoformat(timespec="minutes"),
                     (apertura - datetime.now(timezone.utc)).total_seconds() / 3600,
                 )
                 if not sleep_until(apertura):
                     break
+                # Se relee el universo al despertar: entre medias han podido
+                # activarse o pausarse perfiles.
                 symbols_edad = 10**9
                 continue
 
-            if symbols_edad >= refresh_min:
-                nuevos = db.active_universe()
-                if nuevos != symbols:
-                    log.info(
-                        "Universo: %d simbolos%s", len(nuevos),
-                        f" ({', '.join(nuevos[:8])}{'...' if len(nuevos) > 8 else ''})"
-                        if nuevos else " -- ningun perfil activo con universo",
-                    )
-                symbols = nuevos
-                symbols_edad = 0
-
-            if not symbols:
-                # Sin perfiles activos no hay nada que seguir. No es un error.
-                if not sleep_until(next_tick(offset)):
-                    break
-                symbols_edad += 1
-                continue
+            symbols = sorted({s for code in abiertos for s in universos[code]})
 
             resultado = ingest_once(db, provider, symbols, last_ts=last_ts)
 
             if resultado.ok:
                 fallos_seguidos = 0
                 log.info(
-                    "%d/%d simbolos  %d barras  %d ms descarga  %d ms escritura",
+                    "[%s] %d/%d simbolos  %d barras  %d ms descarga  %d ms escritura",
+                    "+".join(sorted(abiertos)),
                     resultado.con_datos, resultado.pedidos, resultado.barras_escritas,
                     resultado.latencia_descarga_ms, resultado.latencia_escritura_ms,
                 )

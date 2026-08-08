@@ -147,7 +147,9 @@ class TradingCycle:
         # analizar seria repetir las decisiones del ciclo anterior gastando cuota.
         # Con barras diarias el momento natural es justo despues del cierre, asi
         # que la comprobacion no es "esta abierto" sino "hay sesion hoy".
-        allowed, reason = market_calendar.should_run(settings.bar_interval)
+        allowed, reason = market_calendar.should_run(
+            settings.bar_interval, market=settings.market
+        )
         if settings.skip_when_market_closed and not allowed:
             log.info("Ciclo omitido: %s", reason)
             report.status = "skipped"
@@ -208,7 +210,7 @@ class TradingCycle:
         log.info("Ciclo %s iniciado. %s", cycle_id, settings.describe())
         if settings.risk_summary:
             log.info("Riesgo: %s", settings.risk_summary)
-        log.info("Calendario: %s", market_calendar.describe())
+        log.info("Calendario: %s", market_calendar.describe(market=settings.market))
 
         describe_selection = getattr(self.market_data, "describe_selection", None)
         if callable(describe_selection):

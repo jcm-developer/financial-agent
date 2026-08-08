@@ -44,6 +44,7 @@ SCHEMA_PATH = Path(__file__).resolve().parent.parent / "schema.sql"
 # En una base recien creada esto no hace nada: el CREATE TABLE ya las trajo.
 ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "agent_settings": {
+        "market": "text not null default 'us' check (market in ('us', 'eu'))",
         "universe_file": "text",
         "screener_min_dollar_volume": "real not null default 20000000",
         "screener_min_price": "real not null default 5",
@@ -413,6 +414,54 @@ class Database:
             "select symbol from positions where status = 'open'"
         )
         return sorted({row["symbol"] for row in rows})
+
+    def active_universe_by_market(self) -> dict[str, list[str]]:
+        """Lo mismo que `active_universe`, pero repartido por bolsa.
+
+        Es lo que el ingestor necesita desde que el mercado es un parametro del
+        perfil: pedir un simbolo europeo a las 16:00 CET tiene sentido y pedirlo
+        a las 22:00 no, y la respuesta depende del simbolo, no del reloj del
+        proceso.
+
+        Los simbolos de posiciones abiertas cuya cartera no tiene perfil
+        (`portfolios.profile_id` nace NULL en las carteras anteriores a F1.4) se
+        clasifican por el sufijo de Yahoo. Es adivinar, si; la alternativa era
+        descartarlos, y una posicion abierta sin precio es peor que una
+        clasificada de mas.
+        """
+        from . import market_calendar
+
+        por_mercado: dict[str, set[str]] = {}
+
+        for row in self.query(
+            "select s.market as market, u.symbol as symbol "
+            "  from profile_universe u "
+            "  join profiles p on p.id = u.profile_id "
+            "  join agent_settings s on s.profile_id = u.profile_id "
+            " where p.status = 'active'"
+        ):
+            por_mercado.setdefault(row["market"], set()).add(row["symbol"])
+
+        for row in self.query(
+            "select s.market as market, pos.symbol as symbol "
+            "  from positions pos "
+            "  join portfolios pf on pf.id = pos.portfolio_id "
+            "  left join agent_settings s on s.profile_id = pf.profile_id "
+            " where pos.status = 'open'"
+        ):
+            code = row["market"]
+            if not code:
+                code = next(
+                    (
+                        m.code
+                        for m in market_calendar.MARKETS.values()
+                        if m.symbol_suffixes and m.owns_symbol(row["symbol"])
+                    ),
+                    market_calendar.DEFAULT_MARKET,
+                )
+            por_mercado.setdefault(code, set()).add(row["symbol"])
+
+        return {code: sorted(symbols) for code, symbols in sorted(por_mercado.items())}
 
     # -- Carteras ----------------------------------------------------------
 

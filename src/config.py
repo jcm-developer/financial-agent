@@ -261,6 +261,12 @@ class Settings:
     # nvidia (por defecto) u openai. Ver [llm.py](llm.py).
     llm_provider: str = "nvidia"
 
+    # Bolsa contra la que opera el perfil: 'us' o 'eu'. Fija horario, festivos y
+    # divisa. Ver [market_calendar.py](market_calendar.py). Entra en `snapshot()`
+    # a proposito: un historico sin el mercado no se puede interpretar, porque
+    # las mismas horas significan cosas distintas segun cual fuera.
+    market: str = "us"
+
     # 1d = barras diarias. 1h = barras horarias, para acumular operaciones
     # cerradas en semanas en lugar de meses.
     bar_interval: str = "1d"
@@ -389,9 +395,15 @@ class Settings:
         else:
             universe = f"watchlist={len(self.watchlist)}"
         origin = f"perfil={self.portfolio_name}" if self.profile_id else ".env"
+        # El simbolo de moneda sale del mercado: un presupuesto europeo escrito
+        # con '$' invita a compararlo con el de otro perfil como si fuera la
+        # misma unidad, y no lo es.
+        from .market_calendar import get_market
+
+        money = get_market(self.market).currency_symbol
         return (
-            f"{origin} datos=yahoo/{self.bar_interval} "
-            f"presupuesto=${self.initial_budget:,.2f} "
+            f"{origin} mercado={self.market} datos=yahoo/{self.bar_interval} "
+            f"presupuesto={money}{self.initial_budget:,.2f} "
             f"{universe} modelo={self.llm_model}"
             f"{suffix}"
         )

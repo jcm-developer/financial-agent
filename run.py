@@ -8,6 +8,15 @@
     python run.py serve       Dashboard web en http://127.0.0.1:8000
     python run.py profiles    Lista los perfiles de experimento.
 
+Para empezar un experimento nuevo en una bolsa concreta:
+
+    python run.py new-profile --name europa-01 --market eu
+    python run.py activate --profile europa-01
+
+El mercado del perfil (`eu` o `us`) fija horario, calendario de festivos y
+divisa. Un perfil cubre una sola bolsa: no hay conversion de divisa en ninguna
+parte del proyecto. Ver [src/market_calendar.py](src/market_calendar.py).
+
 **Los parametros del agente viven en la base de datos, no en el `.env`** (F6.4):
 cada perfil de experimento lleva los suyos en `agent_settings`. Del entorno solo
 sale la infraestructura (`DB_PATH`, `NVIDIA_API_KEY`, `LOG_LEVEL`).
@@ -86,11 +95,17 @@ def command_check(settings: Settings) -> int:
         print("  Parametros leidos del .env: todavia no hay perfil. Crealo con "
               "python run.py import-profile")
 
-    _print_header("Calendario de mercado")
     from src import market_calendar
 
-    print(f"  {market_calendar.describe()}")
-    allowed, reason = market_calendar.should_run(settings.bar_interval)
+    mercado = market_calendar.get_market(settings.market)
+    _print_header(f"Calendario de mercado -- {mercado.label}")
+
+    print(f"  {market_calendar.describe(market=mercado)}")
+    print(f"  Sesion {mercado.open_time:%H:%M}-{mercado.close_time:%H:%M} "
+          f"hora local, divisa {mercado.currency}")
+    allowed, reason = market_calendar.should_run(
+        settings.bar_interval, market=mercado
+    )
     if allowed:
         print(f"  Un ciclo ahora SI se ejecutaria: {reason}")
     elif settings.skip_when_market_closed:
@@ -176,10 +191,12 @@ def command_check(settings: Settings) -> int:
             )[0]["n"]
 
         print(f"  OK  sin cuenta de broker: la contabilidad es local")
-        print(f"      efectivo=${account.cash:,.2f}  equity=${account.equity:,.2f}")
+        money = market_calendar.get_market(settings.market).currency_symbol
+        print(f"      efectivo={money}{account.cash:,.2f}  "
+              f"equity={money}{account.equity:,.2f}")
         print(f"      posiciones={len(account.positions)}  ejecuciones registradas={fills}")
         print(f"      deslizamiento={settings.sim_slippage_bps:.0f} pb  "
-              f"comision=${settings.sim_commission:,.2f} por orden")
+              f"comision={money}{settings.sim_commission:,.2f} por orden")
         for position in account.positions:
             print(
                 f"        {position.symbol:<6} {position.qty:>8g} @ "
@@ -309,11 +326,19 @@ def command_status(settings: Settings) -> int:
             })
         account = broker.get_account_state()
 
-    _print_header(f"Cuenta ({settings.portfolio_name}, {settings.mode})")
-    print(f"  Equity          ${account.equity:>14,.2f}")
-    print(f"  Cash            ${account.cash:>14,.2f}")
-    print(f"  En posiciones   ${account.positions_value:>14,.2f}")
-    print(f"  P&L del dia     ${account.day_pnl:>+14,.2f}  ({account.day_pnl_pct:+.2f}%)")
+    from src import market_calendar
+
+    mercado = market_calendar.get_market(settings.market)
+    money = mercado.currency_symbol
+
+    _print_header(
+        f"Cuenta ({settings.portfolio_name}, {settings.mode}, {mercado.currency})"
+    )
+    print(f"  Equity          {money}{account.equity:>14,.2f}")
+    print(f"  Cash            {money}{account.cash:>14,.2f}")
+    print(f"  En posiciones   {money}{account.positions_value:>14,.2f}")
+    print(f"  P&L del dia     {money}{account.day_pnl:>+14,.2f}  "
+          f"({account.day_pnl_pct:+.2f}%)")
 
     _print_header(f"Posiciones abiertas ({len(account.positions)})")
     if not account.positions:
@@ -350,9 +375,28 @@ def command_report(dash: DashboardSettings) -> int:
     from src.dashboard import build_dashboard
     from src.db import Database, DatabaseError
 
+    from src import market_calendar
+
+    # La divisa sale del perfil de la cartera. `report` no recibe `Settings`
+    # -mirar el historico no debe exigir la clave del modelo-, asi que se
+    # consulta aqui. Sin perfil (carteras anteriores a F1.4) se cae al default,
+    # que es justo lo que esas carteras eran.
+    money = market_calendar.get_market().currency_symbol
     try:
         with Database(path=dash.db_path, read_only=True) as database:
             data = build_dashboard(database, portfolio_name=dash.portfolio_name)
+            portfolio_row = data.get("portfolio") or {}
+            if portfolio_row.get("id"):
+                rows = database.query(
+                    "select s.market as market from portfolios p "
+                    "  join agent_settings s on s.profile_id = p.profile_id "
+                    " where p.id = ?",
+                    (portfolio_row["id"],),
+                )
+                if rows:
+                    money = market_calendar.get_market(
+                        rows[0]["market"]
+                    ).currency_symbol
     except DatabaseError as exc:
         print(f"  {exc}")
         return 1
@@ -368,17 +412,17 @@ def command_report(dash: DashboardSettings) -> int:
     portfolio, summary = data["portfolio"], data["summary"]
 
     _print_header(f"Cartera: {portfolio['name']} ({portfolio['mode']})")
-    print(f"  Presupuesto asignado       ${portfolio['initial_budget']:>13,.2f}")
-    print(f"  Equity del primer ciclo    ${_or_zero(summary['equity_start']):>13,.2f}")
-    print(f"  Equity actual              ${_or_zero(summary['equity']):>13,.2f}"
+    print(f"  Presupuesto asignado       {money}{portfolio['initial_budget']:>13,.2f}")
+    print(f"  Equity del primer ciclo    {money}{_or_zero(summary['equity_start']):>13,.2f}")
+    print(f"  Equity actual              {money}{_or_zero(summary['equity']):>13,.2f}"
           f"   ({_signed_pct(summary['total_return_pct'])})")
-    print(f"  Efectivo                   ${_or_zero(summary['cash']):>13,.2f}")
+    print(f"  Efectivo                   {money}{_or_zero(summary['cash']):>13,.2f}")
     print(f"  Ultimo ciclo               {str(summary['last_update'])[:19]}")
 
     _print_header("Resultados")
-    print(f"  P&L realizado              ${summary['realized_pnl']:>+13,.2f}"
+    print(f"  P&L realizado              {money}{summary['realized_pnl']:>+13,.2f}"
           f"   ({summary['closed_trades']} operaciones cerradas)")
-    print(f"  P&L abierto                ${summary['unrealized_pnl']:>+13,.2f}"
+    print(f"  P&L abierto                {money}{summary['unrealized_pnl']:>+13,.2f}"
           f"   ({summary['open_positions']} posiciones)")
     print(f"  Acierto                    {_pct(summary['win_rate_pct']):>14}"
           f"   ({summary['wins']} ganadoras / {summary['losses']} perdedoras)")
@@ -521,6 +565,7 @@ def command_serve(dash: DashboardSettings, *, host: str, port: int) -> int:
 # ----------------------------------------------------------------------
 
 def command_profiles(infra: Infra) -> int:
+    from src import market_calendar
     from src.db import Database
     from src.profile_settings import mask_secret
     from src.risk_presets import describe
@@ -540,7 +585,12 @@ def command_profiles(infra: Infra) -> int:
             universe = (
                 settings["universe_file"] or f"{len(symbols)} simbolos propios"
             )
-            print(f"  {profile['name']}  [{profile['status']}]")
+            # La divisa sale del mercado del perfil. Escribir '$' en un perfil
+            # europeo invita a comparar dos presupuestos como si fueran la misma
+            # unidad, y con dos experimentos en paralelo eso pasa solo.
+            mercado = market_calendar.get_market(settings["market"])
+            print(f"  {profile['name']}  [{profile['status']}]  "
+                  f"mercado={mercado.code} ({mercado.currency})")
             print(f"      {describe(settings)}")
             # Con NVIDIA, una columna vacia no significa "sin clave": significa
             # que se usa NVIDIA_API_KEY del entorno. Decir "(sin clave)" ahi
@@ -552,7 +602,8 @@ def command_profiles(infra: Infra) -> int:
             print(f"      modelo={settings['llm_provider']}/{settings['llm_model']}"
                   f"  clave={mask_secret(settings['llm_api_key'], empty=sin_clave)}")
             print(f"      universo={universe}  "
-                  f"presupuesto=${float(settings['initial_budget']):,.2f}")
+                  f"({len(symbols)} en vivo)  presupuesto="
+                  f"{mercado.currency_symbol}{float(settings['initial_budget']):,.2f}")
     return 0
 
 
@@ -587,6 +638,103 @@ def command_import_profile(infra: Infra, *, name: str, env_file: str | None) -> 
     return 0
 
 
+#: Por encima de esto, seguir el universo entero minuto a minuto deja de ser
+#: razonable: son peticiones a Yahoo por minuto desde una IP domestica (R2). El
+#: S&P 500 cae de este lado; el europeo de 89, no.
+MAX_UNIVERSO_SEGUIDO = 120
+
+
+def command_new_profile(
+    infra: Infra, *, name: str, market: str, watch: int, budget: float
+) -> int:
+    """Crea un perfil desde cero para un mercado, con su universo ya puesto.
+
+    Existe porque `import-profile` solo sabe partir de un `.env`, y ese `.env`
+    describe el experimento americano heredado. Sin este comando, montar un
+    perfil europeo exigia abrir la base a mano.
+
+    Deja el perfil en `draft`: activarlo es un paso aparte y explicito, igual que
+    elegir contra que perfil se opera. Un perfil que naciera activo empezaria a
+    consumir ingesta antes de que nadie hubiera revisado sus parametros.
+    """
+    from src import market_calendar
+    from src.db import Database, DatabaseError
+    from src.screener import load_universe
+
+    try:
+        mercado = market_calendar.get_market(market)
+    except market_calendar.UnknownMarket as exc:
+        print(f"  {exc}", file=sys.stderr)
+        return 2
+
+    if not name:
+        print("  new-profile necesita --name <nombre>.", file=sys.stderr)
+        return 2
+
+    try:
+        universo = load_universe(mercado.universe_file)
+    except Exception as exc:  # noqa: BLE001 - load_universe lanza tipos variados
+        print(f"  No se pudo leer {mercado.universe_file}: {exc}", file=sys.stderr)
+        return 1
+
+    forasteros = mercado.foreign_symbols(universo)
+    if forasteros:
+        # Si el fichero del mercado trae simbolos de otra bolsa, el perfil no
+        # llegaria ni a resolverse. Mejor decirlo aqui que en el primer ciclo.
+        print(f"  {mercado.universe_file} tiene simbolos que no son de "
+              f"{mercado.code}: {', '.join(forasteros[:8])}", file=sys.stderr)
+        return 1
+
+    seguidos = universo
+    if watch > 0:
+        seguidos = universo[:watch]
+    elif len(universo) > MAX_UNIVERSO_SEGUIDO:
+        print(
+            f"  {mercado.universe_file} tiene {len(universo)} simbolos y el "
+            f"ingestor pide uno por peticion cada minuto.\n"
+            f"  Elige cuantos seguir en vivo:  --watch 50\n"
+            f"  (el screener sigue cribando el universo entero para el ciclo)",
+            file=sys.stderr,
+        )
+        return 2
+
+    with Database(path=infra.db_path) as database:
+        try:
+            profile_id = database.create_profile(
+                name=name,
+                description=f"Mercado {mercado.code}: {mercado.label}",
+                settings={
+                    "market": mercado.code,
+                    "benchmark": mercado.benchmark,
+                    "universe_file": mercado.universe_file,
+                    "initial_budget": budget,
+                },
+            )
+            # El universo en vivo es lo que el ingestor sigue minuto a minuto;
+            # `universe_file` es lo que criba el screener para el ciclo. Son dos
+            # cosas distintas y por eso se rellenan las dos: un perfil con solo
+            # fichero no aparece en `active_universe_by_market` y se queda sin
+            # precios en vivo sin que nada lo diga.
+            database.set_profile_universe(profile_id, seguidos)
+        except DatabaseError as exc:
+            print(f"  No se pudo crear el perfil: {exc}", file=sys.stderr)
+            return 1
+
+    _print_header(f"Perfil {name!r} creado en {mercado.label}")
+    print(f"  Divisa: {mercado.currency}   "
+          f"sesion {mercado.open_time:%H:%M}-{mercado.close_time:%H:%M} hora local")
+    print(f"  Screener sobre {mercado.universe_file} ({len(universo)} simbolos)")
+    print(f"  Ingesta en vivo de {len(seguidos)} simbolos")
+    print(f"  Presupuesto inicial: {mercado.currency_symbol}{budget:,.2f}")
+    print(f"  Benchmark: {mercado.benchmark}")
+    if mercado.code == "eu":
+        print("\n  Baja screener_min_dollar_volume a 5.000.000: el default de")
+        print("  20 M esta pensado para el S&P 500 y aqui deja fuera 15 valores.")
+    print(f"\n  Actívalo cuando lo tengas revisado:  "
+          f"python run.py activate --profile {name}")
+    return 0
+
+
 def command_activate(infra: Infra, *, name: str) -> int:
     from src.db import Database
     from src.profile_settings import select_profile
@@ -611,10 +759,11 @@ def main(argv: list[str] | None = None) -> int:
         nargs="?",
         default="check",
         choices=["check", "status", "cycle", "report", "serve",
-                 "profiles", "import-profile", "activate"],
+                 "profiles", "new-profile", "import-profile", "activate"],
         help="check: diagnostico (por defecto). status: estado de la cuenta. "
              "cycle: ejecutar un ciclo. report: analitica en consola. "
              "serve: dashboard web. profiles: listar experimentos. "
+             "new-profile: crear un perfil para un mercado. "
              "import-profile: crear un perfil a partir del .env. "
              "activate: marcar un perfil como activo.",
     )
@@ -624,8 +773,22 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--name", default="",
-        help="Nombre del perfil a crear (solo import-profile). Por defecto, "
-             "PORTFOLIO_NAME del .env.",
+        help="Nombre del perfil a crear (new-profile e import-profile). En "
+             "import-profile, por defecto PORTFOLIO_NAME del .env.",
+    )
+    parser.add_argument(
+        "--market", default="eu",
+        help="Bolsa del perfil nuevo (solo new-profile): eu o us.",
+    )
+    parser.add_argument(
+        "--watch", type=int, default=0,
+        help="Cuantos simbolos del universo seguir minuto a minuto (solo "
+             "new-profile). 0 = todos, permitido solo si el universo es "
+             f"pequeno (<= {MAX_UNIVERSO_SEGUIDO}).",
+    )
+    parser.add_argument(
+        "--budget", type=float, default=10_000.0,
+        help="Capital inicial del perfil nuevo (solo new-profile).",
     )
     parser.add_argument(
         "--dry-run",
@@ -662,6 +825,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "profiles":
             return command_profiles(infra)
+        if args.command == "new-profile":
+            return command_new_profile(
+                infra, name=args.name, market=args.market,
+                watch=args.watch, budget=args.budget,
+            )
         if args.command == "import-profile":
             return command_import_profile(
                 infra, name=args.name or args.profile, env_file=args.env_file

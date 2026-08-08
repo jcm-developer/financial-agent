@@ -365,6 +365,15 @@ create table if not exists agent_settings (
                            check (diversification between 1 and 10),
     horizon_days           integer not null default 10 check (horizon_days > 0),
 
+    -- Bolsa contra la que opera el perfil. Decide el horario, el calendario de
+    -- festivos y **la divisa de la cartera**: no hay conversion de divisa en
+    -- ninguna parte del proyecto, asi que un perfil 'eu' esta integramente en
+    -- euros. Mezclar mercados dentro de un mismo perfil no esta soportado y por
+    -- eso es una columna del perfil y no del simbolo. Ver src/market_calendar.py.
+    -- El default es 'us' por las bases que ya existen, no por preferencia.
+    market                 text not null default 'us'
+                           check (market in ('us', 'eu')),
+
     -- Universo. `universe_file` vacio o NULL = no hay embudo: se analiza la
     -- watchlist de `profile_universe` tal cual. Con fichero, el screener criba
     -- ese universo y `profile_universe` deja de mandar.
@@ -381,6 +390,9 @@ create table if not exists agent_settings (
     excluded_sectors_json  text not null default '[]',
     cash_reserve_pct       real not null default 0
                            check (cash_reserve_pct between 0 and 100),
+    -- Indice de referencia. El default vale para 'us'; un perfil 'eu' quiere
+    -- EXW1.DE (iShares EURO STOXX 50), que es el equivalente en euros y con el
+    -- mismo horario. `Market.benchmark` lleva el que corresponde a cada uno.
     benchmark              text not null default 'SPY',
 
     -- Ejecucion. No hay columna de broker: la unica implementacion es el

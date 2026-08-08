@@ -47,29 +47,32 @@ sys.path.insert(0, str(APP_DIR))
 from src import market_calendar  # noqa: E402
 from src.market_data import YahooMarketData  # noqa: E402
 
-UNIVERSE_FILE = APP_DIR / "universe" / "sp500.txt"
 BAR_SECONDS = 60
 
 
-def load_symbols(spec: str, count: int) -> list[str]:
+def load_symbols(spec: str, count: int, universe_file: Path) -> list[str]:
     """Simbolos a pedir: lista explicita, o los `count` primeros del universo."""
     if spec:
         return sorted({s.strip().upper() for s in spec.split(",") if s.strip()})
 
-    if not UNIVERSE_FILE.exists():
+    if not universe_file.exists():
         raise SystemExit(
-            f"No se encontro {UNIVERSE_FILE}. Pasa los simbolos a mano:\n"
-            "    python tools/spike_1m.py --symbols AAPL,MSFT,NVDA --once --force"
+            f"No se encontro {universe_file}. Pasa los simbolos a mano:\n"
+            "    python tools/spike_1m.py --symbols SAN.MC,SAP.DE,ASML.AS --once --force"
         )
     symbols = [
         line.strip().upper()
-        for line in UNIVERSE_FILE.read_text(encoding="utf-8").splitlines()
+        for line in universe_file.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.startswith("#")
     ]
     return symbols[:count]
 
 
-def one_pass(symbols: list[str], threads: bool = False) -> dict:
+def one_pass(
+    symbols: list[str],
+    threads: bool = False,
+    market: str | market_calendar.Market | None = None,
+) -> dict:
     """Una descarga del lote de simbolos. Devuelve las metricas, nunca lanza.
 
     `threads` no es un detalle menor: yfinance pide **un endpoint por simbolo**,
@@ -135,7 +138,9 @@ def one_pass(symbols: list[str], threads: bool = False) -> dict:
 
     return {
         "ts": now.isoformat(),
-        "mercado_abierto": market_calendar.is_session_open(),
+        # Del mercado que se esta midiendo, no del americano: de este campo
+        # depende que el retraso medido se declare valido al final (ver main).
+        "mercado_abierto": market_calendar.is_session_open(market=market),
         "threads": threads,
         "pedidos": len(symbols),
         "con_datos": len(con_datos),
@@ -178,10 +183,17 @@ def sleep_to_next_minute() -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--symbols", default="", help="Lista separada por comas.")
+    parser.add_argument("--market", default="us",
+                        help="Bolsa a medir: eu o us. Decide el calendario que "
+                             "se consulta y, si no se pasa --universe, el "
+                             "fichero de simbolos. Def. us.")
+    parser.add_argument("--universe", default="",
+                        help="Fichero de universo. Por defecto, el del mercado.")
     parser.add_argument("--count", type=int, default=50,
                         help="Cuantos simbolos del universo. Def. 50.")
-    parser.add_argument("--minutes", type=int, default=390,
-                        help="Minutos a medir. 390 = una sesion. Def. 390.")
+    parser.add_argument("--minutes", type=int, default=0,
+                        help="Minutos a medir. 0 = la sesion entera del mercado "
+                             "elegido (390 en us, 510 en eu).")
     parser.add_argument("--once", action="store_true", help="Una sola pasada.")
     parser.add_argument("--force", action="store_true",
                         help="Medir aunque el mercado este cerrado.")
@@ -191,22 +203,31 @@ def main() -> int:
     parser.add_argument("--out", default="spike_1m.jsonl")
     args = parser.parse_args()
 
-    symbols = load_symbols(args.symbols, args.count)
-    abierto = market_calendar.is_session_open()
+    try:
+        mercado = market_calendar.get_market(args.market)
+    except market_calendar.UnknownMarket as exc:
+        raise SystemExit(f"  {exc}") from exc
+
+    universe_file = (
+        Path(args.universe) if args.universe else APP_DIR / mercado.universe_file
+    )
+    symbols = load_symbols(args.symbols, args.count, universe_file)
+    abierto = market_calendar.is_session_open(market=mercado)
 
     print()
-    print(f"  Spike de ingesta 1m — {len(symbols)} simbolos")
-    print(f"  Mercado: {market_calendar.describe()}")
+    print(f"  Spike de ingesta 1m — {len(symbols)} simbolos de {mercado.label}")
+    print(f"  Mercado: {market_calendar.describe(market=mercado)}")
     print(f"  Resultados: {args.out}")
 
     if not abierto and not args.force:
         print()
         print("  El mercado esta cerrado. La medicion que importa (el retraso real")
         print("  del dato en vivo) solo tiene sentido en sesion.")
-        print(f"  Proxima apertura: {market_calendar.next_session_open()}")
+        print(f"  Proxima apertura: "
+              f"{market_calendar.next_session_open(market=mercado)}")
         print()
         print("  Para validar solo el mecanismo contra la ultima sesion:")
-        print("      python tools/spike_1m.py --once --force")
+        print(f"      python tools/spike_1m.py --market {mercado.code} --once --force")
         print()
         return 0
 
@@ -216,7 +237,7 @@ def main() -> int:
         print("  el retraso medido NO es representativo. Sirve para comprobar que la")
         print("  descarga funciona, cuanto tarda y cuantos simbolos vuelven vacios.")
 
-    pasadas = 1 if args.once else args.minutes
+    pasadas = 1 if args.once else (args.minutes or mercado.session_minutes)
     out = Path(args.out)
     resultados: list[dict] = []
 
@@ -225,7 +246,7 @@ def main() -> int:
 
     try:
         for n in range(1, pasadas + 1):
-            r = one_pass(symbols, threads=args.threads)
+            r = one_pass(symbols, threads=args.threads, market=mercado)
             resultados.append(r)
             with out.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(r, ensure_ascii=False) + "\n")
