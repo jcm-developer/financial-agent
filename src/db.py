@@ -52,6 +52,13 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "lookback_days": "integer not null default 200",
         "skip_when_market_closed": "integer not null default 1",
     },
+    "ingest_runs": {
+        # Sin CHECK a proposito: SQLite no sabe anadir una restriccion con ALTER
+        # TABLE, asi que exigirla aqui obligaria a recrear la tabla sobre una base
+        # viva. El CHECK esta en `schema.sql` para las bases nuevas y quien
+        # escribe es solo `start_ingest_run`.
+        "kind": "text not null default 'tick'",
+    },
 }
 
 
@@ -893,10 +900,30 @@ class Database:
             ],
         )
 
-    def start_ingest_run(self, *, symbols_requested: int) -> int:
+    def bars_1m_timestamps(self, symbol: str, *, since: str) -> set[str]:
+        """Marcas de tiempo ya guardadas de un simbolo desde `since`.
+
+        Existe para el relleno de huecos (F2.10): el proveedor devuelve dias
+        enteros y sin esto habria que reescribirlos todos. Con el indice
+        `bars_1m (symbol, ts desc)` son unos pocos miles de filas por simbolo, y
+        se pide de una en una a proposito: un `in (...)` de 89 simbolos por 7 dias
+        traeria medio millon de filas a memoria de golpe.
+        """
+        return {
+            row["ts"]
+            for row in self.query(
+                "select ts from bars_1m where symbol = ? and ts >= ?", (symbol, since)
+            )
+        }
+
+    def start_ingest_run(self, *, symbols_requested: int, kind: str = "tick") -> int:
         cursor = self._insert(
             "ingest_runs",
-            {"started_at": _now(), "symbols_requested": symbols_requested},
+            {
+                "started_at": _now(),
+                "symbols_requested": symbols_requested,
+                "kind": kind,
+            },
         )
         return int(cursor.lastrowid or 0)
 
@@ -911,10 +938,23 @@ class Database:
              int(rate_limited), error, run_id),
         )
 
-    def ingest_health(self, *, limit: int = 60) -> list[dict[str, Any]]:
-        """Ultimos ticks del ingestor, para pintar el estado en la interfaz."""
+    def ingest_health(
+        self, *, limit: int = 60, kind: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Ultimas pasadas del ingestor, para pintar el estado en la interfaz.
+
+        `kind='tick'` deja fuera los rellenos de huecos (F2.10). Conviene
+        filtrarlos al mirar latencias: un backfill descarga varios dias de una
+        vez, asi que una sola de sus filas desplaza cualquier media de un minuto.
+        Por defecto no filtra, para que nada quede invisible por descuido.
+        """
+        if kind is None:
+            return self.query(
+                "select * from ingest_runs order by started_at desc limit ?", (limit,)
+            )
         return self.query(
-            "select * from ingest_runs order by started_at desc limit ?", (limit,)
+            "select * from ingest_runs where kind = ? order by started_at desc limit ?",
+            (kind, limit),
         )
 
     def prune_bars_1m(self, *, keep_days: int) -> int:

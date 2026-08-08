@@ -21,6 +21,15 @@ Tres decisiones que conviene entender antes de tocar nada:
     historico, no una averia: el siguiente tick lo intenta otra vez. Solo se
     escala a error tras varios fallos seguidos, que ya sugiere algo sistematico
     (429 sostenido, red caida, Yahoo cambiado).
+
+  * **Que huecos se curan solos y cual no** (F2.10). Cada tick pide `period=1d`,
+    o sea la sesion entera, y escribe todo lo que sea posterior a la ultima barra
+    conocida. Eso quiere decir que una caida *dentro* de la sesion se rellena en
+    el tick siguiente sola, por larga que sea. Lo que no se cura es **la sesion
+    que se perdio entera**: si el proceso muere a media tarde y vuelve al dia
+    siguiente, `period=1d` ya no alcanza a la de ayer y el hueco se queda para
+    siempre. De ahi `backfill_gaps`, que corre una vez al dia fuera de ventana y
+    pide varios dias en lugar de uno.
 """
 
 from __future__ import annotations
@@ -28,8 +37,9 @@ from __future__ import annotations
 import logging
 import random
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
 from .db import Database
@@ -46,6 +56,15 @@ SOLAPE_BARRAS = 3
 # discos mas lentos sin que el aviso pierda sentido.
 UMBRAL_ESCRITURA_MS = 1000
 UMBRAL_MS_POR_FILA = 5.0
+
+# Dias que pide el relleno de huecos por defecto. Cubre un puente entero, que es
+# el caso realista: el ordenador apagado de viernes a lunes.
+BACKFILL_DIAS = 5
+
+# Tope duro por peticion. Yahoo sirve como mucho 7 dias de barras de 1 minuto en
+# una sola llamada (y solo 30 dias de historico en total): pedir mas no da error,
+# devuelve un marco vacio, que es la peor forma de fallar. Se recorta aqui.
+BACKFILL_DIAS_MAX = 7
 
 
 class IngestError(RuntimeError):
@@ -70,15 +89,45 @@ class IngestResult:
         return self.error is None and self.con_datos > 0
 
 
+@dataclass
+class BackfillResult:
+    """Lo medido en un relleno de huecos. Tambien acaba en `ingest_runs`."""
+
+    dias: int = 0
+    pedidos: int = 0
+    con_datos: int = 0
+    barras_escritas: int = 0
+    #: Simbolos a los que les faltaba algo, con cuantas barras. Es el dato que
+    #: interesa leer: dice si hubo hueco y de que tamano.
+    huecos: dict[str, int] = field(default_factory=dict)
+    #: Simbolos ya comparados y escritos. Con `interrumpido`, dice hasta donde se
+    #: llego; sin el, es la lista completa.
+    revisados: list[str] = field(default_factory=list)
+    latencia_ms: int = 0
+    rate_limited: bool = False
+    #: Se abandono entre simbolos por una senal de parada. No es un fallo: lo
+    #: hecho esta escrito y manana se vuelve a mirar la misma ventana.
+    interrumpido: bool = False
+    error: str | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None
+
+
 class QuoteProvider(Protocol):
     """Fuente de barras de un minuto.
 
     Existe como interfaz por una razon practica y otra de diseno: los tests
     necesitan una fuente sin red, y cambiar de proveedor si Yahoo empieza a
     limitar por IP no deberia tocar nada mas que esta pieza.
+
+    `days` es lo unico que separa un tick de un relleno: el tick pide el dia en
+    curso y el relleno pide varios. Es un parametro y no un metodo aparte para
+    que un proveedor nuevo no tenga dos caminos que se puedan desincronizar.
     """
 
-    def fetch(self, symbols: list[str]) -> dict[str, list[Bar]]:
+    def fetch(self, symbols: list[str], *, days: int = 1) -> dict[str, list[Bar]]:
         ...
 
 
@@ -105,18 +154,19 @@ class YahooQuotes:
         self.max_retries = max_retries
         self.backoff_base = backoff_base
 
-    def fetch(self, symbols: list[str]) -> dict[str, list[Bar]]:
+    def fetch(self, symbols: list[str], *, days: int = 1) -> dict[str, list[Bar]]:
         import yfinance as yf
 
         from .market_data import YahooMarketData
 
         ultimo_error: Exception | None = None
+        period = f"{max(1, min(days, BACKFILL_DIAS_MAX))}d"
 
         for intento in range(1, self.max_retries + 1):
             try:
                 frame = yf.download(
                     tickers=symbols,
-                    period="1d",
+                    period=period,
                     interval="1m",
                     auto_adjust=False,
                     progress=False,
@@ -305,6 +355,137 @@ def ingest_once(
         symbols_ok=result.con_datos,
         symbols_failed=len(result.vacios),
         latency_ms=result.latencia_descarga_ms + result.latencia_escritura_ms,
+        rate_limited=result.rate_limited,
+        error=result.error[:500] if result.error else None,
+    )
+    return result
+
+
+def backfill_gaps(
+    db: Database,
+    provider: QuoteProvider,
+    symbols: list[str],
+    *,
+    days: int = BACKFILL_DIAS,
+    should_stop: Callable[[], bool] | None = None,
+) -> BackfillResult:
+    """Rellena las barras que falten de los ultimos `days` dias. No lanza nunca.
+
+    Es la mitad que le faltaba a F2.10. La otra -- la poda -- vive en el bucle.
+
+    **Que arregla que el tick no arregle.** Un tick pide el dia en curso, asi que
+    una caida dentro de la sesion se recupera sola en el minuto siguiente. Lo que
+    no se recupera es una sesion perdida entera: con el proceso parado de viernes
+    a lunes, el lunes `period=1d` solo trae el lunes y el viernes se queda vacio
+    para siempre, porque nada volvera a mirar atras. Esto mira atras.
+
+    **Escribe solo lo que falta, no lo que trae.** Reescribir cinco dias enteros
+    cada tarde serian ~225.000 filas con el universo europeo, y con `insert or
+    replace` no fallaria: se notaria solo como una tarea que tarda cada vez mas.
+    Comparar contra lo que ya hay cuesta una consulta por simbolo sobre un indice
+    y de paso da la unica cifra que interesa leer -- cuantas barras faltaban.
+
+    **Y escribe simbolo a simbolo, no todo al final.** Medido el 2026-08-08
+    contra Yahoo: 3 simbolos por 5 dias son 7.635 barras y 9 s, o sea unos 3 s por
+    simbolo, ~4-5 minutos con los 89 europeos. Eso es demasiado para una sola
+    transaccion: coincide con la hora del ciclo del agente (las 18:00 en Madrid
+    son "fuera de ventana" para los dos) y una escritura larga ahi es justo la
+    contencion que R3 vigila. Por lotes, ademas, una parada a media faena deja
+    hecho lo que llevaba.
+
+    `should_stop` permite abandonar entre simbolos. Sin eso, un `docker stop` a la
+    hora del mantenimiento esperaria los minutos que dura la descarga y acabaria
+    en SIGKILL.
+    """
+    result = BackfillResult(dias=max(1, min(days, BACKFILL_DIAS_MAX)))
+    if not symbols or days < 1:
+        return result
+
+    result.pedidos = len(symbols)
+    run_id = db.start_ingest_run(symbols_requested=len(symbols), kind="backfill")
+    # Margen de un dia sobre la ventana pedida: la comparacion se hace contra lo
+    # que hay en la base desde este corte, y quedarse corto haria que las barras
+    # mas antiguas del lote parecieran nuevas todas las tardes.
+    desde = (
+        datetime.now(timezone.utc) - timedelta(days=result.dias + 1)
+    ).isoformat()
+
+    t0 = time.monotonic()
+    try:
+        por_simbolo = provider.fetch(symbols, days=result.dias)
+    except Exception as exc:  # noqa: BLE001 - el bucle no puede morir por esto
+        result.error = str(exc)
+        result.rate_limited = _es_rate_limit(exc)
+        result.latencia_ms = int((time.monotonic() - t0) * 1000)
+        db.finish_ingest_run(
+            run_id, symbols_ok=0, symbols_failed=len(symbols),
+            latency_ms=result.latencia_ms, rate_limited=result.rate_limited,
+            error=result.error[:500],
+        )
+        log.error("Relleno de huecos fallido: %s", exc)
+        return result
+
+    result.con_datos = len(por_simbolo)
+
+    for symbol, bars in sorted(por_simbolo.items()):
+        if should_stop is not None and should_stop():
+            result.interrumpido = True
+            # Queda escrito en `ingest_runs` aunque no sea una averia: una pasada
+            # a medias que se registrara como completa haria pensar que la ventana
+            # ya se reviso entera.
+            result.error = (
+                f"interrumpido por senal de parada tras "
+                f"{len(result.revisados)}/{result.con_datos} simbolos"
+            )
+            break
+
+        conocidas = db.bars_1m_timestamps(symbol, since=desde)
+        filas: list[dict] = []
+        faltan = 0
+        for indice, bar in enumerate(bars):
+            ts = _utc(bar.timestamp).isoformat()
+            if ts < desde:
+                continue
+            nueva = ts not in conocidas
+            # La ultima barra se reescribe aunque ya se tuviera, por lo mismo que
+            # el tick reescribe la suya: la version que guardamos pudo capturarse
+            # con el minuto a medias. En Estados Unidos, con la ventana operativa
+            # pegada al cierre (drain=0), esa version a medias es justo la del
+            # cierre de sesion, que es la barra que mas se mira.
+            ultima = indice == len(bars) - 1
+            if not nueva and not ultima:
+                continue
+            # Solo cuenta como hueco lo que faltaba de verdad: si el refresco de
+            # la ultima barra entrara en la cuenta, cada simbolo tendria "1 hueco"
+            # todas las tardes y la cifra dejaria de significar nada.
+            faltan += int(nueva)
+            filas.append({
+                "symbol": symbol,
+                "ts": ts,
+                "open": bar.open, "high": bar.high, "low": bar.low,
+                "close": bar.close, "volume": bar.volume,
+            })
+
+        try:
+            db.upsert_bars_1m(filas)
+        except Exception as exc:  # noqa: BLE001 - un simbolo no tumba el resto
+            result.error = f"Fallo al escribir {symbol}: {exc}"
+            log.error("%s", result.error)
+            continue
+
+        result.revisados.append(symbol)
+        result.barras_escritas += len(filas)
+        if faltan:
+            result.huecos[symbol] = faltan
+
+    result.latencia_ms = int((time.monotonic() - t0) * 1000)
+    # `symbols_ok` son los revisados, no los que devolvio el proveedor: si se
+    # abandono a medias, contar los recibidos daria una pasada por completa.
+    db.finish_ingest_run(
+        run_id,
+        symbols_ok=len(result.revisados),
+        symbols_failed=len(symbols) - len(result.revisados),
+        latency_ms=result.latencia_ms,
         rate_limited=result.rate_limited,
         error=result.error[:500] if result.error else None,
     )

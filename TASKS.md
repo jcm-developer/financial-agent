@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-08 (tarde: mercado europeo + FE.11)
+Última actualización: 2026-08-08 (tarde: mercado europeo + FE.11 + F2.10)
 
 ---
 
@@ -225,7 +225,8 @@ otra forma y pide su SDK, así que queda en F9.1.
 - [x] **F1.9** ⚠️ **Simplificado**: solo poda, sin consolidación a `bars_1d`. Las barras
       diarias ya las mantiene `bar_cache`, que es de donde el agente calcula indicadores;
       una segunda tabla diaria sería un duplicado con dos fuentes que podrían discrepar.
-      `prune_bars_1m(keep_days=90)` y se acabó. Falta engancharla a una tarea diaria (F2.10).
+      `prune_bars_1m(keep_days=90)` y se acabó. Ya enganchada al mantenimiento diario del
+      ingestor (F2.10).
 - [x] **F1.10** [tests/test_profiles.py](tests/test_profiles.py): 23 tests. **Suite completa
       en verde: 307 pasan.** (Tras F6.3–F6.7 la suite va por **444**.)
 
@@ -285,11 +286,51 @@ otra forma y pide su SDK, así que queda en F9.1.
       versión avisaba por tiempo absoluto y saltaba en la carga inicial (1.950 filas, 2,2 s)
       sin que hubiera contención ninguna: un aviso que cría lobos se acaba ignorando. Base
       medida: ~1,1 ms/fila sin competencia; avisa a partir de 5.
-- [ ] **F2.10** ⚠️ **A medias.** La poda diaria sí está (se ejecuta al cerrar el mercado). Falta
-      el relleno de huecos al cierre: si el ingestor estuvo caído media sesión, el hueco se
-      queda. El solape de 3 barras solo cubre caídas de pocos minutos.
+- [x] **F2.10** Mantenimiento diario completo al cerrar: **relleno de huecos** y luego poda.
+      `backfill_gaps` en [src/ingest.py](src/ingest.py), enganchado en
+      [tools/ingestor.py](tools/ingestor.py); `INGEST_BACKFILL_DAYS` (5 por defecto, 0 lo
+      apaga).
+
+      **La descripción de esta tarea era incorrecta y conviene dejarlo escrito.** Decía que
+      una caída de media sesión dejaba el hueco, y que el solape de 3 barras solo cubría
+      caídas de pocos minutos. No es así: cada tick pide `period=1d` —la sesión entera— y
+      escribe todo lo posterior a la última barra conocida, así que **una caída dentro de la
+      sesión se rellena sola en el tick siguiente, por larga que sea**. El solape de 3 barras
+      solo entra cuando no hay nada nuevo. Ya había un test que lo fijaba
+      (`test_un_hueco_se_rellena_solo`).
+
+      El hueco real es otro: **la sesión perdida entera.** Si el proceso muere el viernes por
+      la tarde y vuelve el lunes, `period=1d` solo alcanza al lunes y nadie vuelve a mirar el
+      viernes. Eso es lo que rellena esto, pidiendo 5 días en lugar de uno.
+
+      Cuatro decisiones que costaron pensarlo:
+      - **Tope de 7 días por petición.** Es lo máximo que Yahoo sirve en intervalo de 1
+        minuto (y solo 30 días de histórico en total). Pedir más **no da error: devuelve un
+        marco vacío**, que es la peor forma de fallar, así que se recorta antes de pedir.
+      - **Escribe solo lo que falta**, comparando contra `bars_1m` símbolo a símbolo. Cinco
+        días del universo europeo son ~225.000 filas: reescribirlas cada tarde tampoco
+        fallaría, se notaría solo como una tarea que tarda cada vez más.
+      - **Y escribe por símbolo, no en un lote final.** Medido contra Yahoo el 2026-08-08: 4
+        símbolos × 5 días = 9.585 barras en 11 s, o sea ~3 s por símbolo, **~4–5 minutos con
+        los 89 europeos**. Una transacción de ese tamaño coincide con la hora del ciclo del
+        agente —las 18:00 de Madrid son "fuera de ventana" para los dos— y es justo la
+        contención que vigila R3. Por lotes, además, una parada a media faena deja hecho lo
+        que llevaba.
+      - **Se puede abandonar entre símbolos** (`should_stop`). Sin eso, un `docker stop` a la
+        hora del mantenimiento esperaría esos minutos y acabaría en SIGKILL, con
+        `stop_grace_period: 15s`. Una pasada abandonada se registra como tal: `symbols_ok`
+        cuenta los revisados, no los que devolvió el proveedor.
+
+      Los rellenos se distinguen de los ticks con `ingest_runs.kind` (más su entrada en
+      `ADDED_COLUMNS`, con un test de la migración). Hacía falta: un backfill descarga varios
+      días de golpe, así que **una sola de sus filas desplaza cualquier media de latencia** y
+      el panel de salud de F3 pasaría a medir otra cosa. `ingest_health(kind=...)` filtra.
+
+      Comprobado de punta a punta contra Yahoo: 510 barras por sesión europea y 390 por
+      americana, las cinco sesiones completas, y una segunda pasada que encuentra 0 huecos.
+      **Suite: 543 en verde** (16 tests nuevos).
 - [x] **F2.11** [tests/test_ingest.py](tests/test_ingest.py): 23 tests con proveedor de
-      mentira, sin red. **Suite completa: 330 en verde.**
+      mentira, sin red (39 tras F2.10). **Suite completa: 330 en verde** (543 tras F2.10).
 - [x] **F2.12** Servicio `ingestor` en [docker-compose.yml](docker-compose.yml) (adelanta F7.3).
 
 ### FE — Mercado europeo ✅ (2026-08-08)
@@ -678,6 +719,11 @@ Hacerlo después habría significado rehacer los endpoints de F3 y la medición 
 - **R3 — Contención de escritura en SQLite.** Dos escritores (ingestor y ciclo) sobre el
   mismo fichero. WAL y `busy_timeout` ya lo cubren a este volumen, pero hay que medirlo
   (F2.9) antes de dar por hecho que escala a más perfiles.
+  ⚠️ **El relleno diario de F2.10 es el único escritor grande del proyecto**: hasta ~225.000
+  filas en la primera pasada con el universo europeo, y a la hora en que corre el ciclo del
+  agente. Por eso escribe símbolo a símbolo en vez de en un lote: son ~90 transacciones
+  cortas donde había una de minutos. Si aparece contención de verdad, la palanca es bajar
+  `INGEST_BACKFILL_DAYS`.
 - **R4 — Crecimiento del fichero.** ~50 MB al mes sin retención. Cómodo durante un año, no
   para siempre. Lo resuelve F1.9. ⚠️ **Con D8 son ~115 MB al mes solo con el perfil
   europeo** (89 símbolos × 510 barras) y ~165 MB con los dos; con la poda de 90 días el

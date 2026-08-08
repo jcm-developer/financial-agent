@@ -22,6 +22,7 @@ Configuracion por entorno:
     INGEST_ENABLED        false para apagarlo sin tocar el compose. Def. true
     INGEST_REFRESH_MIN    cada cuantos minutos se relee el universo. Def. 5
     INGEST_KEEP_DAYS      dias de barras de 1m que se conservan. Def. 90
+    INGEST_BACKFILL_DAYS  dias que revisa el relleno diario. 0 lo apaga. Def. 5
     INGEST_MAX_FAILURES   fallos seguidos antes de gritar. Def. 5
     INGEST_THREADS        descargar en paralelo. Def. false (ver src/ingest.py)
     INGEST_OFFSET_SECONDS segundos tras el cambio de minuto. Def. 5
@@ -34,6 +35,11 @@ ha terminado. Pedirla en el segundo 0 devuelve la del minuto anterior a medias.
 Con todas las bolsas cerradas no se pide nada: se duerme hasta la proxima
 apertura -la mas temprana de las que se siguen- en tramos cortos, para que
 `docker stop` responda en segundos en vez de esperar al SIGKILL.
+
+Antes de esa siesta corre el mantenimiento diario, una vez al dia: **relleno de
+huecos** y **poda**. En ese orden, y ahi y no al arrancar, porque es el unico
+momento en que la sesion ya esta completa en Yahoo y pedir varios dias de golpe
+no compite con los ticks del minuto.
 """
 
 from __future__ import annotations
@@ -51,7 +57,13 @@ sys.path.insert(0, str(APP_DIR))
 
 from src import market_calendar  # noqa: E402
 from src.db import Database, DatabaseError  # noqa: E402
-from src.ingest import YahooQuotes, ingest_once, load_last_timestamps  # noqa: E402
+from src.ingest import (  # noqa: E402
+    BACKFILL_DIAS,
+    YahooQuotes,
+    backfill_gaps,
+    ingest_once,
+    load_last_timestamps,
+)
 
 log = logging.getLogger("ingestor")
 
@@ -130,6 +142,51 @@ def podar(db: Database, keep_days: int) -> None:
         log.warning("La poda fallo, se reintentara manana: %s", exc)
 
 
+def rellenar(db: Database, provider: YahooQuotes, symbols: list[str], days: int) -> None:
+    """Relleno diario de huecos (F2.10). Corre al cerrar, con la poda.
+
+    Al cierre y no al arrancar: es cuando la sesion ya esta completa en Yahoo y
+    cuando pedir 89 simbolos por varios dias no compite con los ticks del minuto.
+
+    Lo que arregla es la **sesion perdida entera**. Un hueco dentro de la sesion
+    ya se cura solo -- cada tick pide el dia completo --, pero si el proceso murio
+    el viernes por la tarde, el lunes ningun tick vuelve a mirar el viernes.
+    """
+    if days < 1 or not symbols:
+        return
+    # Con 89 simbolos son ~4-5 minutos de descarga: sin poder abandonar, un
+    # `docker stop` a esta hora esperaria todo eso y acabaria en SIGKILL.
+    resultado = backfill_gaps(
+        db, provider, symbols, days=days, should_stop=lambda: _stopping
+    )
+    if resultado.interrumpido:
+        log.info(
+            "Relleno interrumpido al parar: %d simbolos revisados, %d barras "
+            "recuperadas. Lo escrito se queda.",
+            len(resultado.revisados), resultado.barras_escritas,
+        )
+        return
+    if not resultado.ok:
+        # Aviso y no error: manana se vuelve a intentar, y la ventana de 1 minuto
+        # de Yahoo son 30 dias, asi que hay margen de sobra para recuperarlo.
+        log.warning("Relleno de huecos fallido, se reintentara manana: %s",
+                    resultado.error)
+        return
+    if not resultado.huecos:
+        log.info(
+            "Relleno: sin huecos en los ultimos %d dias (%d simbolos, %d ms).",
+            resultado.dias, resultado.con_datos, resultado.latencia_ms,
+        )
+        return
+    peores = sorted(resultado.huecos.items(), key=lambda kv: -kv[1])[:5]
+    log.info(
+        "Relleno: %d barras recuperadas en %d simbolos de los ultimos %d dias. "
+        "Mayores huecos: %s",
+        sum(resultado.huecos.values()), len(resultado.huecos), resultado.dias,
+        ", ".join(f"{s} ({n})" for s, n in peores),
+    )
+
+
 def main() -> int:
     logging.basicConfig(
         level=(os.getenv("LOG_LEVEL") or "INFO").strip().upper(),
@@ -150,12 +207,14 @@ def main() -> int:
     max_failures = _get_int("INGEST_MAX_FAILURES", 5)
     offset = _get_int("INGEST_OFFSET_SECONDS", 5)
     threads = _get_bool("INGEST_THREADS", False)
+    backfill_days = _get_int("INGEST_BACKFILL_DAYS", BACKFILL_DIAS)
 
     provider = YahooQuotes(threads=threads)
 
     log.info(
         "Ingestor en marcha. base=%s universo cada %d min, retencion %d dias, "
-        "paralelo=%s", db_path, refresh_min, keep_days, threads,
+        "relleno %d dias, paralelo=%s",
+        db_path, refresh_min, keep_days, backfill_days, threads,
     )
     for mercado in market_calendar.MARKETS.values():
         log.info("Mercado %s: %s", mercado.code, market_calendar.describe(market=mercado))
@@ -163,7 +222,7 @@ def main() -> int:
     universos: dict[str, list[str]] = {}
     symbols_edad = 10**9        # fuerza relectura en el primer tick
     fallos_seguidos = 0
-    ultima_poda: str | None = None
+    ultimo_mantenimiento: str | None = None
 
     with Database(path=db_path) as db:
         last_ts = load_last_timestamps(db)
@@ -207,11 +266,18 @@ def main() -> int:
             ]
 
             if not abiertos:
-                # Aprovecha que no hay nada que hacer para podar, una vez al dia.
+                # Aprovecha que no hay nada que hacer para el mantenimiento
+                # diario: primero recuperar lo que falte, luego tirar lo viejo.
                 hoy = datetime.now(timezone.utc).date().isoformat()
-                if ultima_poda != hoy:
+                if ultimo_mantenimiento != hoy:
+                    todos = sorted({s for ss in universos.values() for s in ss})
+                    rellenar(db, provider, todos, backfill_days)
                     podar(db, keep_days)
-                    ultima_poda = hoy
+                    ultimo_mantenimiento = hoy
+                    # El relleno ha podido escribir barras posteriores a lo que
+                    # habia: sin releer, el primer tick de manana las daria por
+                    # nuevas y las reescribiria enteras.
+                    last_ts = load_last_timestamps(db)
 
                 apertura = min(
                     market_calendar.next_operating_open(market=code)

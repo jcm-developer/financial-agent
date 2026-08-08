@@ -53,7 +53,8 @@ services:
   # Ingestor: un tick por minuto mientras la bolsa US esta abierta.
   #
   # No necesita credenciales: solo Yahoo y la base. Con el mercado cerrado no
-  # pide nada, duerme hasta la proxima apertura y aprovecha para podar.
+  # pide nada: duerme hasta la proxima apertura y aprovecha para el mantenimiento
+  # diario -- rellenar huecos y podar.
   #
   # Es un servicio aparte y no un hilo del dashboard a proposito: si Yahoo se
   # cuelga o empieza a devolver 429, la interfaz y el agente siguen a lo suyo.
@@ -66,6 +67,11 @@ services:
       INGEST_ENABLED: "${INGEST_ENABLED:-true}"
       INGEST_REFRESH_MIN: "${INGEST_REFRESH_MIN:-5}"
       INGEST_KEEP_DAYS: "${INGEST_KEEP_DAYS:-90}"
+      # Relleno de huecos al cierre. Recupera la sesion que se perdio entera --el
+      # ordenador apagado el viernes--, que es el unico hueco que los ticks no
+      # curan solos. Tope de 7 dias: es lo maximo que Yahoo sirve en 1m por
+      # peticion. 0 lo apaga.
+      INGEST_BACKFILL_DAYS: "${INGEST_BACKFILL_DAYS:-5}"
       INGEST_MAX_FAILURES: "${INGEST_MAX_FAILURES:-5}"
       INGEST_OFFSET_SECONDS: "${INGEST_OFFSET_SECONDS:-5}"
       # Paralelizar la descarga es ~5x mas rapido, pero la cache interna de

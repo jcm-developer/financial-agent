@@ -494,6 +494,13 @@ create table if not exists ingest_runs (
     id                integer primary key autoincrement,
     started_at        text not null,
     finished_at       text,
+    -- 'tick' es la pasada de cada minuto; 'backfill' es el relleno de huecos que
+    -- corre una vez al dia fuera de ventana (F2.10). Se distinguen porque un
+    -- backfill descarga varios dias de golpe: mezclado con los ticks, una sola de
+    -- sus filas desplaza cualquier media de latencia y el panel de salud pasa a
+    -- medir otra cosa.
+    kind              text not null default 'tick'
+                      check (kind in ('tick', 'backfill')),
     symbols_requested integer not null default 0,
     symbols_ok        integer not null default 0,
     symbols_failed    integer not null default 0,
