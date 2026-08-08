@@ -181,7 +181,13 @@ def find_profile(db: Database, reference: str) -> dict[str, Any]:
 
     Acepta las dos cosas a proposito: los ids son UUID y los nombres son unicos,
     asi que no hay ambiguedad posible, y `/api/positions?profile=europa-01` se
-    puede escribir a mano al depurar. La interfaz siempre manda el id.
+    puede escribir a mano al depurar.
+
+    La interfaz manda **el nombre** (F4 tramo C): el perfil activo va en la URL
+    (`/p/europa-01/posiciones`) y con un UUID ahi nadie sabria que experimento
+    esta mirando, que era justo el motivo de sacarlo de la memoria de React. Un
+    enlace guardado se rompe si el perfil se renombra, y esta bien que se rompa:
+    el 404 de aqui abajo dice cuales hay.
     """
     reference = (reference or "").strip()
     if not reference:

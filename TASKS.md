@@ -616,7 +616,7 @@ esperan a que F4 tenga frontend que servir.
 
 **Orden de ataque (decidido 2026-08-08).** Seis tramos, y el primero va solo porque es el que
 falla: **A** andamiaje y toolchain (F4.1, F4.2, F4.10) ✅ → **B** capa de datos (F4.4, F4.5,
-F4.12) ✅ → **C** layout y selector de perfil (F4.3, F5.5) → **D** pantallas (F4.7, F4.8) →
+F4.12) ✅ → **C** layout y selector de perfil (F4.3, F5.5) ✅ → **D** pantallas (F4.7, F4.8) →
 **E** gráficas (F4.6) → **F** cierre (F4.9, F4.11, F7.2, F7.4).
 
 El tramo A termina en una página que pinta `/api/markets` con los tipos generados. Es
@@ -672,8 +672,33 @@ diez sesiones en silencio.
       Tema oscuro por defecto, con la clase en `<html>` puesta por un script en línea antes
       de pintar: sin eso hay un fogonazo del tema equivocado en cada carga. El interruptor
       manual gana a la preferencia del sistema en los dos sentidos, igual que el viejo.
-- [ ] **F4.3** `react-router` y layout: barra lateral con Perfiles, Dashboard, Posiciones,
-      Decisiones, Órdenes, Ajustes.
+- [x] **F4.3** `react-router` 7 y layout: cabecera con selector de perfil, indicador de datos
+      en vivo e interruptor de tema; barra lateral en dos grupos.
+
+      **La barra lateral separa lo que depende del experimento de lo que no.** Sin esa raya,
+      «Experimentos» y «Posiciones» parecen la misma clase de cosa y no lo son: una vale para
+      todos y la otra cambia por completo según cuál esté seleccionado.
+
+      Tres decisiones:
+      - **El stream se abre en el layout, una sola vez.** Si cada pantalla llamara a
+        `useStream()` habría una conexión SSE por pantalla montada y el servidor repetiría el
+        sondeo a SQLite tantas veces como pestañas — justo lo que F3.5 evitaba moviendo el
+        sondeo del navegador al servidor. Las pantallas leen de la caché.
+      - **Las rutas del perfil van todas dentro de `/p/:perfil/`**, no con el perfil en un
+        parámetro de consulta opcional: así no se puede perder al navegar. Con un parámetro
+        opcional, cualquier enlace que se olvidara de arrastrarlo dejaría al usuario mirando
+        otro experimento sin avisar.
+      - **Los huecos de las pantallas dicen qué tarea las trae** (F4.7, F6.8). Un
+        «próximamente» a secas es el cartel que sobrevive meses porque nadie sabe qué falta; y
+        durante el experimento hay que poder distinguir un hueco de una avería.
+
+      La página de comprobación de los tramos A y B **no se ha borrado: se queda como
+      pantalla «Ingesta»**. El dashboard viejo es anterior al ingestor, así que su salud y la
+      antigüedad de los precios no se ven hoy en ningún sitio, y son los dos números que hay
+      que vigilar estas dos semanas.
+
+      Comprobado contra la API: las rutas profundas (`/p/europa-01/ciclos`) devuelven el
+      `index.html` y el enrutador del cliente las resuelve.
 - [x] **F4.4** Datos con **TanStack Query** contra la API. `client.ts` (una sola puerta,
       rutas relativas), `keys.ts` (fábrica de claves), `hooks.ts` (un hook por endpoint con
       su tipo generado) y `queryClient.ts`.
@@ -782,10 +807,25 @@ diez sesiones en silencio.
       cada bolsa salen del registro, no cableados (F3.2).
 - [ ] **F5.4** Acciones: activar, pausar, archivar, **duplicar** (clonar y cambiar un solo
       parámetro es el gesto central del experimento) y borrar con confirmación por nombre.
-- [ ] **F5.5** Selector de perfil global en el layout, **con el perfil en la URL**
-      (`/p/:profile/...`, ver la cabecera de F4); todas las pantallas filtran por él. Con un
-      solo experimento activo (decisión nº 5) el selector no parece urgente, pero los
-      perfiles archivados se acumulan y son justo lo que hay que poder mirar después.
+- [x] **F5.5** Selector de perfil global en la cabecera, **con el perfil en la URL por su
+      nombre**: `/p/europa-01/posiciones`. Con un UUID ahí nadie sabría qué experimento está
+      mirando, que era justo el motivo de sacarlo de la memoria de React; la API acepta nombre
+      o id (`find_profile`), así que no hay que traducir nada. Se ha corregido el docstring de
+      [api/deps.py](api/deps.py), que decía que la interfaz mandaría el id.
+
+      Dos decisiones:
+      - **Cambiar de perfil conserva la sección.** De `/p/europa-01/posiciones` se salta a
+        `/p/otro/posiciones`, no al resumen: comparar la misma pantalla de dos experimentos es
+        el gesto que F5.6 llama central, y volver al inicio en cada salto lo convertiría en
+        cuatro clics.
+      - **Un perfil que no existe no redirige en silencio.** Un enlace guardado que apunta a
+        un experimento renombrado o borrado lo dice, con la lista de los que hay. Mandar al
+        inicio dejaría al usuario creyendo que falló el clic, y si el perfil se borró por
+        accidente esa sería la única señal que existía.
+
+      **Consecuencia asumida: renombrar un perfil rompe los enlaces guardados.** Es el precio
+      de una URL legible, y está bien que se rompa de forma visible en lugar de resolverse a
+      un experimento distinto.
 - [ ] **F5.6** **Comparador**: varios perfiles en la misma gráfica de equity, con tabla de
       métricas lado a lado. Es lo que convierte esto en un experimento y no en un bot.
 - [ ] **F5.7** Perfil de control: screener en modo `random`, para tener contra qué medir el

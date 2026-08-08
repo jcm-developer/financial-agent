@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { keys } from "@/api/keys";
 import type { CycleControl, IngestStatus, QuoteRow } from "@/api/types";
@@ -111,11 +111,16 @@ export function aplicarEvento(
   nombre: string,
   datos: unknown,
   claveQuotes: readonly unknown[],
+  ahora: number = Date.now(),
 ): void {
   switch (nombre) {
     case "quotes": {
       const evento = datos as QuotesEvento;
       cliente.setQueryData(claveQuotes, evento.quotes);
+      // La marca de llegada va tambien a la cache, no al estado del hook: el
+      // stream se abre una sola vez en el Layout y quien la necesita son las
+      // pantallas. Ver `keys.quotesMeta`.
+      cliente.setQueryData(keys.quotesMeta(), { recibidasEn: ahora });
       break;
     }
     case "ingest": {
@@ -145,17 +150,6 @@ export interface Stream {
   estado: EstadoStream;
   /** Cuantas veces se ha reconectado. Util para ver si la conexion baila. */
   reconexiones: number;
-  /**
-   * Cuando llego el ultimo lote de cotizaciones, en `Date.now()`.
-   *
-   * Existe para poder enseñar la antiguedad real de un precio. `age_seconds`
-   * viene calculado por el servidor **en el momento de leer**, asi que en cuanto
-   * se guarda en cache se congela: enseñarlo tal cual diria "hace 4 s" durante
-   * media hora. Sumando lo que ha pasado desde que llego el evento se corrige, y
-   * ademas sin depender del reloj del navegador —que puede ir desviado del del
-   * servidor—, porque solo se usa una diferencia local.
-   */
-  quotesRecibidasEn: number | null;
   /** Motivo del ultimo corte, si el servidor lo dijo. */
   ultimoAviso: string | null;
 }
@@ -166,7 +160,6 @@ export function useStream({ symbols, enabled = true }: OpcionesStream = {}): Str
 
   const [estado, setEstado] = useState<EstadoStream>("conectando");
   const [reconexiones, setReconexiones] = useState(0);
-  const [quotesRecibidasEn, setQuotesRecibidasEn] = useState<number | null>(null);
   const [ultimoAviso, setUltimoAviso] = useState<string | null>(null);
   // Para no contar como reconexion la primera conexion de todas.
   const abiertoAlgunaVez = useRef(false);
@@ -190,7 +183,6 @@ export function useStream({ symbols, enabled = true }: OpcionesStream = {}): Str
       } catch {
         return; // Un evento ilegible se ignora; el siguiente traera el estado.
       }
-      if (nombre === "quotes") setQuotesRecibidasEn(Date.now());
       if (nombre === "bye" || nombre === "error") {
         const motivo = (datos as { reason?: string; message?: string });
         setUltimoAviso(motivo.message ?? motivo.reason ?? null);
@@ -232,7 +224,26 @@ export function useStream({ symbols, enabled = true }: OpcionesStream = {}): Str
     // `cliente` es estable (viene del provider) pero se declara por honestidad.
   }, [cliente, lista, enabled]);
 
-  return { estado, reconexiones, quotesRecibidasEn, ultimoAviso };
+  return { estado, reconexiones, ultimoAviso };
+}
+
+/**
+ * Cuando llego el ultimo lote de cotizaciones, en `Date.now()`.
+ *
+ * Se lee de la cache y no del hook de SSE para que cualquier pantalla pueda
+ * pedirlo sin abrir una conexion propia. `initialData` mas `staleTime: Infinity`
+ * dejan la entrada siempre fresca, asi que `queryFn` no se llega a ejecutar: el
+ * unico que escribe aqui es `aplicarEvento`.
+ */
+export function useQuotesRecibidasEn(): number | null {
+  const { data } = useQuery({
+    queryKey: keys.quotesMeta(),
+    queryFn: () => ({ recibidasEn: null as number | null }),
+    initialData: { recibidasEn: null as number | null },
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  return data.recibidasEn;
 }
 
 /**

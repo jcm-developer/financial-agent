@@ -135,6 +135,24 @@ describe("aplicarEvento", () => {
     expect(cliente.getQueryData(clave)).toHaveLength(1);
   });
 
+  it("guarda la marca de llegada en la cache, no en el hook", () => {
+    // El stream se abre una sola vez (en el Layout) y quien necesita la marca son
+    // las pantallas. Cuando esto vivia en el estado del hook, una pantalla que lo
+    // pedia con `useStream({enabled:false})` recibia siempre null: su instancia
+    // nunca veia un evento. Por eso va a la cache.
+    const cliente = new QueryClient();
+
+    aplicarEvento(
+      cliente,
+      "quotes",
+      { mark: "m", quotes: [] },
+      keys.quotes(undefined),
+      1_700_000,
+    );
+
+    expect(cliente.getQueryData(keys.quotesMeta())).toEqual({ recibidasEn: 1_700_000 });
+  });
+
   it("un evento desconocido no toca nada", () => {
     const cliente = new QueryClient();
     aplicarEvento(cliente, "inventado", { lo: "que sea" }, keys.quotes(undefined));

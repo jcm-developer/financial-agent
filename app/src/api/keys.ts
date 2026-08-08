@@ -20,6 +20,15 @@ export const keys = {
   settingsHistory: (ref: string) => ["profiles", ref, "settings", "history"] as const,
 
   quotes: (symbols?: string) => ["quotes", symbols ?? ""] as const,
+  /**
+   * Cuándo llegó el último lote de cotizaciones.
+   *
+   * Está en la caché y no en el estado del hook de SSE porque **el stream se abre
+   * una sola vez, en el Layout**, y quien necesita el dato son las pantallas. Un
+   * `useStream()` por pantalla para leerlo abriría una conexión SSE por pantalla,
+   * que es exactamente lo que F3.5 quería evitar.
+   */
+  quotesMeta: () => ["quotes", "meta"] as const,
   ingestStatus: () => ["ingest-status"] as const,
 
   cycleControl: () => ["cycles", "control"] as const,

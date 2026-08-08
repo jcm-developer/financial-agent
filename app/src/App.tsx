@@ -1,208 +1,111 @@
-import { useIngestStatus, useMarkets, useQuotes } from "@/api/hooks";
-import { antiguedadReal, useStream } from "@/api/stream";
-import { IndicadorEnVivo } from "@/components/IndicadorEnVivo";
-import type { MarketInfo, QuoteRow } from "@/api/types";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+
+import { Layout } from "@/layout/Layout";
+import { Diagnostico } from "@/paginas/Diagnostico";
+import { Inicio } from "@/paginas/Inicio";
+import { NoEncontrado } from "@/paginas/NoEncontrado";
+import { Pendiente } from "@/paginas/Pendiente";
+import { Perfiles } from "@/paginas/Perfiles";
 
 /**
- * Comprobacion de que la capa de datos esta viva (tramos A y B de F4).
+ * Enrutado (F4.3).
  *
- * Sigue siendo un cartel de "estoy vivo" y no una pantalla: las de verdad llegan
- * en el tramo D y este componente desaparece entonces. Lo que demuestra ahora es
- * la cadena completa —tipos generados, cliente, TanStack Query y el SSE
- * escribiendo en la cache— sobre los tres endpoints que no necesitan un perfil.
+ * **El perfil va en la URL con su nombre**, no con su id: `/p/europa-01/posiciones`.
+ * Con un UUID ahí nadie sabría qué experimento está mirando, que era justo el
+ * motivo de sacarlo de la memoria de React. La API acepta nombre o id
+ * (`find_profile`), así que no hace falta traducir.
+ *
+ * Las rutas del perfil van todas dentro de `/p/:perfil/` para que el nombre no se
+ * pueda perder al navegar: con el perfil como parámetro de consulta opcional,
+ * cualquier enlace que se olvidara de arrastrarlo dejaría al usuario mirando otro
+ * experimento sin avisar.
  */
 export function App() {
-  const mercados = useMarkets();
-  const cotizaciones = useQuotes();
-  const ingesta = useIngestStatus();
-  const stream = useStream();
-
   return (
-    <div className="mx-auto max-w-5xl px-5 pt-6 pb-16">
-      <header className="mb-6 flex flex-wrap items-baseline justify-between gap-4 border-b border-border pb-5">
-        <div>
-          <h1 className="text-[19px] font-semibold tracking-tight">financial-bot</h1>
-          <p className="mt-1 text-[13px] text-text-secondary">
-            Capa de datos de F4 en pie. Las pantallas llegan en el tramo D.
-          </p>
-        </div>
-        <IndicadorEnVivo
-          estado={stream.estado}
-          reconexiones={stream.reconexiones}
-          aviso={stream.ultimoAviso}
-        />
-      </header>
+    <BrowserRouter>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<Inicio />} />
+          <Route path="perfiles" element={<Perfiles />} />
+          <Route path="diagnostico" element={<Diagnostico />} />
 
-      <Seccion titulo="Mercados" consulta={mercados}>
-        {(datos: MarketInfo[]) => (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {datos.map((mercado) => (
-              <TarjetaMercado key={mercado.code} mercado={mercado} />
-            ))}
-          </div>
-        )}
-      </Seccion>
+          <Route path="p/:perfil">
+            <Route index element={<Navigate to="resumen" replace />} />
+            <Route
+              path="resumen"
+              element={
+                <Pendiente
+                  titulo="Resumen"
+                  tarea="F4.7"
+                  descripcion="Capital, P&L del día y total, posiciones abiertas, win rate y el último ciclo."
+                />
+              }
+            />
+            <Route
+              path="posiciones"
+              element={
+                <Pendiente
+                  titulo="Posiciones"
+                  tarea="F4.7"
+                  descripcion="Abiertas y cerradas, con su stop, su objetivo y de dónde sale el precio con el que se valoran (live o cycle)."
+                />
+              }
+            />
+            <Route
+              path="decisiones"
+              element={
+                <Pendiente
+                  titulo="Decisiones"
+                  tarea="F4.7"
+                  descripcion="Lo que propuso el analista, con su tesis, sus riesgos y su convicción, y el veredicto del Risk Manager al lado."
+                />
+              }
+            />
+            <Route
+              path="ordenes"
+              element={
+                <Pendiente
+                  titulo="Órdenes"
+                  tarea="F4.7"
+                  descripcion="Enviadas, ejecutadas y no ejecutadas, con el motivo de las que se quedaron sin ejecutar."
+                />
+              }
+            />
+            <Route
+              path="riesgo"
+              element={
+                <Pendiente
+                  titulo="Eventos de riesgo"
+                  tarea="F4.7"
+                  descripcion="Contra qué límite chocó cada propuesta rechazada, y los disparos del kill switch."
+                />
+              }
+            />
+            <Route
+              path="ciclos"
+              element={
+                <Pendiente
+                  titulo="Ciclos"
+                  tarea="F4.7"
+                  descripcion="Cada ejecución del agente con su log en vivo, y las llamadas del analista que se quedaron sin respuesta (F6.9)."
+                />
+              }
+            />
+            <Route
+              path="ajustes"
+              element={
+                <Pendiente
+                  titulo="Ajustes"
+                  tarea="F6.8"
+                  descripcion="Los 41 parámetros del experimento, con los deslizadores de riesgo y diversificación y los límites derivados visibles en vivo."
+                />
+              }
+            />
+          </Route>
 
-      <Seccion titulo="Salud del ingestor" consulta={ingesta}>
-        {(datos) => (
-          <p className="text-[13px] text-text-secondary">
-            <span className={datos.healthy ? "text-delta-good" : "text-delta-bad"}>
-              {datos.healthy ? "Sano" : "Con problemas"}
-            </span>
-            {" — "}
-            {datos.message} {datos.symbols_tracked ?? 0} símbolos seguidos,{" "}
-            {/* Los campos con default en Pydantic salen opcionales en el tipo
-                generado, así que hay que decidir qué significa que falten. Aquí
-                un 0 es correcto: la API siempre los manda. */}
-            <span className="tabular">
-              {(datos.bars_stored ?? 0).toLocaleString("es-ES")}
-            </span>{" "}
-            barras guardadas.
-          </p>
-        )}
-      </Seccion>
-
-      <Seccion titulo="Cotizaciones" consulta={cotizaciones}>
-        {(datos: QuoteRow[]) =>
-          datos.length === 0 ? (
-            <p className="text-[13px] text-text-muted">
-              Todavía no hay cotizaciones: el ingestor las escribe en horario de mercado.
-            </p>
-          ) : (
-            <table className="w-full text-[13px]">
-              <thead className="text-left text-text-muted">
-                <tr>
-                  <th className="pb-1 font-medium">Símbolo</th>
-                  <th className="pb-1 text-right font-medium">Precio</th>
-                  <th className="pb-1 text-right font-medium">Var.</th>
-                  <th className="pb-1 text-right font-medium">Antigüedad</th>
-                </tr>
-              </thead>
-              <tbody>
-                {datos.slice(0, 12).map((fila) => (
-                  <FilaCotizacion
-                    key={fila.symbol}
-                    fila={fila}
-                    recibidasEn={stream.quotesRecibidasEn}
-                  />
-                ))}
-              </tbody>
-            </table>
-          )
-        }
-      </Seccion>
-    </div>
-  );
-}
-
-/**
- * Envoltorio con los tres estados de F4.8: cargando, error y vacío.
- *
- * Es un boceto de lo que el tramo D hará bien con shadcn. Está aquí porque la
- * alternativa —`datos?.map(...)` a secas— convierte un error de la API en una
- * sección en blanco, y una sección en blanco se lee como "no hay nada", que es
- * una afirmación distinta.
- */
-function Seccion<T>({
-  titulo,
-  consulta,
-  children,
-}: {
-  titulo: string;
-  consulta: { data?: T; error: Error | null; isPending: boolean };
-  children: (datos: T) => React.ReactNode;
-}) {
-  return (
-    <section className="mb-8">
-      <h2 className="mb-3 text-[13px] font-semibold tracking-wide text-text-secondary uppercase">
-        {titulo}
-      </h2>
-      {consulta.isPending && <p className="text-[13px] text-text-muted">Cargando…</p>}
-      {consulta.error && (
-        <p className="rounded-md border border-negative/40 bg-card p-3 text-[13px] text-negative">
-          {consulta.error.message}
-          <br />
-          <span className="text-text-muted">
-            Con <code>npm run dev</code> hace falta la API escuchando:{" "}
-            <code>python run.py api</code>
-          </span>
-        </p>
-      )}
-      {consulta.data !== undefined && children(consulta.data)}
-    </section>
-  );
-}
-
-function TarjetaMercado({ mercado }: { mercado: MarketInfo }) {
-  return (
-    <article className="rounded-lg border border-border bg-card p-4 shadow-[var(--shadow-card)]">
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="font-semibold">{mercado.label}</h3>
-        <span
-          className={
-            mercado.is_operating
-              ? "text-xs font-semibold text-delta-good"
-              : "text-xs text-text-muted"
-          }
-        >
-          {mercado.is_operating ? "en ventana" : "fuera de ventana"}
-        </span>
-      </div>
-      <p className="mt-1 text-[13px] text-text-secondary">{mercado.status_text}</p>
-      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[13px]">
-        <dt className="text-text-muted">Sesión</dt>
-        <dd className="tabular text-right">
-          {mercado.session_open}–{mercado.session_close}
-        </dd>
-        <dt className="text-text-muted">Ventana</dt>
-        <dd className="tabular text-right">
-          {mercado.operating_open}–{mercado.operating_close}
-        </dd>
-        <dt className="text-text-muted">Universo</dt>
-        <dd className="tabular text-right">{mercado.universe_size} valores</dd>
-      </dl>
-    </article>
-  );
-}
-
-function FilaCotizacion({
-  fila,
-  recibidasEn,
-}: {
-  fila: QuoteRow;
-  recibidasEn: number | null;
-}) {
-  const edad = antiguedadReal(fila, recibidasEn);
-  const variacion = fila.change_pct;
-
-  return (
-    <tr className="border-t border-border">
-      <td className="py-1">{fila.symbol}</td>
-      <td className="tabular py-1 text-right">{fila.price.toFixed(2)}</td>
-      <td
-        className={
-          variacion === null || variacion === undefined
-            ? "tabular py-1 text-right text-text-muted"
-            : variacion >= 0
-              ? "tabular py-1 text-right text-delta-good"
-              : "tabular py-1 text-right text-delta-bad"
-        }
-      >
-        {variacion === null || variacion === undefined
-          ? "—"
-          : `${variacion >= 0 ? "+" : ""}${variacion.toFixed(2)}%`}
-      </td>
-      {/* La antigüedad es la medición de F2.1c puesta donde se ve todos los
-          días: "cada minuto" solo vale si el dato es de hace un minuto. */}
-      <td
-        className={
-          edad !== null && edad > 300
-            ? "tabular py-1 text-right text-warning"
-            : "tabular py-1 text-right text-text-muted"
-        }
-      >
-        {edad === null ? "n/d" : `${Math.round(edad)} s`}
-      </td>
-    </tr>
+          <Route path="*" element={<NoEncontrado />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }
