@@ -812,9 +812,21 @@ def test_las_rutas_del_spa_caen_en_el_frontend(client):
     assert respuesta.headers["content-type"].startswith("text/html")
 
 
-def test_sin_build_del_frontend_se_dice_que_falta(client):
-    """Un 404 pelado se leeria como una averia; esto dice que llega en F4."""
-    assert "app/dist" in client.get("/").text
+def test_sin_build_del_frontend_se_dice_que_falta(tmp_path, db_path):
+    """Un 404 pelado se leeria como una averia; esto dice que llega en F4.
+
+    El `app_dist` se apunta a un directorio vacio a proposito. Antes usaba el
+    cliente por defecto, o sea el `app/dist` real, y el test decia la verdad solo
+    mientras nadie hubiera compilado el frontend: en cuanto se hizo `npm run
+    build` (F4 tramo A) empezo a fallar en la maquina de desarrollo y a pasar en
+    CI, que es la peor combinacion posible.
+    """
+    vacio = tmp_path / "sin-build"
+    vacio.mkdir()
+
+    app = create_app(ApiConfig(db_path=db_path, app_dist=vacio))
+    with TestClient(app) as sin_build:
+        assert "app/dist" in sin_build.get("/").text
 
 
 def test_el_spa_sirve_los_ficheros_del_build(tmp_path, db_path):
