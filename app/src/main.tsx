@@ -1,6 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { QueryClientProvider } from "@tanstack/react-query";
 
+import { crearQueryClient } from "@/api/queryClient";
 import { App } from "@/App";
 import "@/index.css";
 
@@ -11,8 +13,14 @@ if (!raiz) {
   throw new Error("Falta <div id=\"root\"> en index.html.");
 }
 
+// Se crea una sola vez y fuera del componente: dentro, cada renderizado haria un
+// cliente nuevo y la cache se vaciaria sola.
+const queryClient = crearQueryClient();
+
 createRoot(raiz).render(
   <StrictMode>
-    <App />
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
   </StrictMode>,
 );

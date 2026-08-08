@@ -615,9 +615,9 @@ esperan a que F4 tenga frontend que servir.
 ### F4 — Frontend React + Tailwind
 
 **Orden de ataque (decidido 2026-08-08).** Seis tramos, y el primero va solo porque es el que
-falla: **A** andamiaje y toolchain (F4.1, F4.2, F4.10) ✅ → **B** capa de datos (F4.4, F4.5) →
-**C** layout y selector de perfil (F4.3, F5.5) → **D** pantallas (F4.7, F4.8) → **E** gráficas
-(F4.6) → **F** cierre (F4.9, F4.11, F7.2, F7.4).
+falla: **A** andamiaje y toolchain (F4.1, F4.2, F4.10) ✅ → **B** capa de datos (F4.4, F4.5,
+F4.12) ✅ → **C** layout y selector de perfil (F4.3, F5.5) → **D** pantallas (F4.7, F4.8) →
+**E** gráficas (F4.6) → **F** cierre (F4.9, F4.11, F7.2, F7.4).
 
 El tramo A termina en una página que pinta `/api/markets` con los tipos generados. Es
 deliberadamente un cartel de "estoy vivo" y no una pantalla: demuestra las cuatro cosas que
@@ -674,9 +674,53 @@ diez sesiones en silencio.
       manual gana a la preferencia del sistema en los dos sentidos, igual que el viejo.
 - [ ] **F4.3** `react-router` y layout: barra lateral con Perfiles, Dashboard, Posiciones,
       Decisiones, Órdenes, Ajustes.
-- [ ] **F4.4** Datos con **TanStack Query** contra la API.
-- [ ] **F4.5** Hook de SSE: precios y P&L moviéndose solos, con reconexión e indicador de
-      "datos en vivo / desconectado".
+- [x] **F4.4** Datos con **TanStack Query** contra la API. `client.ts` (una sola puerta,
+      rutas relativas), `keys.ts` (fábrica de claves), `hooks.ts` (un hook por endpoint con
+      su tipo generado) y `queryClient.ts`.
+
+      Tres decisiones:
+      - **Las claves viven en un solo sitio** porque el SSE escribe en la caché por clave: un
+        `["quotes"]` frente a un `["quotes", undefined]` serían dos entradas distintas, el
+        stream actualizaría una y la pantalla leería la otra, y el síntoma sería "los precios
+        no se mueven" sin ningún error por ninguna parte.
+      - **Los 4xx no se reintentan.** Pedir dos veces un 422 devuelve el mismo 422 y retrasa
+        el mensaje que el usuario necesita. Y **las mutaciones no se reintentan nunca**: en
+        esta API las escrituras crean perfiles y lanzan ciclos.
+      - **`client.ts` aplana el `detail` de los 422 de Pydantic.** Sin eso el formulario de 41
+        campos de F6.8 diría "[object Object]" justo cuando hay que saber qué campo falla.
+- [x] **F4.5** Hook de SSE escribiendo en la caché de Query, con el indicador de "datos en
+      vivo / reconectando / desconectado".
+
+      Los eventos se han comprobado **contra el servidor de verdad**, no supuestos, y de ahí
+      salieron las tres cosas que tenían trampa:
+      - ⚠️ **El evento `ingest` manda 5 campos y `/api/ingest-status` devuelve 13**, así que
+        hay que **fundir, no reemplazar**: un `setQueryData(evento)` borraría
+        `avg_latency_ms`, `symbols_tracked`, `bars_stored` y los ticks recientes, y el panel
+        de salud se quedaría a medias en cuanto el ingestor cambiara de veredicto —o sea justo
+        cuando se mira—. TypeScript no avisa, porque el evento es un subconjunto válido.
+      - ⚠️ **El evento `cycle` llega de dos formas**: el estado completo al abrir y solo las
+        líneas nuevas después, con `from`. Si `from` va por delante de lo que tenemos se ha
+        perdido un trozo, y entonces **no se empalma a ojo** —un log que se lee como continuo
+        sin serlo es peor que no tenerlo— se invalida la consulta y se relee del servidor.
+      - ⚠️ **El estado de conexión sale de `readyState` y no de un temporizador de silencio.**
+        Los latidos del servidor son comentarios SSE y **no disparan eventos**, así que con el
+        mercado cerrado no llega nada durante horas siendo todo correcto. Un temporizador
+        marcaría "roto" una conexión sana.
+
+      Y el indicador tiene **tres estados y no dos**: el servidor retira las conexiones cada
+      15 minutos a propósito (F3.5) y `EventSource` las restablece solo, así que dos estados
+      parpadearían en rojo cada cuarto de hora en una conexión perfecta. Un rojo que se
+      enciende sin motivo deja de creerse, y entonces tampoco se cree el de verdad.
+
+      **`age_seconds` se corrige en el cliente.** Lo calcula el servidor al leer, así que en
+      caché se congela: enseñarlo tal cual diría "hace 60 s" durante media hora. Se le suma el
+      tiempo transcurrido desde que llegó el evento, que además no depende del reloj del
+      navegador porque solo usa una diferencia local.
+- [x] **F4.12** **Vitest** y 11 tests de la capa de datos
+      ([app/src/api/stream.test.ts](app/src/api/stream.test.ts)). No estaba en el plan y se ha
+      añadido porque el empalme de los eventos —la fusión parcial, el hueco en el log, la
+      antigüedad corregida— es lógica con casos, y en un repositorio con 606 tests de Python
+      escribirla a ojo era el sitio raro para empezar a confiar. `npm test`.
 - [ ] **F4.6** Gráficas con **Recharts** (decidido 2026-08-08): curva de capital, drawdown,
       histograma de convicción, calibración. visx da más control, pero aquí las gráficas son
       cuatro formas estándar y el trabajo de verdad está en F4.7; el comparador de F5.6
