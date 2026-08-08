@@ -1,15 +1,19 @@
 # =============================================================================
 # financial-bot
 #
-#   docker compose up -d                     dashboard + planificador
+#   docker compose up -d                     la aplicacion en http://localhost:8000
 #   docker compose logs -f scheduler         seguir los ciclos programados
 #   docker compose run --rm bot <comando>    comandos puntuales
+#
+# Un solo puerto y una sola imagen: `api` sirve el build de React y la API REST
+# desde el mismo origen (F3.7), asi que no hay nada que configurar entre las dos
+# mitades.
 #
 # La base de datos vive en un volumen con nombre, no en un bind mount al disco
 # de Windows: SQLite necesita bloqueo de fichero fiable y los bind mounts de
 # Docker Desktop en Windows no lo garantizan. Para sacar el fichero:
 #
-#   docker compose cp dashboard:/app/data/trading.db ./data/trading.db
+#   docker compose cp api:/app/data/trading.db ./data/trading.db
 # =============================================================================
 name: financial-bot
 
@@ -29,21 +33,38 @@ x-app: &app
 
 services:
   # ---------------------------------------------------------------------------
-  # Dashboard. No llama al modelo ni a la red: solo lee la base en modo solo
-  # lectura, asi que funciona aunque el .env este a medio rellenar.
+  # API + frontend (F7.4). Sustituye al servicio `dashboard`, que servia el HTML
+  # de 1.500 lineas de web/.
+  #
+  # Escribe, pero solo en las tablas de configuracion: la conexion pasa por el
+  # autorizador de SQLite (F3.3), asi que un endpoint no puede tocar el
+  # historico aunque lo intente. Las lecturas van en modo `ro`.
   # ---------------------------------------------------------------------------
-  dashboard:
+  api:
     <<: *app
-    command: ["python", "run.py", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["python", "run.py", "api", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      DB_PATH: /app/data/trading.db
+      # Escuchar en 0.0.0.0 es obligatorio para que el mapeo de puertos funcione,
+      # asi que la direccion no dice nada sobre quien puede llegar: quien manda es
+      # el "127.0.0.1:" de abajo. Los controles que lanzan ciclos se apagan aqui
+      # si algun dia esto se publica de verdad (F3.8).
+      API_CONTROLS: "${API_CONTROLS:-true}"
     ports:
       # Publicado solo en el localhost del anfitrion: son datos de una cuenta de
-      # inversion y el dashboard no tiene autenticacion. Para abrirlo al resto
-      # de la red cambia a "8000:8000", sabiendo lo que implica.
+      # inversion y la API no tiene autenticacion. Para abrirla al resto de la
+      # red cambia a "8000:8000", sabiendo lo que implica -- y apaga antes
+      # API_CONTROLS, porque quien alcance el puerto puede lanzar ciclos.
       - "127.0.0.1:8000:8000"
     restart: unless-stopped
     healthcheck:
+      # Contra /api/markets y no contra "/": la raiz devuelve el index.html
+      # incluso cuando falta el build, asi que daria por sano un contenedor que
+      # sirve la pagina de "falta el frontend". /api/markets recorre el enrutado
+      # de verdad y **no toca la base**, asi que tampoco se pone en rojo porque
+      # el ingestor tenga el fichero ocupado un instante.
       test: ["CMD", "python", "-c",
-             "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/', timeout=5)"]
+             "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/api/markets', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -91,8 +112,32 @@ services:
     command: ["python", "tools/scheduler.py"]
     environment:
       DB_PATH: /app/data/trading.db
+      # Contra que perfil opera. Vacio = el unico activo, que es lo que se quiere
+      # con un experimento a la vez (decision nº 5).
+      #
+      # ⚠️ Vacio NO significa "elige tu": `Infra.load()` cae en `PORTFOLIO_NAME`
+      # del .env, que es una variable heredada de antes de F6.4 y suele traer un
+      # nombre viejo. Si el planificador arranca diciendo "no existe ningun perfil
+      # llamado ...", es esto: pon aqui el nombre bueno o quita `PORTFOLIO_NAME`
+      # del .env (F8.3 lo retira cuando no queden `.env` que migrar).
+      #
+      #   PROFILE=europa-01 docker compose up -d scheduler
+      PROFILE: "${PROFILE:-}"
       # 22:15 en hora peninsular: poco despues del cierre de Nueva York, cuando
       # las barras diarias ya estan completas.
+      #
+      # ⚠️ Ese default es para un perfil AMERICANO. Con `market=eu` el "tras el
+      # cierre" son las 18:00 de Madrid, y si se pasa a barras horarias son los
+      # ocho ciclos de la ventana europea, veinte minutos pasada la hora para que
+      # la barra este completa con el desfase del feed:
+      #
+      #   CYCLE_TIMES=18:00                                        (1d, europeo)
+      #   CYCLE_TIMES=10:20,11:20,12:20,13:20,14:20,15:20,16:20,17:20   (1h)
+      #
+      # Cual de los dos depende de la medicion de F2.1c. Y ⚠️ el horario sale de
+      # aqui y no del perfil: `agent_settings.cycle_times` existe pero no lo lee
+      # nadie todavia (F6.10), asi que con mas de un perfil activo esto se queda
+      # corto.
       CYCLE_TIMES: "${CYCLE_TIMES:-22:15}"
       CYCLE_TZ: "${CYCLE_TZ:-Europe/Madrid}"
       RUN_ON_START: "${RUN_ON_START:-false}"
@@ -112,6 +157,11 @@ services:
   bot:
     <<: *app
     command: ["python", "run.py", "check"]
+    environment:
+      DB_PATH: /app/data/trading.db
+      # Mismo caso que el planificador: sin esto no hay forma de elegir perfil
+      # desde fuera sin editar el .env.
+      PROFILE: "${PROFILE:-}"
     profiles: ["manual"]
 
 volumes:

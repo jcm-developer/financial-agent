@@ -518,10 +518,25 @@ def test_un_simbolo_sin_datos_no_cuenta_como_hueco(db, perfil):
 # -- Aviso de contencion (F2.9) ---------------------------------------------
 
 
-def test_carga_inicial_grande_no_dispara_el_aviso(db, perfil, caplog):
+def test_carga_inicial_grande_no_dispara_el_aviso(db, perfil, caplog, monkeypatch):
     """El primer tick escribe la sesion entera y tarda segundos sin que nadie lo
-    bloquee. Un aviso que salta ahi cria lobos y se acaba ignorando."""
+    bloquee. Un aviso que salta ahi cria lobos y se acaba ignorando.
+
+    El reloj es falso a proposito, igual que en el test de abajo. Antes se medi­a
+    el disco de verdad, y eso hacia que el test dijera la verdad solo en la
+    maquina donde se escribio: pasaba en el anfitrion (~1.1 ms/fila) y fallaba
+    dentro del contenedor (~3.9), que es justamente donde el codigo corre. Un test
+    que se rompe en el entorno de destino y pasa en el de desarrollo es el peor
+    reparto posible.
+
+    El 1.5 s para 400 filas no es inventado: es lo medido en el contenedor.
+    """
     import logging
+
+    import src.ingest as ingest_mod
+
+    reloj = iter([0.0, 0.0, 0.0, 1.5])
+    monkeypatch.setattr(ingest_mod.time, "monotonic", lambda: next(reloj))
 
     with caplog.at_level(logging.WARNING, logger="src.ingest"):
         ingest_once(db, ProveedorFalso({"AAPL": barras(400)}), ["AAPL"])

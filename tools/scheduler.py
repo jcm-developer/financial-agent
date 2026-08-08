@@ -128,7 +128,7 @@ def validate_config() -> bool:
     except ConfigError as exc:
         log.error("Configuracion incompleta, el planificador no puede operar:\n%s", exc)
         log.error(
-            "Si solo quieres el dashboard, para este servicio con:  "
+            "Si solo quieres la interfaz, para este servicio con:  "
             "docker compose stop scheduler"
         )
         return False

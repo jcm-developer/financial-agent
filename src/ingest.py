@@ -51,11 +51,21 @@ log = logging.getLogger(__name__)
 # un tick perdido sin tener que reescribir la sesion entera cada minuto.
 SOLAPE_BARRAS = 3
 
-# Umbrales del aviso de contencion. Medido en esta maquina, una escritura sin
-# competencia cuesta ~1.1 ms/fila; se avisa a partir de 5 para dejar margen a
-# discos mas lentos sin que el aviso pierda sentido.
+# Umbrales del aviso de contencion (F2.9).
+#
+# La primera calibracion se hizo en el anfitrion Windows —~1.1 ms/fila sin
+# competencia— y se puso el aviso en 5 "para dejar margen a discos mas lentos".
+# Ese margen no llegaba: medido dentro del contenedor, que es donde esto corre de
+# verdad, una escritura tranquila cuesta **~3.6-3.9 ms/fila**, asi que cualquier
+# carga normal rozaba el umbral y con la maquina ocupada lo pasaba. Un aviso que
+# salta en una carga inicial sana es exactamente el que se acaba ignorando, que
+# es contra lo que se escribio esta medicion.
+#
+# 15 deja unas 4 veces el coste tranquilo del contenedor. Lo que se busca detectar
+# es una espera por `busy_timeout`, que son cientos de ms por fila, no un disco
+# lento.
 UMBRAL_ESCRITURA_MS = 1000
-UMBRAL_MS_POR_FILA = 5.0
+UMBRAL_MS_POR_FILA = 15.0
 
 # Dias que pide el relleno de huecos por defecto. Cubre un puente entero, que es
 # el caso realista: el ordenador apagado de viernes a lunes.

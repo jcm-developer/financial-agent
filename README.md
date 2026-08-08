@@ -170,16 +170,20 @@ Programador de tareas de Windows.
 `failed to connect to the docker API`, abre Docker Desktop y espera a que el
 icono deje de moverse.
 
-### 2.2 Ver el dashboard sin credenciales (2 minutos)
+### 2.2 Ver la interfaz sin credenciales (2 minutos)
 
 ```powershell
 cd c:\Users\jaume\Desktop\financial-bot
-docker compose up -d dashboard
+docker compose up -d api
 docker compose run --rm bot python tools/seed_demo.py
 ```
 
-Abre http://127.0.0.1:8000 y elige `demo` en el selector de cartera. No hace
-falta `.env` ni ninguna clave: el dashboard solo lee la base de datos.
+Abre http://localhost:8000. No hace falta `.env` ni ninguna clave: para leer, la
+API abre SQLite en modo solo lectura.
+
+La primera construcción tarda un par de minutos porque compila el frontend
+dentro de la imagen; las siguientes reutilizan las capas. **No hace falta Node
+instalado**: lo pone la etapa de compilación y no llega a la imagen final.
 
 ### 2.3 Ponerlo a operar
 
@@ -221,9 +225,9 @@ la separación funciona.
 docker compose run --rm bot python run.py cycle --dry-run
 ```
 
-Revisa el resultado en el dashboard, pestaña *Decisiones del modelo*.
+Revisa el resultado en la interfaz, pestaña *Decisiones*.
 
-**4. Arranca todo**, dashboard y planificador:
+**4. Arranca todo**: interfaz, ingestor y planificador.
 
 ```powershell
 docker compose up -d
@@ -242,7 +246,7 @@ docker compose logs -f scheduler
 | Ejecutar los tests | `docker compose run --rm bot python -m pytest tests -q` |
 | Parar todo | `docker compose down` |
 | Aplicar cambios de código | `docker compose up -d --build` |
-| Solo el dashboard | `docker compose up -d dashboard` |
+| Solo la interfaz | `docker compose up -d api` |
 | Parar el planificador | `docker compose stop scheduler` |
 
 ### 2.5 Cambiar la cadencia
@@ -266,7 +270,7 @@ deliberado: SQLite necesita bloqueo de fichero fiable y los *bind mounts* de
 Docker Desktop en Windows no lo garantizan. Para sacar una copia:
 
 ```powershell
-docker compose cp dashboard:/app/data/trading.db ./data/trading.db
+docker compose cp api:/app/data/trading.db ./data/trading.db
 ```
 
 Y para inspeccionarla dentro del contenedor:
@@ -275,7 +279,7 @@ Y para inspeccionarla dentro del contenedor:
 docker compose run --rm bot python run.py report
 ```
 
-**El dashboard se publica solo en `127.0.0.1:8000`.** No tiene autenticación y
+**La interfaz se publica solo en `127.0.0.1:8000`.** No tiene autenticación y
 son datos de una cuenta de inversión. Si de verdad quieres abrirlo al resto de
 tu red, cambia el mapeo a `"8000:8000"` en `docker-compose.yml` sabiendo lo que
 implica.
@@ -284,7 +288,36 @@ implica.
 con un mensaje explicando qué falta, en lugar de entrar en bucle de reinicios. El
 perfil se resuelve al arrancar el planificador, no al lanzar el ciclo: descubrir
 que no hay ninguno activo a las 22:15, tras ocho horas dormido, es la peor hora
-posible para enterarse. El `dashboard` sigue funcionando.
+posible para enterarse. La `api` sigue funcionando.
+
+### 2.7 Modo desarrollo
+
+Los servicios en Docker y el frontend en el anfitrión, con recarga en caliente:
+
+```powershell
+docker compose up -d api ingestor
+cd app
+npm install        # una vez
+npm run dev        # http://localhost:5173
+```
+
+`vite dev` reenvía `/api` al contenedor del 8000, así que la interfaz de
+desarrollo habla con la misma base que la de producción. Dos detalles que cuestan
+un rato averiguar solos:
+
+- **Abre `localhost`, no `127.0.0.1`**: Vite escucha en `::1`.
+- Si mueves la API de puerto —por ejemplo porque el dashboard viejo ocupa el
+  8000— dile a dónde apuntar:
+  `$env:VITE_API_TARGET="http://127.0.0.1:8001"`.
+
+Para tocar el backend basta con `docker compose up -d --build api`. Y si cambias
+`api/models.py`, regenera los tipos del frontend o el build fallará al detectar
+que no cuadran:
+
+```powershell
+python tools/gen_api_types.py           # regenera app/src/api/types.ts
+python tools/gen_api_types.py --check   # solo comprueba si están al día
+```
 
 ---
 
@@ -298,20 +331,24 @@ python -m pip install -r requirements.txt
 ```
 
 `yfinance` (que arrastra pandas), `httpx`, `python-dotenv`, `tzdata` y
-`pytest`. La base de datos es SQLite de la biblioteca estándar y el dashboard no
-usa ninguna librería de gráficos.
+`fastapi`, `uvicorn`, `yfinance` (que arrastra pandas), `httpx`, `python-dotenv`,
+`tzdata` y `pytest`. La base de datos es SQLite de la biblioteca estándar.
+
+Para el frontend hace falta **Node 22** y `cd app; npm install`. Con Docker no:
+la imagen lo compila por dentro.
 
 
-### 3.2 Ver el dashboard sin credenciales
+### 3.2 Ver la interfaz sin credenciales
 
 Puedes probar toda la interfaz antes de dar de alta nada, con datos sintéticos:
 
 ```powershell
 python tools/seed_demo.py          # crea la cartera 'demo' con 40 ciclos
-python run.py serve                # http://127.0.0.1:8000
+cd app; npm install; npm run build; cd ..   # una vez
+python run.py api                  # http://127.0.0.1:8000
 ```
 
-En el dashboard, elige `demo` en el selector de cartera. Para regenerarla:
+Elige `demo` en el selector de experimento. Para regenerarla:
 `python tools/seed_demo.py --reset`.
 
 ### 3.3 Credenciales
@@ -390,67 +427,95 @@ exponer credenciales, y un `.env` a medio rellenar no te impide ver los datos.
 
 ---
 
-## 5. El dashboard
+## 5. La interfaz
 
 ```powershell
-python run.py serve                  # http://127.0.0.1:8000
-python run.py serve --port 8080      # otro puerto
+docker compose up -d api             # http://localhost:8000
+python run.py api --port 8080        # sin Docker, otro puerto
 ```
 
-Escucha **solo en 127.0.0.1**: son datos de una cuenta de inversión y no tienen
-por qué estar accesibles desde la red local. Si de verdad quieres abrirlo al
-resto de tu red, `--host 0.0.0.0`, sabiendo que no hay autenticación.
+React + Tailwind, servido por la propia API desde el mismo origen: un puerto y
+nada que configurar entre las dos mitades. Escucha **solo en 127.0.0.1** — son
+datos de una cuenta de inversión y no hay autenticación.
 
-Cuatro pestañas:
+**El experimento va en la URL**: `/p/europa-01/posiciones`. Con el nombre a la
+vista, la pregunta «¿qué experimento estoy mirando?» la responde la barra de
+direcciones, y un enlace guardado sigue apuntando al mismo sitio después de
+recargar. Cambiar de experimento en el selector conserva la sección.
 
-**Resumen** — Equity, P&L realizado y abierto, acierto, profit factor y caída
-máxima. Debajo, cinco gráficos:
+Las pantallas:
 
-- *Curva de capital*: un punto por ciclo, con la referencia del capital inicial.
-- *Calibración de la convicción* — **el gráfico que decide el experimento**. Es
-  el acierto real agrupado por la convicción que el modelo declaró al entrar. Si
-  las barras no suben de izquierda a derecha, la convicción del modelo no
-  informa de nada y estás operando con ruido caro.
-- *P&L realizado por activo*: escala divergente con el signo en la etiqueta.
-- *Rechazos del Risk Manager*: contra qué límite choca el modelo.
-- *Convicción declarada*: si se concentra en un solo tramo, el modelo no
-  discrimina entre oportunidades.
+**Resumen** — Capital, rentabilidad contra el presupuesto asignado, P&L del día,
+posiciones abiertas, operaciones cerradas (con cuántas faltan para las 30 que
+hacen falta para leer la calibración), aciertos y último ciclo.
 
-**Decisiones del modelo** — Cada llamada al LLM junto al veredicto de riesgo que
-recibió. Filtrable por acción y activo; pulsa una fila para ver la tesis
-completa. Es la tabla que da sentido a todo el ejercicio.
+**Posiciones** — Abiertas y cerradas en dos tablas, porque las columnas que
+importan son distintas. Cada precio lleva **de dónde sale**: `VIVO` si es la
+cotización del ingestor, `CICLO` si es lo que vio el analista en su última
+pasada, `SIN PRECIO` si no hay ninguno. Sumar una posición valorada con el cierre
+de anteayer y otra con el precio de hace un minuto da un P&L que no significa
+nada.
 
-**Posiciones** — Abiertas (con margen hasta el stop) y cerradas. El precio
-mostrado es el último que registró el bot, no una cotización en vivo, y así se
-etiqueta.
+**Decisiones** — Cada llamada al modelo con su tesis, sus riesgos y su
+convicción, y al lado el veredicto del Risk Manager. Filtrable por activo, acción
+y veredicto. Es la tabla que da sentido a todo el ejercicio, así que la tesis se
+lee en la propia fila y no detrás de un clic.
 
-**Ciclos y órdenes** — Cada ejecución y cada intento de orden, incluidos los
-fallidos y los no enviados.
+**Órdenes** — Enviadas, ejecutadas y **también las que no se enviaron**, con el
+motivo. Una orden en `canceled` significa que el agente decidió operar y no pudo;
+sin verla parecería que el analista no propuso nada.
 
-### Lanzar un ciclo desde el dashboard
+**Riesgo** — Contra qué límite choca el modelo, con el recuento por regla. Si el
+80 % de los rechazos son del mismo límite, o el modelo insiste en algo que no cabe
+o ese límite está mal puesto.
 
-El botón **Lanzar ciclo** de la cabecera arranca un ciclo sin tocar la terminal, y
-**Simular** hace lo mismo con `--dry-run`. Aparece un panel con la etapa actual, el
-tiempo transcurrido y el log en vivo; puedes cerrar la pestaña, porque el proceso
-corre en el servidor, no en el navegador.
+**Ciclos** — Cada ejecución con su log en vivo y el detalle de los parámetros con
+los que corrió. Un ciclo marcado `SIN MODELO` es uno en el que **ninguna llamada
+al analista obtuvo respuesta** — cuota agotada o proveedor caído —; sin esa
+etiqueta se leería como un día tranquilo, que es la trampa que cerró F6.9.
 
-El dashboard sigue abriendo SQLite en **solo lectura**: el botón no escribe nada
-por su cuenta, arranca `run.py cycle` como proceso aparte con su propia conexión.
+**Ingesta** — Salud del ingestor y antigüedad de cada cotización. «Cada minuto»
+solo vale si el dato es de hace un minuto, así que la antigüedad se avisa en
+ámbar a partir de cinco.
+
+### Lanzar un ciclo desde la interfaz
+
+En la pantalla de Ciclos, **Lanzar ciclo** arranca uno sin tocar la terminal y
+**Lanzar en seco** hace lo mismo con `--dry-run`. Puedes cerrar la pestaña: el
+proceso corre en el servidor.
+
+La API **no puede escribir en el histórico aunque quiera**: las lecturas abren
+SQLite en modo `ro` y las escrituras pasan por un autorizador que solo admite las
+tablas de configuración, así que un `insert into decisions` falla con «not
+authorized» antes de tocar el fichero. El botón no escribe nada por su cuenta:
+arranca `run.py cycle` como proceso aparte con su propia conexión.
 
 Dos protecciones:
 
 - **Un solo ciclo por cartera a la vez.** Si el planificador ya tiene uno en
-  marcha, el botón lo rechaza con un mensaje en lugar de arrancar un segundo. Dos
-  ciclos en paralelo se pisan el efectivo y las posiciones.
-- **`DASHBOARD_CONTROLS=false`** quita los botones. Ponlo si publicas el dashboard
-  fuera de localhost: no hay autenticación, así que quien alcance el puerto podría
-  gastar tu cuota y mover la cartera. Con el mapeo por defecto
-  (`127.0.0.1:8000`) no hace falta.
+  marcha, el botón lo rechaza en lugar de arrancar un segundo. Dos ciclos en
+  paralelo se pisan el efectivo y las posiciones.
+- **`API_CONTROLS=false`** quita los botones y los endpoints. Ponlo si publicas
+  esto fuera de localhost: quien alcance el puerto podría gastar tu cuota y mover
+  la cartera.
 
-Cada gráfico tiene un botón *Tabla* que muestra los mismos datos en texto, y hay
-tema claro y oscuro. La paleta está validada para daltonismo: la pareja
-verde/rojo habitual en finanzas falla la separación para deuteranopía, así que
-los gráficos usan azul/rojo y el signo `+`/`−` acompaña siempre al valor.
+Hay tema claro y oscuro, oscuro por defecto. La paleta está validada para
+daltonismo: la pareja verde/rojo habitual en finanzas falla la separación para
+deuteranopía, así que las series usan **azul/rojo** y el signo `+`/`−` acompaña
+siempre al valor.
+
+### Datos en vivo
+
+Los precios llegan por **Server-Sent Events**, y el indicador de la cabecera dice
+si el flujo está vivo. Tiene tres estados y no dos: el servidor retira las
+conexiones cada 15 minutos a propósito y el navegador las restablece solo, así que
+un indicador de dos estados parpadearía en rojo cada cuarto de hora estando todo
+bien.
+
+Dicho sin adornos: **por dentro esto sondea.** El ingestor corre en otro proceso,
+así que el servidor mira el fichero cada dos segundos y manda solo lo que cambia.
+La ganancia es mover el sondeo del navegador al servidor, no que haya empuje de
+verdad.
 
 ---
 
@@ -512,8 +577,11 @@ Register-ScheduledTask -TaskName "financial-bot-ciclo" -Action $action -Trigger 
 Para comprobar que la tarea funciona: `Start-ScheduledTask -TaskName "financial-bot-ciclo"`
 y luego `python run.py report`.
 
-El dashboard (`serve`) sí es un proceso continuo, pero no hace llamadas a nada:
-solo lee el fichero SQLite cuando refrescas la página.
+La interfaz (`api`) sí es un proceso continuo, pero no llama al modelo ni a
+Yahoo: solo lee el fichero SQLite. El **ingestor** sí llama a Yahoo, una vez por
+símbolo y por minuto mientras la bolsa está abierta, y es la razón de que sea un
+servicio aparte: si Yahoo se cuelga o empieza a devolver 429, ni la interfaz ni
+el agente se enteran.
 
 ---
 
@@ -586,7 +654,7 @@ Hay una interacción de estos valores que conviene entender: un stop de 2×ATR
 ronda el 4% del precio en una acción típica, así que arriesgar el 1% del equity
 implicaría una posición del **25%**. El tope del 20% recorta antes, y eso es lo
 buscado: manda la diversificación sobre el presupuesto de riesgo. Lo verás en el
-dashboard como rechazos o recortes con la regla `max_position_pct`.
+la interfaz como rechazos o recortes con la regla `max_position_pct`.
 
 ---
 
@@ -624,10 +692,10 @@ order by p.realized_pnl asc limit 10;
 ## 10. Estructura
 
 ```
-Dockerfile              Imagen unica para los tres servicios
-docker-compose.yml      dashboard + scheduler + comandos puntuales
-run.py                  CLI: check / cycle / status / report / serve
-                        + profiles / import-profile / activate
+Dockerfile              Imagen multietapa: Node compila React, Python lo sirve
+docker-compose.yml      api + ingestor + scheduler + comandos puntuales
+run.py                  CLI: check / cycle / status / report / api / serve
+                        + profiles / new-profile / import-profile / activate
 schema.sql              Esquema SQLite; se aplica solo en cada arranque
 src/
   config.py             Infra desde .env (rutas, clave, log)
@@ -637,37 +705,52 @@ src/
   indicators.py         RSI, ATR, MACD… funciones puras, sin numpy
   market_data.py        Barras desde Yahoo (yfinance)
   bar_cache.py          Cache de barras con refresco incremental
+  ingest.py             Ticks de un minuto y relleno de huecos
   screener.py           Filtro determinista: universo -> candidatos
   universe_data.py      El embudo: cache + screener + snapshots
-  market_calendar.py    Sesiones, festivos y medias sesiones de NYSE
+  market_calendar.py    Registro de mercados: horarios, festivos, divisa
   sim_broker.py         Broker simulado sobre SQLite
-  llm.py                Cliente NVIDIA NIM y parseo defensivo de JSON
+  llm.py                Cliente multiproveedor (NIM y OpenAI)
   analyst.py            Prompts y validación de la salida del modelo
   risk.py               Risk Manager  ← la pieza crítica
   broker.py             El contrato que el ciclo espera de un broker
   db.py                 Persistencia y reconciliación
-  dashboard.py          Ensamblado de datos para report y web
+  dashboard.py          Ensamblado de datos para report
   cycle.py              Orquestación del ciclo
-web/
-  server.py             Servidor del dashboard (biblioteca estándar)
-  index.html            Dashboard autocontenido
+api/                    FastAPI: 24 endpoints y el SSE de precios
+  guard.py              Conexión con autorizador: el histórico es de solo lectura
+  queries.py            Lecturas; models.py, los tipos que salen por la red
+  runner.py             Lanza `run.py cycle` como subproceso
+  routes/               profiles, trading, market, control, stream
+app/                    React + Vite + Tailwind (se compila en la imagen)
+  src/api/              Cliente, hooks de TanStack Query y el hook de SSE
+  src/api/types.ts      Tipos generados del OpenAPI; no se editan a mano
+  src/paginas/          Resumen, Posiciones, Decisiones, Órdenes, Riesgo, Ciclos
+web/                    El dashboard viejo, hasta que se retire (F8.2)
 tools/
   fetch_universe.py     Descarga la lista de componentes del S&P 500
+  ingestor.py           Bucle de ingesta (proceso del contenedor)
   scheduler.py          Planificador de ciclos (proceso del contenedor)
+  gen_api_types.py      OpenAPI -> app/src/api/types.ts
+  spike_1m.py           Mide el retraso real del feed de un minuto
   seed_demo.py          Datos sintéticos para probar la interfaz
 universe/
   sp500.txt             503 símbolos, en notación de Yahoo
-tests/                  284 tests, sin red ni credenciales
+  eurostoxx50_ibex35.txt  89 símbolos de la zona euro, verificados
+tests/                  606 tests, sin red ni credenciales
   helpers.py            Dobles del LLM y de los datos, compartidos
                         (incluye un ciclo completo de integración)
 ```
 
 ```powershell
-python -m pytest tests -q
+python -m pytest tests -q                                   # 606, sin red
+docker compose run --rm bot python -m pytest tests -q       # los mismos, en Docker
+cd app; npm test                                            # 14 del frontend
 ```
 
 Los tests no tocan la red: el Risk Manager, los indicadores, el parseo de JSON
-del LLM y la capa de datos son deterministas y se prueban en aislamiento.
+del LLM y la capa de datos son deterministas y se prueban en aislamiento. Los del
+frontend cubren el empalme de los eventos del stream, que es donde hay casos.
 
 ---
 

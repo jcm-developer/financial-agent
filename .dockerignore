@@ -15,4 +15,17 @@ __pycache__/
 venv/
 .git/
 .gitignore
+
+# El frontend se compila DENTRO de la imagen (etapa `frontend` del Dockerfile).
+#
+# Excluir estos dos no es solo por tamano: `node_modules` del anfitrion es de
+# Windows y sus binarios no valen en la imagen de Linux, y un `dist` compilado
+# a mano hace semanas se coparia encima del recien construido sin que nada
+# avisara. Que el unico build que existe sea el de la imagen es lo que hace que
+# `docker compose up` sirva siempre lo que hay en el codigo.
+app/node_modules/
+app/dist/
+.vite/
+
 README.md
+TASKS.md

@@ -1046,27 +1046,52 @@ diez sesiones en silencio.
 
 ### F7 — Docker y puesta en marcha
 
-- [ ] **F7.1** Estructura del repo:
-      ```
-      app/        React + Vite (se compila en el build de Docker)
-      api/        FastAPI
-      src/        el agente, tal cual está hoy
-      tools/      ingestor.py, scheduler.py, fetch_universe.py
-      tests/
-      ```
-- [ ] **F7.2** [Dockerfile](Dockerfile) multietapa: etapa Node que hace `npm run build`, etapa
-      Python que copia `app/dist` y arranca uvicorn. **Una imagen, un puerto.**
+- [x] **F7.1** Estructura del repo tal como se planificó: `app/`, `api/`, `src/`, `tools/`,
+      `tests/`. Solo sobra `web/`, que se retira en F8.2.
+- [x] **F7.2** [Dockerfile](Dockerfile) multietapa: etapa `node:22-slim` que compila React y
+      etapa Python que copia `app/dist`. **Una imagen (507 MB), un puerto.**
+
+      **Node no llega a la imagen final**, que es la razón de las dos etapas: la de
+      compilación se lleva `node_modules` entera y en producción el frontend son tres
+      ficheros estáticos que sirve FastAPI. `npm ci` y no `npm install`, para que construir
+      dos veces dé lo mismo las dos veces.
+
+      Y **`app/dist` y `app/node_modules` están en el `.dockerignore`**. No es por tamaño:
+      el `node_modules` del anfitrión es de Windows y sus binarios no valen en Linux, y un
+      `dist` compilado a mano hace semanas se copiaría encima del recién construido sin que
+      nada avisara. Que el único build que existe sea el de la imagen es lo que hace que
+      `docker compose up` sirva siempre lo que hay en el código.
 - [x] **F7.3** Servicio `ingestor` en [docker-compose.yml](docker-compose.yml) — hecho en
       F2.12, con `restart: unless-stopped` y `stop_grace_period: 15s`.
-- [ ] **F7.4** Renombrar `dashboard` → `api` con el comando de uvicorn, manteniendo la
-      publicación en `127.0.0.1:8000` y el healthcheck.
-- [ ] **F7.5** Conservar el volumen con nombre para la base (ver D4) y el comando documentado
-      para extraer el fichero.
-- [ ] **F7.6** `docker compose up` levanta todo y la app está en `http://localhost:8000` sin
-      más pasos.
-- [ ] **F7.7** Modo desarrollo documentado: contenedores para API e ingestor, `vite dev` en el
-      anfitrión con proxy.
-- [ ] **F7.8** Reescribir el [README.md](README.md) con la arquitectura nueva.
+- [x] **F7.4** `dashboard` → **`api`**, con `run.py api`, la publicación en `127.0.0.1:8000`
+      y `API_CONTROLS` configurable.
+
+      **El healthcheck ahora apunta a `/api/markets` y no a `/`.** La raíz devuelve el
+      `index.html` incluso cuando falta el build, así que daba por sano un contenedor que
+      sirve la página de "falta el frontend"; `/api/markets` recorre el enrutado de verdad y
+      **no toca la base**, así que tampoco se pone en rojo porque el ingestor tenga el
+      fichero ocupado un instante.
+- [x] **F7.5** Volumen con nombre `trading-data` intacto, y el comando de extracción
+      actualizado al servicio nuevo: `docker compose cp api:/app/data/trading.db ./data/`.
+- [x] **F7.6** `docker compose up -d` levanta los cuatro servicios y la aplicación está en
+      `http://localhost:8000`. Verificado de punta a punta: `api` en *healthy* sirviendo el
+      bundle compilado dentro de la imagen, `ingestor` durmiendo hasta la apertura del lunes
+      y `scheduler` con el perfil europeo cargado.
+
+      ⚠️ **Un tropiezo que costará a cualquiera que repita esto:** el `.env` trae
+      `PORTFOLIO_NAME=experimento-01`, heredado de antes de F6.4, y el planificador arrancaba
+      diciendo que ese perfil no existe. Se ha añadido `PROFILE` como variable de compose
+      —`PROFILE=europa-01 docker compose up -d scheduler`— porque sin ella no había forma de
+      elegir perfil sin editar el `.env`. La limpieza de verdad es F8.3.
+- [x] **F7.7** Modo desarrollo documentado en el README (§2.7): `docker compose up -d api
+      ingestor` y `npm run dev` en el anfitrión. Funciona sin configurar nada porque el proxy
+      de Vite apunta al 8000, que es donde publica el contenedor. Documentados los dos
+      detalles que cuestan un rato solos: **`localhost` y no `127.0.0.1`** (Vite escucha en
+      `::1`) y `VITE_API_TARGET` si la API se mueve de puerto.
+- [x] **F7.8** [README.md](README.md) actualizado: capítulo de la interfaz reescrito entero
+      (las seis pantallas, el perfil en la URL, los datos en vivo y qué significa `SIN
+      MODELO`), estructura del repo con `api/` y `app/`, modo desarrollo, y las 21 menciones
+      al `dashboard` puestas al día.
 
 ### F8 — Limpieza
 
@@ -1085,7 +1110,22 @@ diez sesiones en silencio.
       ejecutar Python antes. Ya estaban `backup/` y `spike_*.jsonl`.
 - [ ] **F8.5** ⚠️ **Hay un `.env` con claves reales en el directorio.** Está en `.gitignore`,
       pero conviene confirmar que nunca llegó a subirse.
-- [ ] **F8.6** Suite de tests entera en verde: `docker compose run --rm bot python -m pytest tests -q`.
+- [x] **F8.6** **606 en verde dentro de Docker.** Y no fue un trámite: encontró un fallo real
+      que el anfitrión no veía.
+
+      `test_carga_inicial_grande_no_dispara_el_aviso` medía el disco de verdad, así que decía
+      la verdad solo en la máquina donde se escribió: pasaba en Windows (~1,1 ms/fila) y
+      fallaba en el contenedor, que es **donde el código corre**. Un test que se rompe en el
+      entorno de destino y pasa en el de desarrollo es el peor reparto posible; ahora usa
+      reloj falso, igual que su vecino.
+
+      Debajo había algo más serio: **el umbral de contención de F2.9 estaba mal calibrado
+      para el entorno real.** Medido dentro del contenedor, una escritura tranquila cuesta
+      **3,6–3,9 ms/fila** frente a los 1,1 del anfitrión, y el aviso estaba en 5 — o sea que
+      habría saltado en cargas iniciales perfectamente sanas, que es justo el aviso que cría
+      lobos contra el que se escribió esa medición. Subido a 15, unas 4 veces el coste
+      tranquilo del contenedor: lo que se busca detectar es una espera por `busy_timeout`,
+      que son cientos de ms por fila, no un disco lento.
 - [ ] **F8.7** Renombrar `screener_min_dollar_volume` → `screener_min_turnover`. Desde D8 la
       cifra está en la divisa del mercado, así que el nombre miente en los perfiles
       europeos. No es urgente —hay un comentario en el esquema y otro en el fichero de
