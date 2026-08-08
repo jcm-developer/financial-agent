@@ -14,6 +14,8 @@ import { AvisoDeError } from "@/components/Seccion";
  *
  * `replace` para no dejar la redirección en el historial: sin eso, el botón de
  * volver atrás rebota entre la raíz y el resumen.
+ *
+ * @return A redirect to the only active experiment, or to the profile list.
  */
 export function Inicio() {
   const { data, isPending, error } = useProfiles();

@@ -7,6 +7,12 @@ import { Tarjeta, TituloPagina } from "@/components/piezas";
  * nadie sabe qué falta. Nombrando la tarea, la pantalla se convierte en su propia
  * lista de pendientes, y quien la abra durante el experimento sabe si está viendo
  * un hueco o una avería.
+ *
+ * @param props - Placeholder props.
+ * @param props.titulo - Heading of the screen that does not exist yet.
+ * @param props.tarea - Task id in TASKS.md that will bring it.
+ * @param props.descripcion - What the screen will answer once it is there.
+ * @return The rendered placeholder.
  */
 export function Pendiente({
   titulo,

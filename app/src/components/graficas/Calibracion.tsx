@@ -31,6 +31,11 @@ const MUESTRA_MINIMA = 5;
  * un tramo con una sola operación ganadora dibuja una barra del 100 % idéntica a
  * la de un tramo con treinta, y es justo al principio —cuando hay pocas— cuando
  * más ganas dan de sacar conclusiones.
+ *
+ * @param props - Chart props.
+ * @param props.tramos - Hit rate per declared-conviction bucket.
+ * @param props.simbolo - Currency symbol of the profile's market, never assumed.
+ * @return The rendered chart, with the buckets below the minimum sample dimmed.
  */
 export function Calibracion({
   tramos,
@@ -122,6 +127,10 @@ export function Calibracion({
  * los dos polos y mantener es el punto neutro, así que le toca el gris. Validado
  * como divergente y no como paleta categórica — un categórico exigiría croma en
  * los tres y aquí el gris del medio es lo correcto.
+ *
+ * @param props - Chart props.
+ * @param props.tramos - Proposal counts per conviction bucket and action.
+ * @return The rendered chart.
  */
 export function HistogramaConviccion({ tramos }: { tramos: ConvictionBucket[] }) {
   const datos = tramos.map((t) => ({

@@ -33,6 +33,8 @@ const LIMITE = 30;
  * El log no lo pide esta pantalla: llega por el stream que abre el Layout y se lee
  * de la caché con `useCycleControl`. Por eso se sigue moviendo aunque se cambie de
  * pestaña y se vuelva.
+ *
+ * @return The rendered screen.
  */
 export function Ciclos() {
   const { perfil, referencia } = usePerfilActivo();
@@ -117,6 +119,11 @@ export function Ciclos() {
  * `API_CONTROLS=false` (F3.8). Cuando están apagados **se dice**, en lugar de
  * enseñar botones que devolverían un error: un botón que siempre falla es peor que
  * ningún botón.
+ *
+ * @param props - Control props.
+ * @param props.estado - Cycle control state, including whether it is enabled.
+ * @param props.perfil - Profile the cycle would run against.
+ * @return The rendered panel, or the notice that the controls are switched off.
  */
 function Control({
   estado,
@@ -203,6 +210,10 @@ function Control({
  * imposible de leer: en cuanto subes a mirar una línea, la siguiente te devuelve
  * al final. Con el umbral, quien sube se queda donde quiso y quien está al final
  * sigue viendo lo último.
+ *
+ * @param props - Log props.
+ * @param props.lineas - Lines emitted so far, in order.
+ * @return The rendered log.
  */
 function Log({ lineas }: { lineas: string[] }) {
   const caja = useRef<HTMLPreElement>(null);
@@ -238,7 +249,16 @@ function Log({ lineas }: { lineas: string[] }) {
   );
 }
 
-/** Un ciclo con la copia de los parámetros con los que corrió (F6.3). */
+/**
+ * One cycle, with the copy of the settings it ran under.
+ *
+ * Un ciclo con la copia de los parámetros con los que corrió (F6.3).
+ *
+ * @param props - Detail props.
+ * @param props.id - Cycle id.
+ * @param props.onCerrar - Called when the panel is dismissed.
+ * @return The rendered panel.
+ */
 function Detalle({ id, onCerrar }: { id: string; onCerrar: () => void }) {
   const consulta = useCycle(id);
 
@@ -297,6 +317,14 @@ function Detalle({ id, onCerrar }: { id: string; onCerrar: () => void }) {
   );
 }
 
+/**
+ * A label and its value inside the detail panel's definition list.
+ *
+ * @param props - Item props.
+ * @param props.etiqueta - Label, in the interface language.
+ * @param props.valor - Value, already formatted.
+ * @return The rendered pair.
+ */
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
   return (
     <div>
@@ -306,6 +334,16 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
   );
 }
 
+/**
+ * One row of the cycles table.
+ *
+ * @param props - Row props.
+ * @param props.ciclo - The cycle.
+ * @param props.simbolo - Currency symbol of the profile's market, never assumed.
+ * @param props.seleccionado - Whether its detail panel is open.
+ * @param props.onElegir - Called when the row is chosen.
+ * @return The rendered row.
+ */
 function FilaCiclo({
   ciclo,
   simbolo,

@@ -20,6 +20,12 @@ import { dinero, entero, fechaHora, porcentaje } from "@/lib/formato";
  * El color codifica **polaridad**, no identidad: azul lo que ganó, rojo lo que
  * perdió. Por eso no hay leyenda —no hay series que distinguir— y sí una línea en
  * el cero, que es donde está el significado.
+ *
+ * @param props - Chart props.
+ * @param props.filas - Per-symbol performance. Rows with no realised P&L are
+ *     dropped rather than drawn as zero, which would claim they broke even.
+ * @param props.simbolo - Currency symbol of the profile's market, never assumed.
+ * @return The rendered chart.
  */
 export function PnlPorSimbolo({
   filas,
@@ -82,6 +88,11 @@ export function PnlPorSimbolo({
  * Barras horizontales porque las etiquetas son nombres de regla
  * (`max_position_pct`, `min_conviction`) y en vertical se solaparían o habría que
  * girarlas, que es peor. Una sola magnitud, así que un solo tono.
+ *
+ * @param props - Chart props.
+ * @param props.filas - Rejection counts per rule, sorted here so the caller
+ *     does not have to.
+ * @return The rendered chart.
  */
 export function RechazosPorRegla({ filas }: { filas: RejectionCount[] }) {
   const datos = [...filas].sort((a, b) => b.rejections - a.rejections);

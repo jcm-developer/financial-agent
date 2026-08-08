@@ -17,6 +17,8 @@ import { cn } from "@/lib/utils";
  * semanas — «cada minuto» solo vale si el dato es de hace un minuto (F2.1c).
  *
  * No depende de ningún perfil: es infraestructura, no experimento.
+ *
+ * @return The rendered screen.
  */
 export function Diagnostico() {
   useTitulo("Ingesta");
@@ -108,6 +110,14 @@ export function Diagnostico() {
   );
 }
 
+/**
+ * A label and its value inside a definition list.
+ *
+ * @param props - Item props.
+ * @param props.etiqueta - Label, in the interface language.
+ * @param props.valor - Value, already formatted.
+ * @return The rendered pair.
+ */
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: string | number }) {
   return (
     <div>
@@ -117,6 +127,13 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: string | number })
   );
 }
 
+/**
+ * One market's card: session, calendar, universe and liquidity floor.
+ *
+ * @param props - Card props.
+ * @param props.mercado - The market, whose own currency labels its figures.
+ * @return The rendered card.
+ */
 function TarjetaMercado({ mercado }: { mercado: MarketInfo }) {
   return (
     <Tarjeta etiqueta="article">
@@ -155,6 +172,15 @@ function TarjetaMercado({ mercado }: { mercado: MarketInfo }) {
   );
 }
 
+/**
+ * One row of the quotes table, showing how old the price really is.
+ *
+ * @param props - Row props.
+ * @param props.fila - The quote.
+ * @param props.recibidasEn - When the batch arrived, which is added to the
+ *     server's age so a stale price cannot pass as fresh.
+ * @return The rendered row.
+ */
 function FilaCotizacion({
   fila,
   recibidasEn,

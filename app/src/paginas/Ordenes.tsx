@@ -19,6 +19,8 @@ const LIMITE = 50;
  * significa que el agente decidió operar y no pudo —mercado cerrado, o el
  * simulador en seco— y sin verlas parece que el analista no propuso nada. La
  * columna de motivo lleva el `error` que dejó el ciclo.
+ *
+ * @return The rendered screen.
  */
 export function Ordenes() {
   const { perfil, referencia } = usePerfilActivo();
@@ -91,7 +93,14 @@ export function Ordenes() {
   );
 }
 
-/** `filled` es lo normal; el resto merece color porque significa que algo pasó. */
+/**
+ * The colour an order status deserves.
+ *
+ * `filled` es lo normal; el resto merece color porque significa que algo pasó.
+ *
+ * @param estado - Order status as the broker recorded it.
+ * @return The Tailwind text-colour class.
+ */
 function claseEstado(estado: string): string {
   if (estado === "filled") return "text-delta-good";
   if (estado === "failed") return "text-delta-bad";
@@ -99,6 +108,14 @@ function claseEstado(estado: string): string {
   return "text-text-secondary";
 }
 
+/**
+ * One row of the orders table.
+ *
+ * @param props - Row props.
+ * @param props.fila - The order, sent or not.
+ * @param props.simbolo - Currency symbol of the profile's market, never assumed.
+ * @return The rendered row.
+ */
 function FilaOrden({ fila, simbolo }: { fila: OrderRow; simbolo: string }) {
   return (
     <Fila>

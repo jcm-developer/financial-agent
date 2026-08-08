@@ -14,6 +14,12 @@ import { cn } from "@/lib/utils";
  *
  * `overflow-x-auto` en el contenedor y no en la página: una tabla ancha tiene que
  * desplazarse dentro de su hueco, sin arrastrar el resto de la pantalla (F4.9).
+ *
+ * @param props - Table props.
+ * @param props.titulo - Screen-reader description, rendered as a `<caption>`.
+ * @param props.children - The `<thead>` and `<tbody>` of the table.
+ * @param props.className - Extra classes for the `<table>`.
+ * @return The rendered table inside its scrolling card.
  */
 export function Tabla({
   titulo,
@@ -35,6 +41,15 @@ export function Tabla({
   );
 }
 
+/**
+ * Column header cell.
+ *
+ * @param props - Header props.
+ * @param props.children - The header text.
+ * @param props.numerica - Right-aligns the column, to match its figures.
+ * @param props.className - Extra classes.
+ * @return The rendered `<th scope="col">`.
+ */
 export function Th({
   children,
   numerica = false,
@@ -58,6 +73,17 @@ export function Th({
   );
 }
 
+/**
+ * Body cell.
+ *
+ * @param props - Cell props.
+ * @param props.children - The cell content.
+ * @param props.numerica - Right-aligns and applies tabular figures.
+ * @param props.encabezado - Renders the cell as the row's header instead.
+ * @param props.className - Extra classes.
+ * @param props.title - Tooltip, used to carry what the colour alone would not say.
+ * @return The rendered `<td>`, or a `<th scope="row">` when it names the row.
+ */
 export function Td({
   children,
   numerica = false,
@@ -100,6 +126,13 @@ export function Td({
   );
 }
 
+/**
+ * The header row of a table.
+ *
+ * @param props - Header props.
+ * @param props.children - The `Th` cells.
+ * @return The rendered `<thead>` with its row.
+ */
 export function Cabecera({ children }: { children: ReactNode }) {
   return (
     <thead>
@@ -108,6 +141,13 @@ export function Cabecera({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * A body row, separated from the next by a rule.
+ *
+ * @param props - Row props.
+ * @param props.children - The `Td` cells.
+ * @return The rendered `<tr>`.
+ */
 export function Fila({ children }: { children: ReactNode }) {
   return <tr className="border-b border-border last:border-0">{children}</tr>;
 }
@@ -118,6 +158,10 @@ export function Fila({ children }: { children: ReactNode }) {
  * «No hay posiciones» y «no hay decisiones» significan cosas muy distintas en un
  * experimento de diez días, y un texto genérico obliga a ir a mirar la base de
  * datos para saber cuál de las dos es.
+ *
+ * @param props - Empty-state props.
+ * @param props.children - The wording, written for this table and no other.
+ * @return The rendered dashed card.
  */
 export function Vacio({ children }: { children: ReactNode }) {
   return (
@@ -133,6 +177,13 @@ export function Vacio({ children }: { children: ReactNode }) {
  * Enseña «41–80 de 480» y no solo las flechas: en un histórico que crece cada día
  * saber cuánto hay detrás es la mitad de la información, y es lo que dice si
  * merece la pena seguir mirando.
+ *
+ * @param props - Pagination props.
+ * @param props.total - Rows the query matched, not rows on screen.
+ * @param props.limite - Page size.
+ * @param props.desplazamiento - Offset of the page on screen.
+ * @param props.onCambio - Called with the new offset.
+ * @return The rendered controls, or null when everything fits on one page.
  */
 export function Paginacion({
   total,

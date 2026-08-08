@@ -39,6 +39,8 @@ import { Riesgo } from "@/paginas/Riesgo";
  * pueda perder al navegar: con el perfil como parámetro de consulta opcional,
  * cualquier enlace que se olvidara de arrastrarlo dejaría al usuario mirando otro
  * experimento sin avisar.
+ *
+ * @return The router with every route of the application.
  */
 export function App() {
   return (

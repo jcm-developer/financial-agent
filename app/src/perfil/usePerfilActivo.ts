@@ -27,6 +27,12 @@ export interface PerfilActivo {
   noEncontrado: boolean;
 }
 
+/**
+ * Resolves the profile named in the URL against the loaded profile list.
+ *
+ * @return The active profile alongside the list, the loading and error state,
+ *     and whether the URL names a profile that does not exist.
+ */
 export function usePerfilActivo(): PerfilActivo {
   const { perfil: referencia } = useParams<{ perfil: string }>();
   const consulta = useProfiles();

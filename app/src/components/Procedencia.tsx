@@ -14,6 +14,12 @@ import { fechaHora } from "@/lib/formato";
  * dos —el resumen y la de posiciones— y estaban divergiendo: la del resumen se
  * callaba el caso sin precio y ponía «de hace minutos» donde la otra ponía la hora
  * exacta. Con dos copias, la que se lee más es la que peor informa.
+ *
+ * @param props - Provenance props.
+ * @param props.fila - Position row, of which the price source and its timestamp
+ *     are read.
+ * @return The tag saying where the price came from, always with the full
+ *     sentence in its `title`.
  */
 export function Procedencia({ fila }: { fila: PositionRow }) {
   if (!fila.price_source) {

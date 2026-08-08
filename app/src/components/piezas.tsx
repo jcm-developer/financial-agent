@@ -45,11 +45,23 @@ const BOTON_TONO: Record<VarianteBoton, string> = {
  * Un botón que navega tiene que ser un enlace de verdad —abrir en otra pestaña,
  * copiar la dirección, verlo en la barra de estado—, así que en esos sitios se
  * comparte la apariencia y no el elemento.
+ *
+ * @param variante - Which of the three button tones to use.
+ * @param className - Extra classes, merged so they win over the recipe.
+ * @return The class string a `<Link>` needs to look like a button.
  */
 export function clasesBoton(variante: VarianteBoton = "neutro", className?: string) {
   return cn(BOTON_BASE, BOTON_TONO[variante], className);
 }
 
+/**
+ * The application's button.
+ *
+ * @param props - Button props, on top of everything a `<button>` accepts.
+ * @param props.variante - Which of the three button tones to use.
+ * @param props.icono - Decorative icon rendered before the label.
+ * @return The rendered button.
+ */
 export function Boton({
   variante = "neutro",
   icono: Icono,
@@ -87,6 +99,10 @@ export const CLASES_ENLACE =
  * vista de tabla— pero visualmente pertenece al texto. Es un botón y no un `<a>`
  * sin `href` porque el teclado y los lectores de pantalla tienen que anunciarlo
  * como lo que hace.
+ *
+ * @param props - Button props, on top of everything a `<button>` accepts.
+ * @param props.variante - Whether the text inherits the colour or is muted.
+ * @return The rendered button.
  */
 export function BotonEnlace({
   variante = "sutil",
@@ -124,11 +140,31 @@ export function BotonEnlace({
  */
 const TARJETA_BASE = "rounded-lg border border-border bg-card shadow-[var(--shadow-card)]";
 
-/** Para cuando la tarjeta es un `<Link>`: la lista de experimentos son tarjetas que navegan. */
+/**
+ * The card recipe as a class string, for when the card is a `<Link>`.
+ *
+ * Para cuando la tarjeta es un `<Link>`: la lista de experimentos son tarjetas
+ * que navegan.
+ *
+ * @param relleno - Padding utility. `p-0` for a card that wraps a table.
+ * @param className - Extra classes, merged so they win over the recipe.
+ * @return The class string.
+ */
 export function clasesTarjeta(relleno = "p-4", className?: string) {
   return cn(TARJETA_BASE, relleno, className);
 }
 
+/**
+ * The card: thin border, surface background, and a shadow that is `none` in dark.
+ *
+ * @param props - Card props, on top of everything a `<div>` accepts.
+ * @param props.etiqueta - Element to render, so a card can carry the right
+ *     semantics without changing how it looks.
+ * @param props.relleno - Padding utility.
+ * @param props.discontinua - Dashed border, for the gap left by something that
+ *     does not exist yet.
+ * @return The rendered card.
+ */
 export function Tarjeta({
   etiqueta = "div",
   relleno = "p-4",
@@ -163,7 +199,12 @@ export function Tarjeta({
   );
 }
 
-/** Texto preformateado: logs, JSON de parámetros y órdenes de consola. */
+/**
+ * Preformatted text: logs, parameter JSON and console commands.
+ *
+ * @param props - Everything a `<pre>` accepts.
+ * @return The rendered block.
+ */
 export function Bloque({ className, children, ...resto }: ComponentProps<"pre">) {
   return (
     <pre
@@ -186,6 +227,11 @@ export function Bloque({ className, children, ...resto }: ComponentProps<"pre">)
  * riesgo del perfil, por ejemplo— y se coloca a la derecha con las líneas base
  * alineadas, que es lo que evita que un texto de 13 px al lado de uno de 17
  * parezca descolgado.
+ *
+ * @param props - Title props.
+ * @param props.children - The title itself.
+ * @param props.secundario - What sits beside it on the same baseline.
+ * @return The rendered heading, with its bottom margin.
  */
 export function TituloPagina({
   children,
@@ -206,7 +252,14 @@ export function TituloPagina({
   );
 }
 
-/** El `<h2>` que encabeza un bloque dentro de una pantalla. */
+/**
+ * The `<h2>` heading a block inside a screen.
+ *
+ * @param props - Heading props.
+ * @param props.children - The heading text.
+ * @param props.className - Extra classes.
+ * @return The rendered heading.
+ */
 export function TituloSeccion({
   children,
   className,
@@ -232,6 +285,12 @@ export function TituloSeccion({
  * `como` existe porque el nivel del encabezado depende de dónde cuelgue —una
  * gráfica dentro de una sección es `h3`, y un aviso que ocupa la pantalla entera
  * es el `h1` de esa pantalla— mientras la apariencia es la misma.
+ *
+ * @param props - Heading props.
+ * @param props.children - The heading text.
+ * @param props.como - Heading level, chosen by where the block hangs.
+ * @param props.className - Extra classes.
+ * @return The rendered heading.
  */
 export function TituloBloque({
   children,
@@ -260,6 +319,9 @@ export function TituloBloque({
  * un ciclo, pararlo, una consulta que falla al recargar— y sin él un lector de
  * pantalla no dice nada: el foco sigue en el botón que acaba de pulsarse y el
  * texto nuevo está en otra parte del documento.
+ *
+ * @param props - Everything a `<div>` accepts.
+ * @return The rendered alert, already carrying `role="alert"`.
  */
 export function Aviso({
   className,
@@ -288,6 +350,12 @@ export function Aviso({
  * esta aplicación van contra un SQLite local y terminan antes de que un
  * placeholder llegue a pintarse — salvo la analítica, que avisa con su propio
  * texto.
+ *
+ * @param props - Loading props.
+ * @param props.texto - What to announce. Worth overriding when the wait is long
+ *     enough that the generic wording would not say what is being waited for.
+ * @param props.className - Extra classes.
+ * @return The rendered notice, already carrying `role="status"`.
  */
 export function Cargando({
   texto = "Cargando…",
@@ -307,7 +375,13 @@ export function Cargando({
 /* Insignias                                                                  */
 /* -------------------------------------------------------------------------- */
 
-/** Píldora con borde: recuentos, estados de la cabecera. */
+/**
+ * Bordered pill: counts, header states.
+ *
+ * @param props - Badge props, on top of everything a `<span>` accepts.
+ * @param props.compacta - Tighter variant, for when the pill sits inside a row.
+ * @return The rendered badge.
+ */
 export function Insignia({
   compacta = false,
   className,
@@ -346,6 +420,15 @@ const ETIQUETA_TONO: Record<TonoEtiqueta, string> = {
   malo: "text-delta-bad",
 };
 
+/**
+ * The tiny uppercase tag stuck to a figure.
+ *
+ * @param props - Tag props, on top of everything a `<span>` accepts. Callers
+ *     must pass `title` with the full sentence: the colour and four uppercase
+ *     letters never carry the meaning on their own (F4.9).
+ * @param props.tono - Which token colours the tag, or `hereda` to inherit.
+ * @return The rendered tag.
+ */
 export function Etiqueta({
   tono = "hereda",
   className,
@@ -379,6 +462,13 @@ const CLASES_CONTROL =
  * Es un `<label>` que contiene al control y no un `htmlFor` con un `id` inventado:
  * así la asociación no puede romperse al copiar el bloque, y pulsar el texto
  * enfoca el campo sin escribir nada más.
+ *
+ * @param props - Field props.
+ * @param props.etiqueta - Label text, in the interface language.
+ * @param props.fila - Label to the left instead of above.
+ * @param props.className - Extra classes for the `<label>`.
+ * @param props.children - The control being wrapped.
+ * @return The rendered label with its control inside.
  */
 export function Campo({
   etiqueta,
@@ -413,6 +503,14 @@ export function Campo({
  * aplicación tienen tres o cuatro entradas y el nativo ya es accesible con teclado
  * sin traerse un popover. Se cambiará cuando haya que enseñar algo dentro de cada
  * opción.
+ *
+ * @param props - Select props, on top of everything a `<select>` accepts.
+ * @param props.etiqueta - Label text, in the interface language.
+ * @param props.fila - Label to the left instead of above.
+ * @param props.claseCampo - Extra classes for the wrapping `<label>`.
+ * @param props.opciones - Options as `[value, text]` pairs, text already in the
+ *     interface language.
+ * @return The rendered select inside its label.
  */
 export function Select({
   etiqueta,
@@ -441,7 +539,14 @@ export function Select({
   );
 }
 
-/** Campo de texto. */
+/**
+ * Text field.
+ *
+ * @param props - Input props, on top of everything an `<input>` accepts.
+ * @param props.etiqueta - Label text, in the interface language.
+ * @param props.claseCampo - Extra classes for the wrapping `<label>`.
+ * @return The rendered input inside its label.
+ */
 export function Entrada({
   etiqueta,
   claseCampo,

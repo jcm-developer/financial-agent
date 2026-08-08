@@ -12,6 +12,8 @@ import { useTitulo } from "@/layout/useTitulo";
  * Es la versión mínima que hace navegable la aplicación: sin ella no hay forma de
  * llegar a un perfil. Las tarjetas con métricas, el alta y el duplicado son F5.2,
  * F5.3 y F5.4, y llegan en el tramo D con `shadcn`.
+ *
+ * @return The rendered screen.
  */
 export function Perfiles() {
   useTitulo("Experimentos");

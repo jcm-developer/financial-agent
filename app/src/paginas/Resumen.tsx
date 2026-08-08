@@ -26,6 +26,8 @@ import { useTitulo } from "@/layout/useTitulo";
  * el resumen contaran cosas distintas del mismo experimento.
  *
  * La curva de capital y el resto de graficas llegan en el tramo E (F4.6).
+ *
+ * @return The rendered screen.
  */
 export function Resumen() {
   const { perfil, referencia, cargando, error } = usePerfilActivo();
@@ -116,6 +118,14 @@ export function Resumen() {
   );
 }
 
+/**
+ * The row of headline figures.
+ *
+ * @param props - Figures props.
+ * @param props.perfil - The profile, whose `metrics` already carry the figures
+ *     computed, so this screen and the profile card cannot disagree.
+ * @return The rendered row.
+ */
 function Cifras({ perfil }: { perfil: ProfileSummary }) {
   const m = perfil.metrics;
   const simbolo = perfil.currency_symbol;
@@ -185,6 +195,16 @@ function Cifras({ perfil }: { perfil: ProfileSummary }) {
   );
 }
 
+/**
+ * One headline figure, as a card.
+ *
+ * @param props - Figure props.
+ * @param props.etiqueta - Label, in the interface language.
+ * @param props.valor - The figure, already formatted with its currency symbol.
+ * @param props.clase - Extra classes for the figure, to colour it by sign.
+ * @param props.children - The footnote below it, when the figure needs one.
+ * @return The rendered card.
+ */
 function Cifra({
   etiqueta,
   valor,
@@ -205,6 +225,15 @@ function Cifra({
   );
 }
 
+/**
+ * One row of the open-positions table on the summary, which carries fewer
+ * columns than the one on the positions screen.
+ *
+ * @param props - Row props.
+ * @param props.fila - The position.
+ * @param props.simbolo - Currency symbol of the profile's market, never assumed.
+ * @return The rendered row.
+ */
 function FilaAbierta({ fila, simbolo }: { fila: PositionRow; simbolo: string }) {
   return (
     <Fila>
@@ -234,6 +263,15 @@ function FilaAbierta({ fila, simbolo }: { fila: PositionRow; simbolo: string }) 
   );
 }
 
+/**
+ * One row of the recent-cycles table on the summary.
+ *
+ * @param props - Row props.
+ * @param props.ciclo - The cycle.
+ * @param props.perfil - Profile name, needed to link to the cycles screen.
+ * @param props.simbolo - Currency symbol of the profile's market, never assumed.
+ * @return The rendered row.
+ */
 function FilaCiclo({
   ciclo,
   perfil,

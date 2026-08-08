@@ -16,6 +16,8 @@ import { usePerfilActivo } from "@/perfil/usePerfilActivo";
  * el mismo sondeo a SQLite tantas veces como pestañas abiertas —justo lo que F3.5
  * quería evitar moviendo el sondeo del navegador al servidor—. Las pantallas leen
  * de la caché de Query, que es donde el stream escribe.
+ *
+ * @return The rendered frame, with the active screen in its outlet.
  */
 export function Layout() {
   const { referencia, perfil, noEncontrado } = usePerfilActivo();
@@ -63,6 +65,11 @@ export function Layout() {
  * decirlo: mandar al usuario al inicio le dejaría creyendo que se ha equivocado
  * de clic, y si el perfil se borró por accidente sería la única señal que
  * existía.
+ *
+ * @param props - Screen props.
+ * @param props.referencia - The name the URL asked for, quoted back so the
+ *     mismatch is visible.
+ * @return The rendered screen.
  */
 function PerfilInexistente({ referencia }: { referencia: string }) {
   return (

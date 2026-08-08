@@ -19,6 +19,16 @@ interface Props<T> {
   children: (datos: T) => ReactNode;
 }
 
+/**
+ * Renders a query's three states, so a failure never reads as an empty section.
+ *
+ * @template T - Shape of the query's data.
+ * @param props - Section props.
+ * @param props.titulo - Optional heading for the block.
+ * @param props.consulta - The query, of which only data, error and pending are read.
+ * @param props.children - Called with the data once it has landed.
+ * @return The rendered section: the loading notice, the error, or the children.
+ */
 export function Seccion<T>({ titulo, consulta, children }: Props<T>) {
   return (
     <section className="mb-8">
@@ -30,6 +40,13 @@ export function Seccion<T>({ titulo, consulta, children }: Props<T>) {
   );
 }
 
+/**
+ * The alert shown when a query fails, with the hint that most often explains it.
+ *
+ * @param props - Alert props.
+ * @param props.error - The error, whose message is already written for the screen.
+ * @return The rendered alert.
+ */
 export function AvisoDeError({ error }: { error: Error }) {
   return (
     <Aviso>

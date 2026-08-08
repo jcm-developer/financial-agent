@@ -46,6 +46,14 @@ export const EJE = {
  * cuando el color no basta —daltonismo, impresión, lector de pantalla— y además
  * es como se comprueba una cifra concreta, que en una gráfica se estima y en una
  * tabla se lee. El dashboard viejo ya lo tenía y habría sido una pérdida.
+ *
+ * @param props - Chart frame props.
+ * @param props.titulo - Chart heading.
+ * @param props.explicacion - What the chart answers, when the title cannot say it.
+ * @param props.vacia - Empty-state wording. When given, nothing is drawn.
+ * @param props.tabla - The same data as a table, for the alternative view.
+ * @param props.children - The chart itself.
+ * @return The rendered card, showing the chart or the table.
  */
 export function Grafica({
   titulo,
@@ -92,7 +100,19 @@ export function Grafica({
   );
 }
 
-/** Tooltip propio: el de Recharts trae sus colores y no conoce la paleta. */
+/**
+ * The charts' tooltip.
+ *
+ * Tooltip propio: el de Recharts trae sus colores y no conoce la paleta.
+ *
+ * @param props - Tooltip props, passed by Recharts.
+ * @param props.active - Whether the pointer is over a point.
+ * @param props.payload - The series values at that point.
+ * @param props.label - The x-axis value.
+ * @param props.formato - Formats a numeric value, given its series name. Without
+ *     it the value is printed as it comes.
+ * @return The rendered tooltip, or null when there is nothing under the pointer.
+ */
 export function Globo({
   active,
   payload,
@@ -130,7 +150,15 @@ export function Globo({
   );
 }
 
-/** Tabla mínima para la vista alternativa de cada gráfica. */
+/**
+ * Minimal table for each chart's alternative view.
+ *
+ * @param props - Table props.
+ * @param props.columnas - Header texts. The first column is left-aligned and
+ *     the rest right-aligned, since they carry the figures.
+ * @param props.filas - Rows, already formatted.
+ * @return The rendered table.
+ */
 export function TablaSimple({
   columnas,
   filas,

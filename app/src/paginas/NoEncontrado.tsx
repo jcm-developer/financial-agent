@@ -9,6 +9,8 @@ import { clasesBoton, Tarjeta, TituloBloque } from "@/components/piezas";
  * cualquier ruta que no empiece por `/api/` (F3.7), así que un enlace mal escrito
  * llega hasta aquí en lugar de dar un error de servidor. Sin la ruta a la vista,
  * una errata en la URL parece un fallo de la aplicación.
+ *
+ * @return The rendered screen, naming the route that was asked for.
  */
 export function NoEncontrado() {
   const { pathname } = useLocation();

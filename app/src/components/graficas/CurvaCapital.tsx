@@ -30,6 +30,16 @@ interface Props {
   presupuesto: number | null | undefined;
 }
 
+/**
+ * The experiment's equity over time.
+ *
+ * @param props - Chart props.
+ * @param props.puntos - Equity points, in chronological order.
+ * @param props.simbolo - Currency symbol of the profile's market, never assumed.
+ * @param props.presupuesto - Assigned budget, which is the reference line the
+ *     experiment is measured against. Null falls back to no reference.
+ * @return The rendered chart.
+ */
 export function CurvaCapital({ puntos, simbolo, presupuesto }: Props) {
   const datos = puntos.map((p) => ({ ...p, etiqueta: fechaHora(p.as_of) }));
 
@@ -93,6 +103,15 @@ export function CurvaCapital({ puntos, simbolo, presupuesto }: Props) {
   );
 }
 
+/**
+ * The drop from the running peak, drawn below the equity curve and sharing its
+ * time axis.
+ *
+ * @param props - Chart props.
+ * @param props.puntos - Equity points, in chronological order.
+ * @param props.simbolo - Currency symbol of the profile's market, never assumed.
+ * @return The rendered chart.
+ */
 export function Drawdown({ puntos, simbolo }: Omit<Props, "presupuesto">) {
   const datos = puntos.map((p) => ({ ...p, etiqueta: fechaHora(p.as_of) }));
   const peor = datos.reduce((min, p) => Math.min(min, p.drawdown_pct ?? 0), 0);

@@ -3,7 +3,12 @@ import { QueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/api/client";
 
 /**
+ * Builds the application's TanStack Query client.
+ *
  * El `QueryClient` de la aplicacion, con dos decisiones que no son el default.
+ *
+ * @return A client that keeps queries fresh for 30 s, retries a query twice
+ *     unless the API returned a 4xx, and never retries a mutation.
  */
 export function crearQueryClient() {
   return new QueryClient({

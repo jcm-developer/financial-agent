@@ -42,6 +42,11 @@ const GENERALES = [
 const CLASES_ENLACE =
   "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] transition-colors";
 
+/**
+ * @param props - What `NavLink` passes to its class callback.
+ * @param props.isActive - Whether the link points at the current route.
+ * @return The class string for that link.
+ */
 function clases({ isActive }: { isActive: boolean }) {
   return cn(
     CLASES_ENLACE,
@@ -51,6 +56,14 @@ function clases({ isActive }: { isActive: boolean }) {
   );
 }
 
+/**
+ * The section navigation.
+ *
+ * @param props - Sidebar props.
+ * @param props.perfil - Active profile name, which the per-profile links hang
+ *     off. Undefined shows only the sections that exist without one.
+ * @return The rendered navigation.
+ */
 export function BarraLateral({ perfil }: { perfil: string | undefined }) {
   return (
     <nav aria-label="Secciones" className="flex flex-col gap-1">

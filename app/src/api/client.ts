@@ -12,6 +12,11 @@ export class ApiError extends Error {
   readonly status: number;
   readonly detail: unknown;
 
+  /**
+   * @param status - HTTP status code, or 0 when the request never reached the API.
+   * @param message - Human-readable message, already in the interface language.
+   * @param detail - Raw error body, kept for callers that need to inspect it.
+   */
   constructor(status: number, message: string, detail: unknown) {
     super(message);
     this.name = "ApiError";
@@ -19,7 +24,13 @@ export class ApiError extends Error {
     this.detail = detail;
   }
 
-  /** Los 4xx son culpa de la peticion: reintentarla da el mismo resultado. */
+  /**
+   * Whether the request itself was at fault and retrying is pointless.
+   *
+   * Los 4xx son culpa de la peticion: reintentarla da el mismo resultado.
+   *
+   * @return True for any 4xx status.
+   */
   get isClientError() {
     return this.status >= 400 && this.status < 500;
   }
@@ -41,6 +52,10 @@ interface Opciones {
  * validacion de Pydantic. Sin aplanar el segundo, el formulario de 41 campos de
  * F6.8 diria "[object Object]" justo cuando el usuario necesita saber que campo
  * ha puesto mal.
+ *
+ * @param status - HTTP status code, used for the fallback message.
+ * @param cuerpo - Parsed response body, or the raw text when it was not JSON.
+ * @return A message ready to be shown on screen.
  */
 function mensajeDeError(status: number, cuerpo: unknown): string {
   if (typeof cuerpo === "string" && cuerpo.trim()) return cuerpo;
@@ -63,6 +78,14 @@ function mensajeDeError(status: number, cuerpo: unknown): string {
   return `La API respondio ${status}.`;
 }
 
+/**
+ * Appends a query string, dropping entries that carry no value.
+ *
+ * @param path - Relative API path.
+ * @param params - Query parameters. Undefined, null and empty values are skipped
+ *     so an absent filter never reaches the API as `?symbol=`.
+ * @return The path with its query string, or unchanged when nothing was kept.
+ */
 function construirUrl(path: string, params?: Params): string {
   if (!params) return path;
   const query = new URLSearchParams();
@@ -74,6 +97,21 @@ function construirUrl(path: string, params?: Params): string {
   return cadena ? `${path}?${cadena}` : path;
 }
 
+/**
+ * Performs one HTTP request against the API and returns its parsed body.
+ *
+ * @template T - Shape of the response body, taken from `api/types.ts`.
+ * @param method - HTTP verb.
+ * @param path - Relative API path, always starting with `/api`.
+ * @param options - Request options.
+ * @param options.params - Query parameters.
+ * @param options.body - Value to send as JSON. Undefined sends no body.
+ * @param options.signal - Signal used to abort the request.
+ * @return The parsed body, or undefined for a 204.
+ * @throws {ApiError} When the API answers with a non-2xx status, or with status
+ *     0 when the request never reached it.
+ * @throws {DOMException} When the request was aborted through `signal`.
+ */
 async function request<T>(
   method: string,
   path: string,
@@ -112,6 +150,7 @@ async function request<T>(
   return cuerpo as T;
 }
 
+/** The one door to the API. Every verb throws {@link ApiError} on failure. */
 export const api = {
   get: <T>(path: string, params?: Params, signal?: AbortSignal) =>
     request<T>("GET", path, { params, signal }),

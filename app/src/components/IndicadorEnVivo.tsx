@@ -25,6 +25,16 @@ interface Props {
   aviso?: string | null;
 }
 
+/**
+ * The stream's connection state, as a badge in the header.
+ *
+ * @param props - Indicator props.
+ * @param props.estado - Connection state, which decides text and colour.
+ * @param props.reconexiones - How many times it has reconnected, shown in the
+ *     tooltip so a connection that keeps dropping is visible.
+ * @param props.aviso - Last notice the server sent before cutting.
+ * @return The rendered badge.
+ */
 export function IndicadorEnVivo({ estado, reconexiones = 0, aviso }: Props) {
   const { texto, clase } = APARIENCIA[estado];
 

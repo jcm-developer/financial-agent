@@ -17,6 +17,8 @@ import { useTitulo } from "@/layout/useTitulo";
  * Tres de los agregados los calcula SQL con vistas que ya existían, así que esta
  * pantalla y `run.py report` no pueden acabar contando cosas distintas del mismo
  * experimento.
+ *
+ * @return The rendered screen with its six charts.
  */
 export function Analitica() {
   const { perfil, referencia } = usePerfilActivo();

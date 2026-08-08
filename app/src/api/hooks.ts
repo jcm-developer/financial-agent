@@ -36,6 +36,11 @@ import type {
 /** Los filtros de una tabla, tal cual viajan en la query. */
 type Filtros = Record<string, string | number | undefined>;
 
+/**
+ * Reads the markets the project knows about, with their calendar and currency.
+ *
+ * @return The query for `GET /api/markets`.
+ */
 export function useMarkets() {
   return useQuery({
     queryKey: keys.markets(),
@@ -46,6 +51,11 @@ export function useMarkets() {
   });
 }
 
+/**
+ * Reads every experiment profile.
+ *
+ * @return The query for `GET /api/profiles`.
+ */
 export function useProfiles() {
   return useQuery({
     queryKey: keys.profiles(),
@@ -53,6 +63,12 @@ export function useProfiles() {
   });
 }
 
+/**
+ * Reads one profile in full, settings included.
+ *
+ * @param ref - Profile name or id. Undefined leaves the query disabled.
+ * @return The query for `GET /api/profiles/:ref`.
+ */
 export function useProfile(ref: string | undefined) {
   return useQuery({
     queryKey: keys.profile(ref ?? ""),
@@ -62,6 +78,12 @@ export function useProfile(ref: string | undefined) {
   });
 }
 
+/**
+ * Reads the last known price of each symbol. The stream keeps it fresh.
+ *
+ * @param symbols - Symbols to ask for. Empty or undefined asks for all of them.
+ * @return The query for `GET /api/quotes`.
+ */
 export function useQuotes(symbols?: string[]) {
   const lista = symbols?.length ? symbols.join(",") : undefined;
   return useQuery({
@@ -74,6 +96,11 @@ export function useQuotes(symbols?: string[]) {
   });
 }
 
+/**
+ * Reads how the ingestor is doing: last tick, symbols covered, failures.
+ *
+ * @return The query for `GET /api/ingest-status`.
+ */
 export function useIngestStatus() {
   return useQuery({
     queryKey: keys.ingestStatus(),
@@ -83,6 +110,11 @@ export function useIngestStatus() {
   });
 }
 
+/**
+ * Reads whether a cycle is running and whether the controls are enabled at all.
+ *
+ * @return The query for `GET /api/cycles/control/status`.
+ */
 export function useCycleControl() {
   return useQuery({
     queryKey: keys.cycleControl(),
@@ -92,6 +124,13 @@ export function useCycleControl() {
   });
 }
 
+/**
+ * Reads the computed analytics of one experiment: equity curve, calibration,
+ * per-symbol breakdown.
+ *
+ * @param perfil - Profile name. Undefined leaves the query disabled.
+ * @return The query for `GET /api/analytics`.
+ */
 export function useAnalytics(perfil: string | undefined) {
   return useQuery({
     queryKey: keys.analytics(perfil ?? ""),
@@ -111,6 +150,13 @@ export function useAnalytics(perfil: string | undefined) {
  * Asi volver de «solo rechazadas» a «todas» pinta al instante desde la cache en
  * lugar de esperar otra peticion, y dos pantallas con filtros distintos no se
  * sobrescriben la una a la otra.
+ *
+ * @template T - The generated `Page_*` wrapper the endpoint returns.
+ * @param clave - Base cache key, which the filters extend.
+ * @param ruta - Relative API path of the table.
+ * @param perfil - Profile name. Undefined leaves the query disabled.
+ * @param filtros - Query filters, part of the cache key.
+ * @return The query for that page of the table.
  */
 function usePagina<T>(
   clave: readonly unknown[],
@@ -126,36 +172,77 @@ function usePagina<T>(
   });
 }
 
+/**
+ * Reads the positions of an experiment, open and closed.
+ *
+ * @param perfil - Profile name. Undefined leaves the query disabled.
+ * @param filtros - Query filters, part of the cache key.
+ * @return The query for `GET /api/positions`.
+ */
 export function usePositions(perfil: string | undefined, filtros: Filtros = {}) {
   return usePagina<Page_PositionRow>(
     keys.positions(perfil ?? ""), "/api/positions", perfil, filtros,
   );
 }
 
+/**
+ * Reads what the model proposed on each cycle, verdict included.
+ *
+ * @param perfil - Profile name. Undefined leaves the query disabled.
+ * @param filtros - Query filters, part of the cache key.
+ * @return The query for `GET /api/decisions`.
+ */
 export function useDecisions(perfil: string | undefined, filtros: Filtros = {}) {
   return usePagina<Page_DecisionRow>(
     keys.decisions(perfil ?? ""), "/api/decisions", perfil, filtros,
   );
 }
 
+/**
+ * Reads the orders the simulated broker executed.
+ *
+ * @param perfil - Profile name. Undefined leaves the query disabled.
+ * @param filtros - Query filters, part of the cache key.
+ * @return The query for `GET /api/orders`.
+ */
 export function useOrders(perfil: string | undefined, filtros: Filtros = {}) {
   return usePagina<Page_OrderRow>(
     keys.orders(perfil ?? ""), "/api/orders", perfil, filtros,
   );
 }
 
+/**
+ * Reads what the risk manager rejected or resized, and under which rule.
+ *
+ * @param perfil - Profile name. Undefined leaves the query disabled.
+ * @param filtros - Query filters, part of the cache key.
+ * @return The query for `GET /api/risk-events`.
+ */
 export function useRiskEvents(perfil: string | undefined, filtros: Filtros = {}) {
   return usePagina<Page_RiskEventRow>(
     keys.riskEvents(perfil ?? ""), "/api/risk-events", perfil, filtros,
   );
 }
 
+/**
+ * Reads the cycles an experiment has run.
+ *
+ * @param perfil - Profile name. Undefined leaves the query disabled.
+ * @param filtros - Query filters, part of the cache key.
+ * @return The query for `GET /api/cycles`.
+ */
 export function useCycles(perfil: string | undefined, filtros: Filtros = {}) {
   return usePagina<Page_CycleRow>(
     keys.cycles(perfil ?? ""), "/api/cycles", perfil, filtros,
   );
 }
 
+/**
+ * Reads one cycle in full, with the settings it ran under.
+ *
+ * @param id - Cycle id. Undefined leaves the query disabled.
+ * @return The query for `GET /api/cycles/:id`.
+ */
 export function useCycle(id: string | undefined) {
   return useQuery({
     queryKey: keys.cycle(id ?? ""),
@@ -176,6 +263,10 @@ export function useCycle(id: string | undefined) {
  * ciclo acaba de arrancar y todavia no ha escrito nada**: son ~20 minutos de
  * trabajo. Lo que refresca las tablas es el evento `cycle` del stream cuando el
  * ciclo pasa a no estar corriendo.
+ *
+ * @param perfil - Profile the cycle runs against.
+ * @return The mutation for `POST /api/cycles/run`, which takes `{dry_run}` and
+ *     writes the returned state straight into the control cache.
  */
 export function useLanzarCiclo(perfil: string | undefined) {
   const cliente = useQueryClient();
@@ -189,6 +280,11 @@ export function useLanzarCiclo(perfil: string | undefined) {
   });
 }
 
+/**
+ * Asks the running cycle to stop.
+ *
+ * @return The mutation for `POST /api/cycles/stop`.
+ */
 export function usePararCiclo() {
   const cliente = useQueryClient();
   return useMutation({

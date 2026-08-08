@@ -15,10 +15,24 @@ type Tema = "dark" | "light";
  */
 const CLAVE = "tema";
 
+/**
+ * Reads the theme already applied to the document.
+ *
+ * Se lee del DOM y no de `localStorage` porque el script en línea de
+ * `index.html` ya decidió, y preguntarlo dos veces abre la puerta a que las dos
+ * respuestas no coincidan.
+ *
+ * @return The theme in force.
+ */
 function leerTema(): Tema {
   return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
+/**
+ * The theme switch, which wins over the system preference in both directions.
+ *
+ * @return The rendered button.
+ */
 export function BotonTema() {
   const [tema, setTema] = useState<Tema>(leerTema);
 

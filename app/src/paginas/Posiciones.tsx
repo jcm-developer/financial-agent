@@ -26,6 +26,8 @@ const LIMITE = 50;
  * distintas: en una abierta se mira el P&L no realizado y la distancia al stop, y
  * en una cerrada el precio de salida y el motivo. Meterlas juntas dejaría media
  * tabla con guiones.
+ *
+ * @return The rendered screen with both tables.
  */
 export function Posiciones() {
   const { perfil, referencia } = usePerfilActivo();
@@ -111,6 +113,14 @@ export function Posiciones() {
   );
 }
 
+/**
+ * One row of the open-positions table.
+ *
+ * @param props - Row props.
+ * @param props.fila - The position.
+ * @param props.simbolo - Currency symbol of the profile's market, never assumed.
+ * @return The rendered row.
+ */
 function FilaAbierta({ fila, simbolo }: { fila: PositionRow; simbolo: string }) {
   return (
     <Fila>
@@ -150,6 +160,15 @@ function FilaAbierta({ fila, simbolo }: { fila: PositionRow; simbolo: string }) 
   );
 }
 
+/**
+ * One row of the closed-positions table, which shows exit price and reason
+ * instead of the stop.
+ *
+ * @param props - Row props.
+ * @param props.fila - The position.
+ * @param props.simbolo - Currency symbol of the profile's market, never assumed.
+ * @return The rendered row.
+ */
 function FilaCerrada({ fila, simbolo }: { fila: PositionRow; simbolo: string }) {
   return (
     <Fila>

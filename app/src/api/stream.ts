@@ -53,6 +53,10 @@ interface QuotesEvento {
  * Si no hay nada en cache todavia se devuelve `undefined`: inventar los otros
  * ocho campos con ceros seria afirmar cosas que no sabemos. La consulta normal
  * los traera.
+ *
+ * @param previo - What the cache already holds, if the normal query has landed.
+ * @param evento - The five fields the `ingest` event carries.
+ * @return The merged status, or undefined when there was nothing to merge into.
  */
 export function fundirIngest(
   previo: IngestStatus | undefined,
@@ -82,6 +86,11 @@ export interface ResultadoCiclo {
  * empalmar dejando el hueco produciria un log que se lee como continuo sin
  * serlo, y eso es peor que no tenerlo — se pide releer al servidor, que tiene la
  * verdad.
+ *
+ * @param previo - Cycle state already in the cache, with the lines seen so far.
+ * @param evento - The event, carrying `from` only when it is incremental.
+ * @return The merged state, and whether lines were lost and the caller must
+ *     re-read from the server.
  */
 export function fundirCiclo(
   previo: CycleControl | undefined,
@@ -105,7 +114,19 @@ export function fundirCiclo(
   };
 }
 
-/** Aplica un evento del stream a la cache. Fuera del hook para poder probarla. */
+/**
+ * Applies one stream event to the query cache.
+ *
+ * Aplica un evento del stream a la cache. Fuera del hook para poder probarla.
+ *
+ * @param cliente - Query client that owns the cache.
+ * @param nombre - Event name. Anything other than `quotes`, `ingest` or `cycle`
+ *     is ignored.
+ * @param datos - Parsed event payload.
+ * @param claveQuotes - Cache key of the quotes query this stream feeds, which
+ *     depends on the symbol list the connection asked for.
+ * @param ahora - Arrival timestamp. Injectable so the tests do not need a clock.
+ */
 export function aplicarEvento(
   cliente: QueryClient,
   nombre: string,
@@ -163,6 +184,20 @@ export interface Stream {
   ultimoAviso: string | null;
 }
 
+/**
+ * Opens the SSE connection and keeps the cache fresh for as long as it lives.
+ *
+ * Se abre una sola vez, en el Layout: un `useStream()` por pantalla abriria una
+ * conexion por pantalla, que es lo que F3.5 queria evitar.
+ *
+ * @param options - Stream options.
+ * @param options.symbols - Symbols to subscribe to. Empty or undefined asks for
+ *     all of them.
+ * @param options.enabled - Whether to connect at all. False reports the stream
+ *     as disconnected without opening anything.
+ * @return The connection state, the reconnection count and the last notice the
+ *     server sent before cutting.
+ */
 export function useStream({ symbols, enabled = true }: OpcionesStream = {}): Stream {
   const cliente = useQueryClient();
   const lista = symbols?.length ? symbols.join(",") : undefined;
@@ -243,6 +278,8 @@ export function useStream({ symbols, enabled = true }: OpcionesStream = {}): Str
  * pedirlo sin abrir una conexion propia. `initialData` mas `staleTime: Infinity`
  * dejan la entrada siempre fresca, asi que `queryFn` no se llega a ejecutar: el
  * unico que escribe aqui es `aplicarEvento`.
+ *
+ * @return The arrival timestamp, or null while no batch has arrived yet.
  */
 export function useQuotesRecibidasEn(): number | null {
   const { data } = useQuery({
@@ -261,6 +298,12 @@ export function useQuotesRecibidasEn(): number | null {
  * `age_seconds` del servidor mas lo que ha pasado desde que llego el evento. Ver
  * la nota de `quotesRecibidasEn` sobre por que no se recalcula desde
  * `updated_at` con el reloj del navegador.
+ *
+ * @param fila - Quote row, of which only `age_seconds` is read.
+ * @param recibidasEn - When the batch arrived, from {@link useQuotesRecibidasEn}.
+ *     Null falls back to the server's age alone.
+ * @param ahora - Current timestamp. Injectable so the tests do not need a clock.
+ * @return The age in seconds, or null when the server did not report one.
  */
 export function antiguedadReal(
   fila: Pick<QuoteRow, "age_seconds">,

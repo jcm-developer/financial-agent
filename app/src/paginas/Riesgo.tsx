@@ -23,6 +23,8 @@ const LIMITE = 50;
  * El recuento se calcula **sobre la página que se está viendo** y lo dice, porque
  * la API no ofrece un agregado por regla: presentarlo como si fuera el total del
  * experimento sería inventarse una estadística.
+ *
+ * @return The rendered screen, with the per-rule tally above the table.
  */
 export function Riesgo() {
   const { perfil, referencia } = usePerfilActivo();
@@ -116,6 +118,13 @@ export function Riesgo() {
   );
 }
 
+/**
+ * Tallies the events by rule.
+ *
+ * @param filas - Events on the page being viewed, not the whole experiment.
+ * @return `[rule, count]` pairs, most frequent first. Events with no rule are
+ *     counted under `sin regla` rather than dropped, so the total still adds up.
+ */
 function contarPorRegla(filas: RiskEventRow[]): [string, number][] {
   const cuenta = new Map<string, number>();
   for (const fila of filas) {
@@ -125,6 +134,14 @@ function contarPorRegla(filas: RiskEventRow[]): [string, number][] {
   return [...cuenta.entries()].sort((a, b) => b[1] - a[1]);
 }
 
+/**
+ * One row of the risk-events table.
+ *
+ * @param props - Row props.
+ * @param props.fila - The event, with the rule it tripped.
+ * @param props.simbolo - Currency symbol of the profile's market, never assumed.
+ * @return The rendered row.
+ */
 function FilaEvento({ fila, simbolo }: { fila: RiskEventRow; simbolo: string }) {
   return (
     <Fila>

@@ -10,6 +10,9 @@ import { useEffect } from "react";
  *
  * Lleva el nombre del perfil cuando lo hay, que es la misma razón por la que el
  * perfil va en la URL: saber qué experimento se está mirando sin deducirlo.
+ *
+ * @param seccion - Screen name, which leads the title.
+ * @param perfil - Active profile name. Omitted on the screens without one.
  */
 export function useTitulo(seccion: string, perfil?: string) {
   useEffect(() => {

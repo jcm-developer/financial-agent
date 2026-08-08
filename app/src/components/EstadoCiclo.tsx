@@ -9,6 +9,12 @@ import { Etiqueta } from "@/components/piezas";
  * F6.9 no había forma de distinguirlos: el ciclo terminaba en `completed` con cero
  * propuestas y se leía como un día tranquilo. Ahora el recuento de llamadas está
  * en la fila, así que se enseña aquí, que es donde se mira.
+ *
+ * @param props - Status props.
+ * @param props.ciclo - Cycle row, of which the status, the error and the
+ *     analyst call counts are read.
+ * @return The status, followed by a tag when the model answered partially or
+ *     not at all.
  */
 export function EstadoCiclo({ ciclo }: { ciclo: CycleRow }) {
   const llamadas = ciclo.analyst_calls ?? 0;

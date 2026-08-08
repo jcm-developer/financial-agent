@@ -19,6 +19,8 @@ const LIMITE = 50;
  * oportunidades o reparte la misma convicción a todo. Por eso la tesis y los
  * riesgos se enseñan en la propia fila y no detrás de un clic — un texto que hay
  * que ir a buscar no se lee, y entonces la pantalla mide otra cosa.
+ *
+ * @return The rendered screen.
  */
 export function Decisiones() {
   const { perfil, referencia } = usePerfilActivo();
@@ -121,6 +123,14 @@ export function Decisiones() {
   );
 }
 
+/**
+ * One row of the decisions table, thesis and risks included.
+ *
+ * @param props - Row props.
+ * @param props.fila - The decision and the risk manager's verdict on it.
+ * @param props.simbolo - Currency symbol of the profile's market, never assumed.
+ * @return The rendered row.
+ */
 function FilaDecision({ fila, simbolo }: { fila: DecisionRow; simbolo: string }) {
   return (
     <Fila>

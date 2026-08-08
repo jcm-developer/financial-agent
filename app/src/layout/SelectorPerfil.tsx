@@ -14,6 +14,8 @@ import { usePerfilActivo } from "@/perfil/usePerfilActivo";
  *
  * El desplegable es el `<Select>` compartido (`components/piezas.tsx`), en su
  * variante de etiqueta a la izquierda: en la cabecera no hay alto que gastar.
+ *
+ * @return The rendered select, or null while there are no profiles to choose from.
  */
 export function SelectorPerfil() {
   const { referencia, perfiles } = usePerfilActivo();
