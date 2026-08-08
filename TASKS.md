@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-08 (noche: F3 completa — API FastAPI)
+Última actualización: 2026-08-08 (noche: F3 completa — API FastAPI; decisiones 1–3 resueltas)
 
 ---
 
@@ -614,6 +614,32 @@ esperan a que F4 tenga frontend que servir.
 
 ### F4 — Frontend React + Tailwind
 
+**Orden de ataque (decidido 2026-08-08).** Seis tramos, y el primero va solo porque es el que
+falla: **A** andamiaje y toolchain (F4.1, F4.2, F4.10) → **B** capa de datos (F4.4, F4.5) →
+**C** layout y selector de perfil (F4.3, F5.5) → **D** pantallas (F4.7, F4.8) → **E** gráficas
+(F4.6) → **F** cierre (F4.9, F4.11, F7.2, F7.4).
+
+**F4 se construye mientras el experimento corre**, no antes. El dashboard viejo funciona y la
+API abre el histórico en modo `ro` (D5), así que desarrollar contra la base del experimento en
+marcha no lo puede tocar. Lo único que va antes del lunes es **F6.9**: es lo que puede arruinar
+diez sesiones en silencio.
+
+**Tres decisiones de diseño, tomadas antes de escribir la primera línea:**
+
+- **Las pantallas se arman con los endpoints tipados, no con `/api/dashboard`.** Ese endpoint
+  se quedó sin modelo Pydantic a propósito (F3.6) y llega al frontend como
+  `Record<string, unknown>`: castear campo a campo y ningún cambio del backend rompería el
+  build, que es exactamente la garantía por la que se generaron los 32 tipos. Cuesta 5-6
+  peticiones en paralelo en lugar de una, y TanStack Query las cachea. **`/api/dashboard`
+  pasa a legado y se borra con `web/` en F8.2.**
+- **El SSE escribe en la caché de TanStack Query** (`setQueryData`), no en un estado paralelo
+  de React. Con dos fuentes para el mismo precio, la pantalla acaba enseñando dos números
+  distintos y no hay un sitio donde arreglarlo.
+- **El perfil activo vive en la URL** (`/p/:profile/posiciones`), no en un contexto. Recargar,
+  compartir un enlace o volver atrás tienen que seguir apuntando al mismo experimento: todo
+  este proyecto se dedica a no confundir dos experimentos, y un selector en memoria es la
+  forma más fácil de mirar el equivocado.
+
 - [ ] **F4.1** Andamiaje **Vite + React + TypeScript** en `app/`. El directorio ya existe:
       F3.6 dejó ahí `app/src/api/types.ts`, los tipos generados del OpenAPI. El build tiene
       que salir en `app/dist`, que es donde lo busca la API (F3.7).
@@ -624,11 +650,19 @@ esperan a que F4 tenga frontend que servir.
 - [ ] **F4.4** Datos con **TanStack Query** contra la API.
 - [ ] **F4.5** Hook de SSE: precios y P&L moviéndose solos, con reconexión e indicador de
       "datos en vivo / desconectado".
-- [ ] **F4.6** Gráficas: curva de capital, drawdown, histograma de convicción, calibración
-      (Recharts o visx, por decidir).
-- [ ] **F4.7** Portar lo que hoy hace [web/index.html](web/index.html): resumen, posiciones
-      abiertas y cerradas, decisiones con tesis y riesgos, órdenes, eventos de riesgo, ciclos
-      y su log en vivo.
+- [ ] **F4.6** Gráficas con **Recharts** (decidido 2026-08-08): curva de capital, drawdown,
+      histograma de convicción, calibración. visx da más control, pero aquí las gráficas son
+      cuatro formas estándar y el trabajo de verdad está en F4.7; el comparador de F5.6
+      —varias series de equity en el mismo eje— es lo más exigente y Recharts lo cubre.
+- [ ] **F4.7** Portar lo que hoy hace [web/index.html](web/index.html) —4 pestañas, 10 tablas
+      y 5 gráficas—: resumen con sus tarjetas, posiciones abiertas y cerradas, decisiones con
+      tesis y riesgos, órdenes, eventos de riesgo, ciclos y su log en vivo, más los filtros
+      por símbolo y por acción. Todo desde los endpoints tipados (ver la cabecera de F4).
+
+      **Dos cosas que el viejo no hace y hay que añadir**: el `price_source` de las
+      posiciones (`live` o `cycle`, F3.2 — sumar una posición valorada con el cierre de
+      anteayer y otra con el precio de hace un minuto da un P&L que no significa nada) y el
+      `age_seconds` de las cotizaciones, que es la medición de F2.1c puesta donde se ve.
 - [ ] **F4.8** Estados de carga, vacío y error decentes en cada pantalla (hoy no existen).
 - [ ] **F4.9** Responsive y accesible: foco visible, contraste AA, tablas navegables.
 - [ ] **F4.10** Modo desarrollo: `vite dev` con proxy a la API, recarga en caliente.
@@ -641,11 +675,31 @@ esperan a que F4 tenga frontend que servir.
       `delete_profile`) y tests de cascada.
 - [ ] **F5.2** Listado en tarjetas con las métricas clave: capital, P&L total y del día, nº
       de posiciones, win rate, último ciclo. (En consola ya existe: `run.py profiles`.)
-- [ ] **F5.3** Alta de perfil: nombre, descripción, capital inicial, universo y parámetros
-      (formulario de F6).
+- [ ] **F5.3** Alta de perfil **en un solo formulario**: nombre, descripción, **mercado**
+      (`eu` / `us`), capital inicial, universo, cuántos símbolos seguir en vivo, y las
+      decisiones de estrategia y modelo —perfil de riesgo 1–10, diversificación 1–10,
+      proveedor, modelo, clave— sin pasar por una segunda pantalla. Decidido 2026-08-08:
+      **el mercado se elige al crear, no se cambia después**; de él salen horario,
+      calendario, divisa, benchmark y suelo de liquidez (D8, FE.11), así que cambiarlo a
+      mitad de experimento reinterpreta el histórico ya grabado.
+
+      El backend ya lo admite: `ProfileCreate` lleva `market` (defecto `eu`) y
+      `SettingsUpdate` los 41 campos. **Son dos llamadas, y así se queda**: el alta pasa
+      por `create_market_profile`, que aplica las reglas del mercado (universo,
+      `profile_universe`, benchmark, `min_turnover`), y meter los 41 campos en el alta
+      duplicaría esa validación. Para que las dos llamadas no dejen basura, el perfil nace
+      en `draft` —que ya es el default del esquema— y **solo se activa cuando el `PATCH`
+      de ajustes ha cuajado**: si falla, lo que queda es un borrador visible y borrable, no
+      un experimento corriendo con parámetros que el usuario no eligió.
+
+      La UI lee `/api/markets` para el selector: divisa, horario y suelo de liquidez de
+      cada bolsa salen del registro, no cableados (F3.2).
 - [ ] **F5.4** Acciones: activar, pausar, archivar, **duplicar** (clonar y cambiar un solo
       parámetro es el gesto central del experimento) y borrar con confirmación por nombre.
-- [ ] **F5.5** Selector de perfil global en el layout; todas las pantallas filtran por él.
+- [ ] **F5.5** Selector de perfil global en el layout, **con el perfil en la URL**
+      (`/p/:profile/...`, ver la cabecera de F4); todas las pantallas filtran por él. Con un
+      solo experimento activo (decisión nº 5) el selector no parece urgente, pero los
+      perfiles archivados se acumulan y son justo lo que hay que poder mirar después.
 - [ ] **F5.6** **Comparador**: varios perfiles en la misma gráfica de equity, con tabla de
       métricas lado a lado. Es lo que convierte esto en un experimento y no en un bot.
 - [ ] **F5.7** Perfil de control: screener en modo `random`, para tener contra qué medir el
@@ -739,6 +793,59 @@ esperan a que F4 tenga frontend que servir.
         la pantalla lo dice así. Poner "(sin clave)" mandaba a buscar un problema inexistente.
 - [ ] **F6.8** Formulario con sliders y **valores derivados visibles en vivo** ("con estos
       ajustes: máx. 8 posiciones, 1,5 % de riesgo por operación").
+- [x] **F6.9** **Un ciclo sin modelo ya no se parece a un día tranquilo.** Encontrado al
+      calcular el gasto del experimento de 10 días (decisión nº 2): `evaluate_entry` y
+      `evaluate_exit` capturan `LLMError`, dejan un `log.warning` y devuelven `None`. Es lo
+      correcto por candidato —un 429 en AAPL no debe tumbar el ciclo entero— pero con la
+      cuota agotada falla **en las 33 llamadas seguidas**, y el ciclo terminaba en
+      `completed` diciendo "Analizados: 20, propuestas de compra: 0", indistinguible de un
+      día en que el modelo no vio nada. `report.analyzed` cuenta snapshots, no análisis
+      logrados.
+
+      `Analyst` cuenta ahora `calls` y `failures`; `TradingCycle._grade_analyst` decide qué
+      hacer con la diferencia, y las dos cifras van a `cycles.analyst_calls` /
+      `analyst_failures`, al `CycleReport` y a `CycleRow`/`CycleDetail` de la API.
+
+      Tres decisiones que costaron pensarlo:
+      - ⚠️ **No hay estado `degraded`, y era el plan.** `cycles.status` tiene un `check` con
+        cuatro valores y **SQLite no sabe alterar una restricción**: añadirlo obligaría a
+        reconstruir la tabla de la que cuelgan otras seis con `on delete cascade`. Y en una
+        base ya creada el CHECK viejo rechazaría el valor nuevo, así que el fallo aparecería
+        **el día que se agota la cuota**, o sea el día que esto tiene que funcionar. Se
+        reutiliza `failed`, que además hace que [run.py:558](run.py#L558) devuelva código 1 y
+        el planificador lo registre como error; el matiz lo dan las dos columnas nuevas.
+      - **Solo el fallo total degrada el estado.** Un ciclo con 3 fallos de 33 sí analizó y
+        sí pudo operar; marcarlo `failed` mentiría en la otra dirección. Queda el recuento en
+        la fila y una nota en `error`.
+      - **Un `halted` no se convierte en `failed`.** El kill switch es el titular de su
+        ciclo y no evalúa entradas por definición, así que sus pocas llamadas no son
+        representativas. Y **0 de 0 llamadas no es un fallo**: sin esa distinción, un día en
+        que el screener no selecciona nada se marcaría como ciclo roto.
+
+      [tests/test_analyst_failures.py](tests/test_analyst_failures.py): 10 tests, incluido
+      el de la migración sobre una base creada antes de las columnas. **Suite: 606 en
+      verde.**
+- [ ] **F6.10** ⚠️ **`cycle_times` y `cycle_tz` están en el esquema y no los lee nadie.**
+      Existen en `agent_settings` (con defecto `22:15` / `Europe/Madrid`) y en
+      `SettingsUpdate`, así que la API los acepta y los guarda — pero
+      [src/profile_settings.py](src/profile_settings.py) no los pasa a `Settings` y
+      [tools/scheduler.py](tools/scheduler.py) lee `CYCLE_TIMES` **del entorno**. O sea que
+      el horario que se ponga en la interfaz no cambia nada, en silencio.
+
+      Es la misma trampa que FE.7 (`profile_universe`) y tiene dos consecuencias reales:
+      hoy los ciclos se configuran en el `.env` del contenedor `scheduler`, **uno para todos
+      los perfiles**, así que un perfil europeo con 8 ciclos intradía y uno americano con
+      uno al cierre no se pueden expresar a la vez; y contradice la premisa de F6, que es
+      que todo lo que define un experimento vive en el perfil.
+
+      El planificador tiene que recorrer los perfiles activos, leer el horario de cada uno y
+      lanzar `run.py cycle --profile X` a su hora.
+
+      ⚠️ **No bloquea el primer experimento** (decisión nº 5: un solo perfil activo, así que
+      `CYCLE_TIMES=10:20,11:20,…` en el entorno del `scheduler` hace exactamente lo que hace
+      falta). Sí bloquea el comparador de F5.6, que es dos perfiles a la vez por definición.
+      Lo que no se puede dejar como está es la columna muda: o la lee el planificador, o la
+      API deja de aceptarla.
 
 **Parámetros propuestos** (los tres que pediste en negrita, más los que creo que faltan):
 
@@ -858,11 +965,20 @@ FE se coló delante de F3 porque cambiaba el esquema (`agent_settings.market`) y
 reescribía la pregunta de F2.1c: medir la sesión americana ya no era lo que interesaba.
 Hacerlo después habría significado rehacer los endpoints de F3 y la medición del lunes.
 
-**Dónde estamos (2026-08-08, noche):** F1, F2 (salvo F2.1c), FE, F6 (salvo F6.8) y **F3**
-cerradas. Lo siguiente es **F4**, y ya tiene contra qué programar: los endpoints están
-publicados en `/openapi.json` y sus tipos de TypeScript, generados en
-`app/src/api/types.ts`. Sigue bloqueante y sin fecha propia **F2.1c**, que se mide el lunes
-por la mañana y puede cambiar la respuesta a la decisión pendiente nº 2.
+**Dónde estamos (2026-08-08, noche):** F1, F2 (salvo F2.1c), FE, F6 (salvo F6.8, F6.9 y
+F6.10) y **F3** cerradas. Lo siguiente es **F4**, y ya tiene contra qué programar: 24
+endpoints publicados en `/openapi.json` y sus 32 tipos de TypeScript en
+`app/src/api/types.ts`.
+
+**Plan de las dos próximas semanas:**
+
+1. ~~**Antes del lunes: F6.9.**~~ ✅ **Hecho (2026-08-08).** Un ciclo sin modelo se registra
+   como `failed` con el recuento de llamadas, no como una sesión tranquila.
+2. **Lunes 2026-08-10, 09:00 Madrid: F2.1c.** La medición del feed europeo, que decide entre
+   `1d` con un ciclo y `1h` con ocho.
+3. **Lunes: arranca el experimento** con el dashboard viejo, un solo perfil europeo.
+4. **Los diez días siguientes: F4**, en los seis tramos de su cabecera. La API abre el
+   histórico en modo `ro`, así que desarrollar no puede tocar el experimento en marcha.
 
 ---
 
@@ -915,6 +1031,22 @@ por la mañana y puede cambiar la respuesta a la decisión pendiente nº 2.
   **al arrancar**, así que editar un parámetro con un ciclo de 20 minutos ya en marcha deja
   ese ciclo registrado con los valores de antes. Es el comportamiento correcto —el ciclo lee
   los ajustes una vez y no los recarga— pero conviene saberlo.
+- **R8 — Cuota de NVIDIA NIM en el experimento de 10 días.** ✅ **Comprobado en la cuenta
+  (2026-08-08): "Up to 40 rpm" y ningún contador de créditos.** O sea que el régimen es por
+  minuto y no por consumo acumulado; los 1.000 créditos que documentaban las fuentes de
+  terceros ya no aplican a esta cuenta.
+
+  **El límite por minuto no aprieta, ni de lejos.** Las llamadas al analista son
+  secuenciales, una cada ~30–60 s: **1–2 por minuto contra 40**. La demanda del experimento
+  —hasta 33 llamadas por ciclo (20 candidatos de `screener_top_n` + 13 posiciones con
+  diversificación 5), ~264 al día con 8 ciclos, ~2.600 en diez sesiones— es irrelevante
+  cuando no hay tope acumulado.
+
+  Queda una reserva pequeña: **"up to" no es un SLA** —depende del modelo y del tráfico— así
+  que un 429 suelto puede aparecer. [src/llm.py](src/llm.py) ya reintenta con espera
+  exponencial respetando `Retry-After`. Lo que no hay es un muro que corte el experimento a
+  mitad. Y ver **F6.9**: mientras un fallo del analista se registre como "0 propuestas", una
+  tanda de 429 se leería como una sesión sin oportunidades.
 - **R7 — Calidad del modelo gratuito.** Llama 3.3 70B puede no dar señal útil, y entonces el
   experimento mide el modelo, no la estrategia. Por eso F5.7 (perfil de control aleatorio):
   sin algo contra lo que comparar, no se sabe distinguir un caso del otro.
@@ -923,17 +1055,72 @@ por la mañana y puede cambiar la respuesta a la decisión pendiente nº 2.
 
 ## 5. Decisiones pendientes
 
-1. **Librería de gráficas**: Recharts (rápido de montar) o visx (más control).
-2. **Frecuencia de los ciclos del agente**: ¿se mantiene 1 al día tras el cierre, o se
-   aprovechan los datos de 1 minuto para varios ciclos intradía? Afecta al gasto de modelo.
-   **Depende de F2.1c**: si el feed europeo llega con 15 minutos de retraso, la pregunta se
-   responde sola. Con `market=eu` el "tras el cierre" son las 18:00 de Madrid, no las 22:15.
+1. ~~**Librería de gráficas**: Recharts o visx.~~ **Resuelto: Recharts** (F4.6).
+2. **Frecuencia de los ciclos del agente.** ⚠️ **Medio resuelto: el suelo es la hora.**
+   Se preguntó por un ciclo cada 5 minutos y **no cabe**, por tres techos independientes, y
+   el más bajo no es la cuota del modelo:
+
+   - **Un ciclo tarda ~20 minutos** ([src/cycle.py](src/cycle.py), `STALE_CYCLE_MINUTES`).
+     El coste son las llamadas al analista, **en serie**: una por candidato
+     (`screener_top_n`, 20 por defecto) más una por posición abierta para la revisión de
+     salida (3–25 según diversificación). Son 20–45 llamadas a Llama 3.3 70B con
+     `max_tokens=1600`, timeout de 120 s y reintentos con espera de hasta 30 s por los 429
+     de la capa gratuita. Y hay cerrojo: `_check_no_other_cycle_running` **salta** un ciclo
+     si ya hay otro en marcha sobre la misma cartera, así que uno cada 5 minutos se
+     auto-saltaría tres de cada cuatro veces y el histórico registraría el intento.
+   - **La barra de 5 minutos no existe en el analista.** `CYCLE_INTERVALS = ("1d", "1h")`
+     ([src/profile_settings.py](src/profile_settings.py)), y `bar_cache` solo conoce esos
+     dos. Aunque el ciclo fuera instantáneo, doce ciclos sobre la misma barra horaria verían
+     los mismos indicadores y decidirían lo mismo, gastando cuota. `bars_1m` es del
+     ingestor y de F9.2, no del analista.
+   - **R1.** Si se confirma el desfase de ~15 minutos en Europa, un ciclo de 5 minutos
+     decidiría sobre datos más viejos que su propio periodo.
+
+   **Techo real: 8 ciclos al día.** Con `bar_interval=1h` la ventana europea (09:15–17:45)
+   da 8 barras horarias; a ~20 minutos cada uno caben en las 8,5 horas, pero sin margen y
+   con el gasto de modelo multiplicado por ocho. **Lo que se hará son 2–3 por sesión** —el
+   README ya lo dice, y por una razón estadística y no de rentabilidad: 30 operaciones
+   cerradas en semanas en lugar de meses—. Con `market=eu`, algo como
+   `cycle_times=11:00,14:00,17:40`.
+
+   **La cuota no es el límite** (R8: 40 rpm, sin créditos, y pedimos 1–2 rpm), así que los 8
+   caben. Para el experimento de 10 días la pauta es **`bar_interval=1h` con los ciclos ~20
+   minutos pasada la hora** —10:20, 11:20 … 17:20, más uno al final de la ventana—: con el
+   desfase de ~15 minutos del feed europeo, la barra de 10:00–11:00 no está completa hasta
+   las 11:15, y arrancar en punto analizaría una barra a medias. Ocho ciclos de ~20 minutos
+   son 160 de los 510 de la ventana, así que cabe sin que dos se pisen (y si uno se alarga,
+   el cerrojo salta el siguiente en lugar de solaparlo).
+
+   **Se fija en 8 ciclos**, que es también el techo. El argumento no es "más datos" —ocho
+   análisis de la misma barra horaria están muy correlacionados— sino la **rotación**: las
+   salidas obligatorias (stop y objetivo) se comprueban en cada ciclo y **no gastan modelo**
+   ([src/risk.py](src/risk.py), `mandatory_exits`). Con un ciclo al día, un stop perforado a
+   las 11:00 no se detecta hasta el cierre y se sale al precio de cierre; con ocho, se
+   detecta esa misma hora. Como `horizon_days` **no cierra nada al expirar** —se registra y
+   se le cuenta al analista, pero las únicas salidas automáticas son stop y objetivo—, el
+   número de operaciones cerradas en diez días depende de con qué frecuencia se miran esos
+   niveles. Ahí está el valor de los ocho ciclos, y no en preguntarle ocho veces al modelo.
+
+   ⚠️ **Hoy ese horario no se pone en el perfil: ver F6.10.** `cycle_times` existe en el
+   esquema y no lo lee nadie; con un solo perfil activo (decisión nº 5) basta
+   `CYCLE_TIMES` en el entorno del `scheduler`.
+
+   **Lo que sigue dependiendo de F2.1c** es solo si se queda en `1d` (un ciclo a las 18:00
+   de Madrid) o pasa a `1h` con esos ciclos intradía. Bajar de la hora exigiría añadir
+   `5m`/`15m` a `CYCLE_INTERVALS` y a `bar_cache`, y sobre todo **paralelizar las llamadas al
+   analista**; es trabajo, no un parámetro, y hoy no hay ninguna razón que lo pida.
 3. ~~**Tamaño del universo a seguir minuto a minuto**: 50 es el punto de partida.~~
    **Resuelto para Europa: 89** (EURO STOXX 50 + IBEX 35, D8). Para el perfil americano
    sigue abierto y ahora se elige explícitamente con `--watch`. Condiciona R2 y R4, que ya
    están recalculados.
-5. **¿Se mantiene un perfil americano activo?** Con los dos, la franja de solape pide 139
-   símbolos por minuto y el fichero crece a ~165 MB/mes. Si el experimento europeo es el
-   que importa, pausar el americano quita las dos presiones de golpe.
+6. ~~**¿Dónde se elige el mercado?**~~ **Resuelto: en el alta del perfil**, junto al resto
+   de las decisiones del experimento (riesgo, diversificación, modelo). No es editable
+   después: ver F5.3 para el motivo y para cómo se reparte entre las dos llamadas de la API.
+5. ~~**¿Se mantiene un perfil americano activo?**~~ **Resuelto (2026-08-08): un solo
+   experimento a la vez**, por decisión de método —los experimentos se hacen de uno en uno
+   para poder mirarlos— y el primero es el europeo. Eso quita de golpe las dos presiones que
+   vigilaban R2 y R4: no hay franja de solape (89 símbolos por minuto, no 139) y el fichero
+   crece a ~115 MB/mes en vez de ~165. También rebaja **F6.10** de bloqueo a trampa
+   latente: con un perfil, `CYCLE_TIMES` del entorno basta.
 4. ~~¿Se conserva el broker simulado, o se pasa a Alpaca paper?~~ **Resuelto: solo
    simulador.** Alpaca fuera del proyecto.

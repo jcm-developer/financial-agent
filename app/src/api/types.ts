@@ -46,6 +46,8 @@ export interface CycleDetail {
   rejected?: number;
   orders?: number;
   symbols_scanned?: Array<string>;
+  analyst_calls?: number;
+  analyst_failures?: number;
   settings?: Record<string, unknown> | null;
 }
 
@@ -65,6 +67,8 @@ export interface CycleRow {
   rejected?: number;
   orders?: number;
   symbols_scanned?: Array<string>;
+  analyst_calls?: number;
+  analyst_failures?: number;
 }
 
 export interface CycleRunRequest {

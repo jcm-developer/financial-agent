@@ -388,6 +388,12 @@ class CycleRow(BaseModel):
     rejected: int = 0
     orders: int = 0
     symbols_scanned: list[str] = Field(default_factory=list)
+    #: Llamadas al modelo y cuantas se quedaron sin respuesta (F6.9). Con
+    #: `analyst_failures == analyst_calls` el ciclo esta en 'failed' y no analizo
+    #: nada; con un valor intermedio si analizo, pero le faltan simbolos. Sin este
+    #: par, "0 decisiones" no se puede leer.
+    analyst_calls: int = 0
+    analyst_failures: int = 0
 
 
 class CycleDetail(CycleRow):

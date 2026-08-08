@@ -76,6 +76,12 @@ create table if not exists cycles (
     -- experimento cuyos ajustes se editan a mitad deja de ser interpretable:
     -- no se sabria que configuracion produjo cada decision.
     settings_json        text,
+    -- Cuantas veces se pregunto al modelo en este ciclo y cuantas se quedaron sin
+    -- respuesta. El analista se traga los errores del LLM a proposito, asi que sin
+    -- este par un ciclo con la cuota agotada se registra igual que una sesion sin
+    -- oportunidades: 'completed' y cero propuestas (F6.9).
+    analyst_calls        integer not null default 0,
+    analyst_failures     integer not null default 0,
     error                text
 );
 

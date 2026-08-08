@@ -450,7 +450,7 @@ def risk_events(
 _CYCLE_COLUMNS = (
     "select c.id, c.started_at, c.finished_at, c.status, c.equity_start, "
     "       c.equity_end, c.market_open, c.llm_model, c.error, "
-    "       c.symbols_scanned_json, "
+    "       c.symbols_scanned_json, c.analyst_calls, c.analyst_failures, "
     "       (select count(1) from decisions d where d.cycle_id = c.id) as decisions, "
     "       (select count(1) from risk_events r where r.cycle_id = c.id "
     "               and r.verdict = 'approved') as approved, "

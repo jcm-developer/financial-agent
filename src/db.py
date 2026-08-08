@@ -59,6 +59,12 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # escribe es solo `start_ingest_run`.
         "kind": "text not null default 'tick'",
     },
+    "cycles": {
+        # F6.9. Con `default 0` los ciclos anteriores a la columna quedan como
+        # "ninguna llamada", que es lo correcto: de ellos no se sabe.
+        "analyst_calls": "integer not null default 0",
+        "analyst_failures": "integer not null default 0",
+    },
 }
 
 
@@ -617,12 +623,21 @@ class Database:
         status: str,
         equity_end: float | None = None,
         error: str | None = None,
+        analyst_calls: int | None = None,
+        analyst_failures: int | None = None,
     ) -> None:
         payload: dict[str, Any] = {"status": status, "finished_at": _now()}
         if equity_end is not None:
             payload["equity_end"] = round(equity_end, 2)
         if error:
             payload["error"] = error[:4000]
+        # Se escriben incluso valiendo 0: "se pregunto 20 veces y respondio a
+        # todas" es informacion, y distinguirla de "no se sabe" es justo el
+        # objetivo de F6.9.
+        if analyst_calls is not None:
+            payload["analyst_calls"] = int(analyst_calls)
+        if analyst_failures is not None:
+            payload["analyst_failures"] = int(analyst_failures)
         self._update("cycles", cycle_id, payload)
 
     # -- Snapshots y decisiones -------------------------------------------

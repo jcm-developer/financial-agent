@@ -96,10 +96,22 @@ INTERVAL_LABELS = {
 
 
 class Analyst:
+    """Un analista por ciclo: los contadores son de esa ejecucion, no globales.
+
+    `calls` y `failures` existen porque tragarse los `LLMError` (ver
+    `evaluate_entry`) hace que un ciclo sin modelo se parezca demasiado a un
+    ciclo sin oportunidades. Quien decide que hacer con la diferencia es
+    `TradingCycle._grade_analyst`; aqui solo se cuenta (F6.9).
+    """
+
     def __init__(self, llm: LLMClient, *, interval: str = "1d") -> None:
         self.llm = llm
         self.interval = interval
         self.labels = INTERVAL_LABELS.get(interval, INTERVAL_LABELS["1d"])
+        #: Veces que se ha preguntado al modelo, contando las que fallaron.
+        self.calls = 0
+        #: De esas, cuantas se quedaron sin respuesta utilizable.
+        self.failures = 0
 
     # -- Entradas ----------------------------------------------------------
 
@@ -109,11 +121,13 @@ class Analyst:
         """Analiza un candidato. Devuelve None si el modelo falla: un simbolo
         sin analisis se salta, no se opera a ciegas."""
         user_prompt = _render_entry_prompt(snapshot, account, self.labels)
+        self.calls += 1
         try:
             response = self.llm.complete_json(
                 system=ENTRY_SYSTEM_PROMPT, user=user_prompt
             )
         except LLMError as exc:
+            self.failures += 1
             log.warning("El analisis de entrada de %s fallo: %s", snapshot.symbol, exc)
             return None
 
@@ -156,11 +170,13 @@ class Analyst:
         user_prompt = _render_exit_prompt(
             position, snapshot, entry_thesis, stop_price, target_price, self.labels
         )
+        self.calls += 1
         try:
             response = self.llm.complete_json(
                 system=EXIT_SYSTEM_PROMPT, user=user_prompt
             )
         except LLMError as exc:
+            self.failures += 1
             log.warning("La revision de salida de %s fallo: %s", position.symbol, exc)
             return None
 

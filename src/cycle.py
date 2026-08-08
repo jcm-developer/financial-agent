@@ -57,6 +57,8 @@ class CycleReport:
     exits_discretionary: int = 0
     halted_reason: str | None = None
     screened: str | None = None
+    analyst_calls: int = 0
+    analyst_failures: int = 0
     errors: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
@@ -76,6 +78,13 @@ class CycleReport:
             f"Salidas: {self.exits_forced} forzadas / "
             f"{self.exits_discretionary} discrecionales",
         ]
+        # Solo se menciona cuando hay fallos: "0 de 33" en cada resumen es ruido
+        # que acaba sin leerse, y esta linea tiene que resaltar cuando aparece.
+        if self.analyst_failures:
+            lines.append(
+                f"Analista: {self.analyst_failures} de {self.analyst_calls} "
+                "llamadas sin respuesta"
+            )
         if self.halted_reason:
             lines.append(f"KILL SWITCH: {self.halted_reason}")
         for error in self.errors:
@@ -249,17 +258,79 @@ class TradingCycle:
             report.errors.append(f"No se pudo guardar la curva de capital: {exc}")
             log.warning("No se pudo guardar la curva de capital: %s", exc)
 
+        # Se leen aqui, y no al final de `_run_phases`, porque tambien cuentan si
+        # una excepcion corto las fases a media faena.
+        report.analyst_calls = self.analyst.calls
+        report.analyst_failures = self.analyst.failures
+        self._grade_analyst(report)
+
         try:
             self.db.finish_cycle(
                 cycle_id,
                 status=report.status,
                 equity_end=report.equity_end,
                 error="; ".join(report.errors) if report.errors else None,
+                analyst_calls=report.analyst_calls,
+                analyst_failures=report.analyst_failures,
             )
         except DatabaseError as exc:
             log.error("No se pudo marcar el ciclo como finalizado: %s", exc)
 
         return report
+
+    # ------------------------------------------------------------------
+
+    def _grade_analyst(self, report: CycleReport) -> None:
+        """Distingue "el modelo dijo que no" de "no hubo modelo".
+
+        `Analyst` se traga los `LLMError` a proposito: un 429 en un simbolo no
+        debe tumbar el ciclo entero. Pero cuando la causa es la cuota agotada o
+        el proveedor caido, falla en **todas** las llamadas seguidas, y el ciclo
+        terminaba en 'completed' con cero propuestas: indistinguible de una
+        sesion en la que el modelo no vio nada. Un experimento de dos semanas
+        puede perder diez sesiones asi sin que el historico lo diga.
+
+        Tres decisiones:
+
+          * **Solo el fallo total degrada el estado.** Un ciclo con 3 fallos de
+            33 si analizo y pudo operar; marcarlo 'failed' mentiria en la otra
+            direccion. Queda el recuento en la fila y una nota en `error`.
+          * **No se toca un ciclo que ya venia 'failed' o 'halted'.** El kill
+            switch es el titular de su ciclo, y ademas no evalua entradas por
+            definicion, asi que sus llamadas son pocas y no representativas.
+          * **Se reutiliza 'failed' en lugar de anadir un estado nuevo.**
+            `cycles.status` tiene un CHECK con cuatro valores y SQLite no sabe
+            alterar una restriccion: meter 'degraded' obligaria a reconstruir la
+            tabla de la que cuelgan otras seis con `on delete cascade`. Peor: en
+            una base ya creada el CHECK viejo rechazaria el valor nuevo, y el
+            fallo apareceria justo el dia que se agota la cuota, o sea el dia que
+            esto tiene que funcionar. El recuento en columnas da el matiz sin
+            tocar el CHECK.
+        """
+        failures, calls = report.analyst_failures, report.analyst_calls
+        if not failures:
+            return
+
+        detalle = f"El analista no respondio en {failures} de {calls} llamadas"
+
+        if failures == calls and report.status == "completed":
+            report.status = "failed"
+            report.errors.append(
+                f"{detalle}: este ciclo no ha analizado nada. Comprueba la cuota "
+                "del proveedor y el log anterior."
+            )
+            log.error(
+                "Ciclo sin analisis: %d de %d llamadas al modelo fallaron. "
+                "El ciclo se marca como fallido para que no se lea como una "
+                "sesion tranquila.", failures, calls,
+            )
+            return
+
+        report.errors.append(f"{detalle}.")
+        log.warning(
+            "%s. El ciclo sigue siendo valido, pero esos simbolos se han "
+            "quedado sin analizar.", detalle,
+        )
 
     # ------------------------------------------------------------------
 
