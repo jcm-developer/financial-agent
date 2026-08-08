@@ -1,8 +1,8 @@
-# financial-bot — Sistema de diseño
+# financial-agent — Sistema de diseño
 
 ## Carácter
 
-El panel de `financial-bot` es un **instrumento de medida**, no un escaparate. Se
+El panel de `financial-agent` es un **instrumento de medida**, no un escaparate. Se
 abre una o dos veces al día durante un experimento de semanas para responder a
 preguntas concretas —¿corrió el ciclo de las 11:20?, ¿la convicción del modelo
 predice algo?— y todo lo visual está subordinado a eso: neutros cálidos, bordes

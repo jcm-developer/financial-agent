@@ -29,7 +29,7 @@ export function Layout() {
       <header className="border-b border-border">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-3">
           <Link to="/" className="text-[15px] font-semibold tracking-tight">
-            financial-bot
+            financial-agent
           </Link>
           <div className="flex flex-wrap items-center gap-3">
             <SelectorPerfil />

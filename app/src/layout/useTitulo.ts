@@ -13,6 +13,6 @@ import { useEffect } from "react";
  */
 export function useTitulo(seccion: string, perfil?: string) {
   useEffect(() => {
-    document.title = [seccion, perfil, "financial-bot"].filter(Boolean).join(" · ");
+    document.title = [seccion, perfil, "financial-agent"].filter(Boolean).join(" · ");
   }, [seccion, perfil]);
 }

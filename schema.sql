@@ -1,5 +1,5 @@
 -- ===========================================================================
--- financial-bot :: esquema SQLite
+-- financial-agent :: esquema SQLite
 --
 -- `src/db.py` ejecuta este fichero al abrir la conexion, en cada arranque. Es
 -- idempotente (todo es CREATE ... IF NOT EXISTS), asi que hace de migracion

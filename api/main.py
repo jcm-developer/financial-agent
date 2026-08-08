@@ -63,7 +63,7 @@ def create_app(config: ApiConfig | None = None) -> FastAPI:
         yield
 
     app = FastAPI(
-        title="financial-bot",
+        title="financial-agent",
         description=DESCRIPTION,
         version="3.0",
         lifespan=lifespan,
@@ -105,7 +105,7 @@ def _ensure_database(db_path: str) -> None:
 
 PLACEHOLDER = """<!doctype html>
 <html lang="es"><head><meta charset="utf-8">
-<title>financial-bot &mdash; API</title>
+<title>financial-agent &mdash; API</title>
 <style>
  body{font:16px/1.6 system-ui,sans-serif;max-width:44rem;margin:4rem auto;padding:0 1.5rem;
       background:#0f1115;color:#d8dee9}

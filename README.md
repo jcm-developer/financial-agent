@@ -1,4 +1,4 @@
-# financial-bot
+# financial-agent
 
 Agente experimental de trading. Un LLM gratuito de NVIDIA NIM analiza activos y
 propone operaciones; un motor de riesgo determinista decide si esas propuestas se
@@ -571,11 +571,11 @@ $py  = (Get-Command python).Source
 $dir = "c:\Users\jaume\Desktop\financial-bot"
 $action  = New-ScheduledTaskAction -Execute $py -Argument "run.py cycle" -WorkingDirectory $dir
 $trigger = New-ScheduledTaskTrigger -Daily -At 22:15
-Register-ScheduledTask -TaskName "financial-bot-ciclo" -Action $action -Trigger $trigger `
+Register-ScheduledTask -TaskName "financial-agent-ciclo" -Action $action -Trigger $trigger `
   -Description "Ciclo diario del agente de trading"
 ```
 
-Para comprobar que la tarea funciona: `Start-ScheduledTask -TaskName "financial-bot-ciclo"`
+Para comprobar que la tarea funciona: `Start-ScheduledTask -TaskName "financial-agent-ciclo"`
 y luego `python run.py report`.
 
 La interfaz (`api`) sí es un proceso continuo, pero no llama al modelo ni a

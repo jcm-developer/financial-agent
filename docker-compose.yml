@@ -1,5 +1,5 @@
 # =============================================================================
-# financial-bot
+# financial-agent
 #
 #   docker compose up -d                     la aplicacion en http://localhost:8000
 #   docker compose logs -f scheduler         seguir los ciclos programados
@@ -15,11 +15,11 @@
 #
 #   docker compose cp api:/app/data/trading.db ./data/trading.db
 # =============================================================================
-name: financial-bot
+name: financial-agent
 
 x-app: &app
   build: .
-  image: financial-bot:latest
+  image: financial-agent:latest
   env_file:
     # Opcional a proposito: el dashboard no necesita credenciales, asi que
     # `docker compose up dashboard` funciona sin haber creado el .env todavia.
@@ -166,3 +166,7 @@ services:
 
 volumes:
   trading-data:
+    # Fijado al nombre que Compose derivaba de `name: financial-bot`. Sin esto el
+    # renombrado del proyecto apuntaria a un volumen nuevo y vacio, y el historico
+    # del experimento se quedaria en el viejo sin que nada avise.
+    name: financial-bot_trading-data

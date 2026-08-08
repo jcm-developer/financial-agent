@@ -1,5 +1,5 @@
 # =============================================================================
-# financial-bot
+# financial-agent
 #
 # Dos etapas y una sola imagen final (F7.2):
 #

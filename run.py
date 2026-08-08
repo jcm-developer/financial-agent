@@ -719,7 +719,7 @@ def command_activate(infra: Infra, *, name: str) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="financial-bot",
+        prog="financial-agent",
         description="Agente de trading con analisis por LLM y control de riesgo determinista.",
     )
     parser.add_argument(

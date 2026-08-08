@@ -50,7 +50,7 @@ def to_yahoo(symbol: str) -> str:
 
 def fetch() -> tuple[list[tuple[str, str, str]], str]:
     """Devuelve [(simbolo, nombre, sector)] y el nombre de la fuente usada."""
-    headers = {"User-Agent": "financial-bot/0.1 (universe fetch)"}
+    headers = {"User-Agent": "financial-agent/0.1 (universe fetch)"}
     errors: list[str] = []
 
     for name, url in SOURCES:
