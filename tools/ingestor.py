@@ -7,9 +7,15 @@ Es el proceso principal del contenedor `ingestor`. La logica vive en
 **Sigue varias bolsas a la vez.** Desde que el mercado es un parametro del perfil
 (`agent_settings.market`), dos perfiles activos pueden operar en Madrid y en
 Nueva York, cuyas sesiones se solapan solo tres horas y media. Cada tick pide
-unicamente los simbolos de las bolsas que estan abiertas en ese instante: pedir
-un valor europeo a las 22:00 CET no da un error, da la barra rancia del cierre,
-que es peor porque parece un dato.
+unicamente los simbolos de las bolsas que estan **dentro de su ventana
+operativa** en ese instante: pedir un valor europeo a las 22:00 CET no da un
+error, da la barra rancia del cierre, que es peor porque parece un dato.
+
+La ventana no es la sesion. En la zona euro va de 09:15 a 17:45 frente a una
+sesion de 09:00 a 17:30: se dejan pasar los 15 primeros minutos, que son la
+resaca de la subasta de apertura, y se trabajan 15 despues del cierre, porque la
+ultima barra no aparece cuando suena la campana. Ver `Market` en
+`src/market_calendar.py`.
 
 Configuracion por entorno:
 
@@ -191,9 +197,13 @@ def main() -> int:
                 symbols_edad += 1
                 continue
 
+            # `is_operating`, no `is_session_open`: la ventana empieza despues de
+            # la apertura y termina despues del cierre. Los ultimos minutos son
+            # los que capturan la barra final, que no llega en el instante en que
+            # suena la campana.
             abiertos = [
                 code for code in universos
-                if market_calendar.is_session_open(market=code)
+                if market_calendar.is_operating(market=code)
             ]
 
             if not abiertos:
@@ -204,11 +214,12 @@ def main() -> int:
                     ultima_poda = hoy
 
                 apertura = min(
-                    market_calendar.next_session_open(market=code)
+                    market_calendar.next_operating_open(market=code)
                     for code in universos
                 ).astimezone(timezone.utc)
                 log.info(
-                    "Todas las bolsas cerradas (%s). Proxima apertura: %s (en %.1f h).",
+                    "Fuera de ventana en todas las bolsas (%s). Proximo arranque: "
+                    "%s (en %.1f h).",
                     ", ".join(sorted(universos)),
                     apertura.isoformat(timespec="minutes"),
                     (apertura - datetime.now(timezone.utc)).total_seconds() / 3600,

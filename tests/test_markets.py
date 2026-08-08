@@ -11,7 +11,8 @@ Todas las fechas son fijas, nunca el reloj.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+import dataclasses
+from datetime import date, datetime, time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -111,6 +112,107 @@ def test_un_datetime_sin_zona_se_lee_en_hora_del_mercado():
     """
     assert mc.is_session_open(datetime(2026, 8, 5, 17, 0), market="eu")
     assert not mc.is_session_open(datetime(2026, 8, 5, 17, 0), market="us")
+
+
+# -- Ventana operativa -------------------------------------------------------
+#
+# El punto de toda esta seccion: la ventana NO es la sesion, y confundirlas es
+# el fallo que estos tests existen para impedir. `is_session_open` es un dato de
+# mercado que se guarda en el historico; `is_operating` es "trabaja el sistema".
+
+
+def test_la_ventana_europea_va_de_las_915_a_las_1745():
+    assert mc.EU.operating_open == time(9, 15)
+    assert mc.EU.operating_close == time(17, 45)
+
+
+def test_los_primeros_quince_minutos_son_sesion_pero_no_ventana():
+    """La bolsa esta abierta y el sistema no trabaja: es el calentamiento, para
+    no decidir sobre la resaca de la subasta de apertura."""
+    apertura = eu(2026, 8, 5, 9, 5)
+
+    assert mc.is_session_open(apertura, market="eu")
+    assert not mc.is_operating(apertura, market="eu")
+
+
+def test_a_las_915_arranca_la_ventana():
+    assert not mc.is_operating(eu(2026, 8, 5, 9, 14), market="eu")
+    assert mc.is_operating(eu(2026, 8, 5, 9, 15), market="eu")
+
+
+def test_los_quince_minutos_tras_el_cierre_son_ventana_pero_no_sesion():
+    """Al reves que el calentamiento: la bolsa ya cerro y el sistema sigue,
+    porque es cuando termina de llegar la ultima barra."""
+    cola = eu(2026, 8, 5, 17, 40)
+
+    assert not mc.is_session_open(cola, market="eu")
+    assert mc.is_operating(cola, market="eu")
+
+
+def test_a_las_1745_se_acaba_la_ventana():
+    assert mc.is_operating(eu(2026, 8, 5, 17, 44), market="eu")
+    assert not mc.is_operating(eu(2026, 8, 5, 17, 45), market="eu")
+
+
+def test_la_ventana_no_abre_en_dia_sin_sesion():
+    """Un festivo no tiene cola ni calentamiento: no hay nada que capturar."""
+    assert not mc.is_operating(eu(2026, 5, 1, 12, 0), market="eu")
+    assert not mc.is_operating(eu(2026, 8, 8, 12, 0), market="eu")
+
+
+def test_la_ventana_americana_sigue_siendo_la_sesion():
+    """Nadie ha pedido cambiar el comportamiento americano, y hacerlo de rebote
+    alteraria un experimento en marcha."""
+    assert mc.US.warmup_minutes == 0
+    assert mc.US.drain_minutes == 0
+    assert mc.US.operating_open == mc.US.open_time
+    assert mc.US.operating_close == mc.US.close_time
+
+
+def test_la_media_sesion_arrastra_su_ventana():
+    """La razon de guardar desplazamientos y no horas absolutas. El 24 de
+    diciembre Nueva York cierra a las 13:00; con 17:45 grabado a fuego, el
+    sistema esperaria barras tres horas de una sesion terminada."""
+    nochebuena = date(2026, 12, 24)
+
+    assert mc.US.operating_close_for(nochebuena) == time(13, 0)
+    assert mc.US.operating_close_for(date(2026, 12, 23)) == time(16, 0)
+
+
+def test_next_operating_open_apunta_a_las_915_no_a_las_900():
+    """Es lo que el ingestor usa para dormir: despertarse a las 09:00 seria
+    pasarse quince minutos pidiendo barras de la subasta."""
+    upcoming = mc.next_operating_open(eu(2026, 8, 7, 20, 0), market="eu")
+
+    assert upcoming.date() == date(2026, 8, 10)   # el finde por medio
+    assert upcoming.timetz().hour == 9
+    assert upcoming.timetz().minute == 15
+
+
+def test_la_ventana_dura_lo_mismo_que_la_sesion():
+    """Calentamiento y cola son iguales, asi que el numero de barras por dia no
+    cambia: 510 en Europa. Importa para el volumen estimado de bars_1m."""
+    assert mc.EU.operating_minutes == mc.EU.session_minutes == 510
+    assert mc.US.operating_minutes == mc.US.session_minutes == 390
+
+
+def test_operating_bounds_devuelve_la_ventana_del_dia():
+    inicio, fin = mc.operating_bounds(date(2026, 8, 10), market="eu")
+
+    assert (inicio.hour, inicio.minute) == (9, 15)
+    assert (fin.hour, fin.minute) == (17, 45)
+    assert mc.operating_bounds(date(2026, 8, 8), market="eu") is None
+
+
+def test_el_registro_se_valida_al_importar():
+    """`_check_markets` corre al importar el modulo. Una ventana vacia o al
+    reves no revienta sola: hace que el sistema trabaje en horas que nadie
+    eligio, y eso no da sintoma hasta que se miran los datos."""
+    roto = dataclasses.replace(mc.EU, warmup_minutes=600)
+
+    assert roto.operating_open >= roto.operating_close
+    with pytest.raises(ValueError, match="ventana operativa"):
+        mc._check_markets([roto])
 
 
 # -- Festivos europeos -------------------------------------------------------

@@ -212,7 +212,10 @@ def main() -> int:
         Path(args.universe) if args.universe else APP_DIR / mercado.universe_file
     )
     symbols = load_symbols(args.symbols, args.count, universe_file)
-    abierto = market_calendar.is_session_open(market=mercado)
+    # La ventana operativa y no la sesion: medir los 15 minutos posteriores al
+    # cierre es justamente donde se vera si la ultima barra llega tarde, que es
+    # la pregunta de F2.1c.
+    abierto = market_calendar.is_operating(market=mercado)
 
     print()
     print(f"  Spike de ingesta 1m — {len(symbols)} simbolos de {mercado.label}")
@@ -223,8 +226,8 @@ def main() -> int:
         print()
         print("  El mercado esta cerrado. La medicion que importa (el retraso real")
         print("  del dato en vivo) solo tiene sentido en sesion.")
-        print(f"  Proxima apertura: "
-              f"{market_calendar.next_session_open(market=mercado)}")
+        print(f"  Proximo arranque de la ventana: "
+              f"{market_calendar.next_operating_open(market=mercado)}")
         print()
         print("  Para validar solo el mecanismo contra la ultima sesion:")
         print(f"      python tools/spike_1m.py --market {mercado.code} --once --force")
@@ -237,7 +240,7 @@ def main() -> int:
         print("  el retraso medido NO es representativo. Sirve para comprobar que la")
         print("  descarga funciona, cuanto tarda y cuantos simbolos vuelven vacios.")
 
-    pasadas = 1 if args.once else (args.minutes or mercado.session_minutes)
+    pasadas = 1 if args.once else (args.minutes or mercado.operating_minutes)
     out = Path(args.out)
     resultados: list[dict] = []
 

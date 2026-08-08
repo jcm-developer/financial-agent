@@ -103,6 +103,13 @@ def command_check(settings: Settings) -> int:
     print(f"  {market_calendar.describe(market=mercado)}")
     print(f"  Sesion {mercado.open_time:%H:%M}-{mercado.close_time:%H:%M} "
           f"hora local, divisa {mercado.currency}")
+    # La ventana operativa solo se nombra cuando difiere de la sesion: repetir
+    # las mismas horas dos veces seguidas solo invita a leerlas mal.
+    if (mercado.warmup_minutes or mercado.drain_minutes):
+        print(f"  Ventana operativa {mercado.operating_open:%H:%M}-"
+              f"{mercado.operating_close:%H:%M}  "
+              f"(+{mercado.warmup_minutes} min tras la apertura, "
+              f"+{mercado.drain_minutes} tras el cierre)")
     allowed, reason = market_calendar.should_run(
         settings.bar_interval, market=mercado
     )

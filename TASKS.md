@@ -154,6 +154,10 @@ Tres decisiones con consecuencia:
 - **Nochebuena y Nochevieja se tratan como cierre completo**, aunque Euronext haga subasta
   hasta las 14:05. Media sesión con liquidez de festivo produce barras que distorsionan los
   indicadores más de lo que aportan.
+- **La ventana operativa no es la sesión** (ver FE.13). En Europa el sistema trabaja de
+  **09:15 a 17:45** sobre una sesión de 09:00–17:30. `is_session_open()` sigue diciendo la
+  verdad de mercado —se guarda en `cycles.market_open` y se enseña en el dashboard— y
+  `is_operating()` responde la otra pregunta: si nos toca capturar y analizar.
 
 **Consecuencia que hay que asumir:** `screener_min_dollar_volume` sigue llamándose así pero
 la cifra está en la divisa del mercado. Renombrar la columna tocaría esquema, `db.py`,
@@ -240,8 +244,10 @@ otra forma y pide su SDK, así que queda en F9.1.
       python tools/spike_1m.py --market eu --count 89 --out spike_eu_lunes.jsonl
       ```
       [tools/spike_1m.py](tools/spike_1m.py) ya sabe de mercados: `--market` elige el
-      calendario y, de paso, el fichero de universo, y `--minutes` sin valor toma la sesión
-      entera del mercado (510 en `eu`). Comprobado el 2026-08-08 con el mercado cerrado:
+      calendario y, de paso, el fichero de universo, y `--minutes` sin valor toma la
+      **ventana operativa** entera (510 minutos en `eu`, de 09:15 a 17:45). Que mida la
+      ventana y no la sesión es deliberado: **los 15 minutos posteriores al cierre son justo
+      donde se verá si la última barra llega tarde**, que es la pregunta. Comprobado el 2026-08-08 con el mercado cerrado:
       3/3 símbolos y la última barra en 17:29 CEST, o sea que el feed europeo llega hasta
       el cierre. Lo que eso **no** dice es con cuánto retraso llega en vivo.
 
@@ -335,14 +341,39 @@ Ver D8. Todo cerrado salvo lo que depende de la sesión del lunes (F2.1c).
       valor toma la sesión entera del mercado elegido. Sin esto, F2.1c no se podía medir el
       lunes: el spike habría consultado el calendario de NYSE y habría dicho "mercado
       cerrado" a las 9 de la mañana.
-- [x] **FE.10** [tests/test_markets.py](tests/test_markets.py): 67 tests. **Suite completa:
-      511 en verde.**
+- [x] **FE.10** [tests/test_markets.py](tests/test_markets.py): 79 tests. **Suite completa:
+      523 en verde.**
 - [ ] **FE.11** ⚠️ **Pendiente, y es lo único que queda:** bajar
       `screener_min_dollar_volume` a 5.000.000 en el perfil europeo. Medido el 2026-08-08
       sobre las últimas 20 sesiones, el default de 20 M (pensado para el S&P 500) deja
       fuera 15 de los 89 — ANE.MC, LOG.MC, COL.MC, PUIG.MC, FDR.MC, ROVI.MC, SCYR.MC,
       MAP.MC… — que son precisamente las medianas españolas por las que se añadió el IBEX.
       Con 5 M pasan los 89: el menos líquido negocia 5,4 M €/día.
+- [x] **FE.13** **Ventana operativa 09:15–17:45**, distinta de la sesión (09:00–17:30).
+      Pedida explícitamente, y con motivo en las dos puntas: los 15 primeros minutos son la
+      resaca de la subasta de apertura —las barras más ruidosas del día, y las peores para
+      decidir sobre ellas— y los 15 últimos son cuando termina de llegar la barra del
+      cierre. **Si se confirma el retraso del feed europeo (R1), parar a las 17:30 perdería
+      el último cuarto de hora de cada sesión.**
+
+      Dos decisiones que costaron pensarlo:
+      - **No se ha tocado el horario del mercado.** Poner 17:45 como cierre habría hecho que
+        `is_session_open()` afirmara que Madrid está abierta a las 17:40, cuando lleva diez
+        minutos cerrada y la subasta se cruzó a las 17:35. Ese dato se guarda en
+        `cycles.market_open` y se enseña en el dashboard: falsearlo contamina el histórico
+        para siempre a cambio de ahorrar una función.
+      - **Se guarda como desplazamientos (`warmup_minutes` / `drain_minutes`), no como horas
+        absolutas.** Con horas fijas, el 24 de diciembre en Nueva York el sistema seguiría
+        esperando barras hasta las 16:00 de una sesión que cerró a las 13:00. Con
+        desplazamientos, la media sesión arrastra su ventana sola. Hay un test que lo fija.
+
+      **Estados Unidos se queda con 0 y 0**, o sea ventana = sesión. Nadie pidió cambiarlo,
+      y hacerlo de rebote alteraría el comportamiento de un experimento en marcha; el motivo
+      de la cola europea es además el retraso del feed en Europa, que allí no aplica.
+
+      Lo consumen el ingestor (`is_operating` / `next_operating_open`), `should_run` para
+      los intervalos intradía, `run.py check` y el spike de F2.1c. `should_run("1d")` no
+      cambia: sigue siendo "¿hay sesión hoy?".
 - [ ] **FE.12** El tope por sector de F6.5 sigue sin aplicarse, y en Europa es **peor**:
       `sp500.txt` al menos traía el reparto sectorial en un comentario, y el fichero
       europeo no trae ninguno. Mismo bloqueo que F6.5 (no hay dato de sector por símbolo);

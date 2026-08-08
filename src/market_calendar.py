@@ -46,6 +46,26 @@ from zoneinfo import ZoneInfo
 
 log = logging.getLogger(__name__)
 
+#: Fecha cualquiera para hacer aritmetica con horas sueltas. No se usa su valor.
+_ANY_DAY = date(2000, 1, 1)
+
+
+def _minutes_between(start: time, end: time) -> int:
+    return (end.hour * 60 + end.minute) - (start.hour * 60 + start.minute)
+
+
+def _shift(moment: time, minutes: int) -> time:
+    """Suma minutos a una hora del dia.
+
+    Se apoya en `datetime` en lugar de sumar a mano porque `time` no soporta
+    aritmetica. Una ventana que cruzara la medianoche daria la vuelta en
+    silencio; ninguno de los mercados del registro se acerca, y `_check_markets`
+    lo comprueba al importar el modulo.
+    """
+    if not minutes:
+        return moment
+    return (datetime.combine(_ANY_DAY, moment) + timedelta(minutes=minutes)).time()
+
 
 @dataclass(frozen=True)
 class Market:
@@ -70,9 +90,42 @@ class Market:
     #: Dias con cierre anticipado y su hora. Vacio si el mercado no los tiene.
     early_closes: Mapping[date, time]
     last_covered_year: int
+    #: Minutos DESPUES de la apertura en que el sistema empieza a trabajar. Los
+    #: primeros minutos de sesion son la subasta de apertura y los huecos: las
+    #: barras mas ruidosas del dia y las peores para decidir sobre ellas.
+    warmup_minutes: int = 0
+    #: Minutos DESPUES del cierre en que el sistema sigue trabajando. La ultima
+    #: barra de la sesion no llega en el instante del cierre, y si el feed viene
+    #: con retraso (R1) puede tardar bastante mas.
+    drain_minutes: int = 0
 
     def close_time_for(self, day: date) -> time:
         return self.early_closes.get(day, self.close_time)
+
+    # -- Ventana operativa -------------------------------------------------
+    #
+    # NO es la sesion, y la diferencia importa: `is_session_open` responde "esta
+    # la bolsa abierta" y tiene que seguir diciendo la verdad —lo consulta el
+    # dashboard y se guarda en `cycles.market_open`—, mientras que `is_operating`
+    # responde "trabaja el sistema ahora". Con la zona euro son 09:15-17:45
+    # frente a una sesion de 09:00-17:30.
+    #
+    # Se guardan como desplazamientos y no como horas absolutas para que una
+    # media sesion arrastre su ventana: con horas fijas, el 24 de diciembre en
+    # Nueva York el sistema seguiria esperando barras hasta las 16:00 de una
+    # sesion que cerro a las 13:00.
+
+    @property
+    def operating_open(self) -> time:
+        return _shift(self.open_time, self.warmup_minutes)
+
+    def operating_close_for(self, day: date) -> time:
+        return _shift(self.close_time_for(day), self.drain_minutes)
+
+    @property
+    def operating_close(self) -> time:
+        """Cierre de la ventana en un dia normal, para enseñarlo."""
+        return _shift(self.close_time, self.drain_minutes)
 
     def owns_symbol(self, symbol: str) -> bool:
         """True si el simbolo pertenece a este mercado, por su sufijo.
@@ -95,9 +148,18 @@ class Market:
     @property
     def session_minutes(self) -> int:
         """Minutos de sesion regular. Lo usa el ingestor para dimensionar."""
-        open_min = self.open_time.hour * 60 + self.open_time.minute
-        close_min = self.close_time.hour * 60 + self.close_time.minute
-        return close_min - open_min
+        return _minutes_between(self.open_time, self.close_time)
+
+    @property
+    def operating_minutes(self) -> int:
+        """Minutos de ventana operativa en un dia normal.
+
+        Coincide con `session_minutes` cuando calentamiento y cola son iguales,
+        que es el caso de los dos mercados de hoy. Se calcula igualmente porque
+        depender de esa coincidencia haria que cambiar uno de los dos numeros
+        rompiera algo lejos y en silencio.
+        """
+        return _minutes_between(self.operating_open, self.operating_close)
 
 
 # ----------------------------------------------------------------------
@@ -148,6 +210,13 @@ US = Market(
     holidays=_US_HOLIDAYS,
     early_closes=_US_EARLY_CLOSES,
     last_covered_year=2027,
+    # Sin calentamiento ni cola: la ventana operativa coincide con la sesion.
+    # Es a proposito —nadie ha pedido cambiar el comportamiento americano, y
+    # hacerlo de rebote alteraria un experimento en marcha—. El motivo de la
+    # cola europea, ademas, es el retraso del feed de Yahoo en Europa (R1), que
+    # aqui no aplica.
+    warmup_minutes=0,
+    drain_minutes=0,
 )
 
 
@@ -215,6 +284,15 @@ EU = Market(
     holidays=_EU_HOLIDAYS,
     early_closes=_EU_EARLY_CLOSES,
     last_covered_year=2027,
+    # Ventana operativa 09:15-17:45, pedida explicitamente.
+    #   * Los 15 primeros minutos se dejan pasar: son la resaca de la subasta de
+    #     apertura y los huecos de la noche, las barras mas ruidosas del dia.
+    #   * Los 15 ultimos se ganan: la subasta de cierre se cruza sobre las 17:35
+    #     y la barra de las 17:29 no aparece en el instante del cierre. Si se
+    #     confirma el retraso del feed europeo (R1 / F2.1c), parar a las 17:30
+    #     perderia el ultimo cuarto de hora de CADA sesion.
+    warmup_minutes=15,
+    drain_minutes=15,
 )
 
 
@@ -224,6 +302,40 @@ EU = Market(
 
 MARKETS: Mapping[str, Market] = MappingProxyType({US.code: US, EU.code: EU})
 DEFAULT_MARKET = US.code
+
+
+def _check_markets(markets=None) -> None:
+    """Invariantes del registro, comprobadas al importar.
+
+    Son errores que se cometen editando la tabla a mano y que despues no dan
+    sintoma: una ventana operativa vacia o que cruza la medianoche no revienta,
+    solo hace que el sistema trabaje —o deje de hacerlo— en horas que nadie
+    eligio.
+
+    Acepta una lista para poder probarla sobre un mercado inventado: `MARKETS`
+    es de solo lectura a proposito y no se deja parchear.
+    """
+    for mkt in (MARKETS.values() if markets is None else markets):
+        if mkt.open_time >= mkt.close_time:
+            raise ValueError(f"{mkt.code}: la sesion cierra antes de abrir.")
+        if mkt.warmup_minutes < 0 or mkt.drain_minutes < 0:
+            raise ValueError(f"{mkt.code}: los desplazamientos van hacia adelante.")
+        if mkt.operating_open >= mkt.operating_close:
+            raise ValueError(
+                f"{mkt.code}: la ventana operativa "
+                f"({mkt.operating_open:%H:%M}-{mkt.operating_close:%H:%M}) esta "
+                "vacia o cruza la medianoche."
+            )
+        # El calentamiento no puede comerse la sesion entera, ni en media sesion.
+        for day, early in mkt.early_closes.items():
+            if _shift(early, mkt.drain_minutes) <= mkt.operating_open:
+                raise ValueError(
+                    f"{mkt.code}: el {day} cierra a las {early:%H:%M} y la ventana "
+                    "operativa quedaria vacia."
+                )
+
+
+_check_markets()
 
 
 class UnknownMarket(ValueError):
@@ -314,6 +426,59 @@ def is_session_open(
     return mkt.open_time <= local.time() < mkt.close_time_for(local.date())
 
 
+def is_operating(
+    moment: datetime | None = None, *, market: str | Market | None = None
+) -> bool:
+    """True si el sistema debe estar trabajando en ese instante.
+
+    Distinta de `is_session_open` a proposito: aquella dice si la bolsa esta
+    abierta —dato de mercado, que se guarda en el historico y se enseña en el
+    dashboard— y esta dice si nos toca capturar precios y analizar. Con la zona
+    euro, la sesion es 09:00-17:30 y la ventana 09:15-17:45.
+    """
+    mkt = get_market(market)
+    local = _localize(moment, mkt)
+    if not is_trading_day(local.date(), market=mkt):
+        return False
+    return mkt.operating_open <= local.time() < mkt.operating_close_for(local.date())
+
+
+def next_operating_open(
+    moment: datetime | None = None, *, market: str | Market | None = None
+) -> datetime:
+    """Proximo arranque de la ventana operativa.
+
+    Es lo que el ingestor usa para dormir. Con `next_session_open` se despertaria
+    15 minutos antes de tener nada que hacer y se pasaria ese rato pidiendo
+    barras de la subasta.
+    """
+    mkt = get_market(market)
+    local = _localize(moment, mkt)
+    day = local.date()
+    if is_trading_day(day, market=mkt) and local.time() < mkt.operating_open:
+        return datetime.combine(day, mkt.operating_open, tzinfo=mkt.tz)
+    for _ in range(1, 12):
+        day += timedelta(days=1)
+        if is_trading_day(day, market=mkt):
+            return datetime.combine(day, mkt.operating_open, tzinfo=mkt.tz)
+    raise RuntimeError(
+        f"No se encontro ninguna sesion de {mkt.code} en los proximos 12 dias."
+    )
+
+
+def operating_bounds(
+    day: date, *, market: str | Market | None = None
+) -> tuple[datetime, datetime] | None:
+    """Inicio y fin de la ventana operativa de ese dia, o None si no hay sesion."""
+    mkt = get_market(market)
+    if not is_trading_day(day, market=mkt):
+        return None
+    return (
+        datetime.combine(day, mkt.operating_open, tzinfo=mkt.tz),
+        datetime.combine(day, mkt.operating_close_for(day), tzinfo=mkt.tz),
+    )
+
+
 def session_bounds(
     day: date, *, market: str | Market | None = None
 ) -> tuple[datetime, datetime] | None:
@@ -383,6 +548,10 @@ def should_run(
         ciclo anterior.
       * Con barras horarias hace falta la sesion viva: una barra nueva cada hora
         es justamente lo que se quiere aprovechar, y fuera de sesion no llegan.
+
+    "Sesion viva" significa aqui **ventana operativa**, no sesion de mercado: en
+    los 15 primeros minutos europeos no se decide a proposito, y en los 15
+    ultimos si, porque es cuando terminan de llegar las barras del cierre.
     """
     mkt = get_market(market)
     local = _localize(moment, mkt)
@@ -394,9 +563,12 @@ def should_run(
         # Dia de mercado: hay barra nueva, este abierto o ya cerrado.
         return True, f"dia de mercado ({local:%a %d %b}), {describe(local, market=mkt)}"
 
-    if is_session_open(local, market=mkt):
+    if is_operating(local, market=mkt):
         return True, describe(local, market=mkt)
-    return False, f"barras de {interval} necesitan sesion viva: {describe(local, market=mkt)}"
+    return (
+        False,
+        f"barras de {interval} necesitan sesion viva: {describe(local, market=mkt)}",
+    )
 
 
 def describe(
@@ -410,10 +582,26 @@ def describe(
         _, close = session_bounds(local.date(), market=mkt)
         remaining = (close - local).total_seconds() / 60
         early = " (media sesion)" if local.date() in mkt.early_closes else ""
+        espera = ""
+        if not is_operating(local, market=mkt):
+            # Sesion abierta pero todavia en el calentamiento. Sin esta frase, el
+            # log diria "mercado abierto" mientras el ciclo se salta a si mismo.
+            espera = f", ventana operativa desde las {mkt.operating_open:%H:%M}"
         return (
             f"mercado abierto{early}, cierra en {remaining:.0f} min "
-            f"({local:%H:%M} {zone})"
+            f"({local:%H:%M} {zone}){espera}"
         )
+
+    if is_operating(local, market=mkt):
+        # Cerrado pero dentro de la cola: es cuando llegan las ultimas barras.
+        _, fin = operating_bounds(local.date(), market=mkt)
+        restante = (fin - local).total_seconds() / 60
+        return (
+            f"mercado cerrado ({local:%H:%M} {zone}), ventana operativa abierta "
+            f"{restante:.0f} min mas (hasta las "
+            f"{mkt.operating_close_for(local.date()):%H:%M})"
+        )
+
     upcoming = next_session_open(local, market=mkt)
     hours = (upcoming - local).total_seconds() / 3600
     return (
