@@ -1,7 +1,7 @@
 """Configuracion de la API y dependencias que comparten los endpoints.
 
 La regla que gobierna este modulo: **cada peticion abre y cierra su propia
-conexion**. Es el mismo criterio que ya seguia `web/server.py`, y por el mismo
+conexion**. Es el mismo criterio que ya seguia el dashboard viejo, y por el mismo
 motivo: es un servidor de un solo usuario contra un fichero local, abrirlo cuesta
 menos de un milisegundo y asi no se sirven datos rancios mientras el ciclo o el
 ingestor escriben en paralelo. Una conexion viva de larga duracion tendria que

@@ -33,8 +33,8 @@ x-app: &app
 
 services:
   # ---------------------------------------------------------------------------
-  # API + frontend (F7.4). Sustituye al servicio `dashboard`, que servia el HTML
-  # de 1.500 lineas de web/.
+  # API + frontend (F7.4). Sustituyo al servicio `dashboard`, que servia el HTML
+  # de 1.500 lineas del panel viejo, retirado en F4.11.
   #
   # Escribe, pero solo en las tablas de configuracion: la conexion pasa por el
   # autorizador de SQLite (F3.3), asi que un endpoint no puede tocar el

@@ -331,8 +331,8 @@ class Settings:
                     "  Crealo copiando la plantilla y rellena la clave del modelo:\n"
                     "      copy .env.example .env\n"
                     "  Solo hace falta NVIDIA_API_KEY.\n"
-                    "  Para ver el dashboard sin ninguna clave:\n"
-                    "      python tools/seed_demo.py  &&  python run.py serve"
+                    "  Para ver la interfaz sin ninguna clave:\n"
+                    "      python tools/seed_demo.py  &&  python run.py api"
                 )
 
         screener = ScreenerSettings.from_env()

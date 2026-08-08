@@ -5,7 +5,7 @@
     python run.py status      Muestra el estado de la cuenta y las posiciones.
     python run.py cycle       Ejecuta un ciclo completo de analisis y operativa.
     python run.py report      Analitica del historico: P&L, calibracion, rechazos.
-    python run.py serve       Dashboard web en http://127.0.0.1:8000
+    python run.py api         API REST + interfaz en http://127.0.0.1:8000
     python run.py profiles    Lista los perfiles de experimento.
 
 Para empezar un experimento nuevo en una bolsa concreta:
@@ -515,7 +515,7 @@ def command_report(dash: DashboardSettings) -> int:
 
     print()
     print(f"  Base de datos: {dash.db_path}")
-    print("  Dashboard web: python run.py serve")
+    print("  Interfaz web: python run.py api")
     print(f"  Consultas libres: sqlite3 {dash.db_path}")
     return 0
 
@@ -560,23 +560,12 @@ def command_cycle(settings: Settings) -> int:
 
 # ----------------------------------------------------------------------
 
-def command_serve(dash: DashboardSettings, *, host: str, port: int) -> int:
-    from web.server import serve
-
-    return serve(
-        db_path=dash.db_path,
-        portfolio_name=dash.portfolio_name,
-        host=host,
-        port=port,
-    )
-
-
 def command_api(dash: DashboardSettings, *, host: str, port: int) -> int:
-    """La API de F3. Convive con `serve` hasta que F4 tenga frontend.
+    """La API de F3, que ademas sirve el build de React de `app/dist` (F3.7).
 
-    Son dos servidores del mismo puerto por defecto, asi que no se levantan a la
-    vez; `serve` sigue existiendo porque `web/index.html` es hoy la unica
-    interfaz que hay, y se retira en F8.2 cuando la de React la sustituya.
+    Es la unica interfaz desde F4.11: el `serve` que levantaba el dashboard de
+    `web/index.html` se retiro con el, para que no quedaran dos pantallas
+    disputandose el 8000 y contando el mismo experimento de dos maneras.
     """
     from api.main import serve as serve_api
 
@@ -737,11 +726,11 @@ def main(argv: list[str] | None = None) -> int:
         "command",
         nargs="?",
         default="check",
-        choices=["check", "status", "cycle", "report", "serve", "api",
+        choices=["check", "status", "cycle", "report", "api",
                  "profiles", "new-profile", "import-profile", "activate"],
         help="check: diagnostico (por defecto). status: estado de la cuenta. "
              "cycle: ejecutar un ciclo. report: analitica en consola. "
-             "serve: dashboard web (el antiguo). api: API REST + frontend. "
+             "api: API REST + interfaz web. "
              "profiles: listar experimentos. "
              "new-profile: crear un perfil para un mercado. "
              "import-profile: crear un perfil a partir del .env. "
@@ -778,23 +767,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--env-file", default=None, help="Ruta a un .env alternativo.")
     parser.add_argument(
-        "--port", type=int, default=8000, help="Puerto del dashboard (solo serve)."
+        "--port", type=int, default=8000, help="Puerto de la API (solo api)."
     )
     parser.add_argument(
         "--host", default="127.0.0.1",
-        help="Interfaz del dashboard (solo serve). Por defecto solo local.",
+        help="Interfaz de escucha de la API (solo api). Por defecto solo local.",
     )
     args = parser.parse_args(argv)
 
-    # `report`, `serve` y `api` solo leen la base -o escriben configuracion-: no
-    # se les exigen credenciales, para poder revisar la operativa con el .env a
-    # medio rellenar.
-    if args.command in {"report", "serve", "api"}:
+    # `report` y `api` solo leen la base -o escriben configuracion-: no se les
+    # exigen credenciales, para poder revisar la operativa con el .env a medio
+    # rellenar.
+    if args.command in {"report", "api"}:
         dash = DashboardSettings.load(env_file=args.env_file)
         setup_logging((os.getenv("LOG_LEVEL") or "INFO").strip().upper())
         try:
-            if args.command == "serve":
-                return command_serve(dash, host=args.host, port=args.port)
             if args.command == "api":
                 return command_api(dash, host=args.host, port=args.port)
             return command_report(dash)

@@ -1,9 +1,10 @@
 """Lanzar un ciclo desde la interfaz, como subproceso.
 
-Es el patron que ya estaba resuelto en `web/server.py` y que F3.4 manda
-reaprovechar. Se copia en vez de importarse porque `web/server.py` se borra en
-F8.2: una dependencia apuntando a un modulo con fecha de caducidad se convierte
-en un fallo el dia que se cumpla.
+Es el patron que ya estaba resuelto en el `web/server.py` del dashboard viejo, y
+que F3.4 mandaba reaprovechar. Se copio en vez de importarse porque aquel modulo
+tenia fecha de caducidad: **se borro en F4.11**, y una dependencia apuntando a el
+habria sido un fallo esperando al dia señalado. Copiarlo costo un fichero;
+importarlo habria costado el arranque de la API.
 
 **Subproceso y no un hilo con `TradingCycle` dentro.** Tres razones, y ninguna es
 teorica:

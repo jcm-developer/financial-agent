@@ -306,9 +306,8 @@ desarrollo habla con la misma base que la de producción. Dos detalles que cuest
 un rato averiguar solos:
 
 - **Abre `localhost`, no `127.0.0.1`**: Vite escucha en `::1`.
-- Si mueves la API de puerto —por ejemplo porque el dashboard viejo ocupa el
-  8000— dile a dónde apuntar:
-  `$env:VITE_API_TARGET="http://127.0.0.1:8001"`.
+- Si mueves la API de puerto —el 8000 es un puerto disputado— dile a dónde
+  apuntar: `$env:VITE_API_TARGET="http://127.0.0.1:8001"`.
 
 Para tocar el backend basta con `docker compose up -d --build api`. Y si cambias
 `api/models.py`, regenera los tipos del frontend o el build fallará al detectar
@@ -419,11 +418,13 @@ la noche y leer el análisis por la mañana.
 | `python run.py cycle --dry-run` | Igual pero sin ejecutar órdenes | solo la del modelo |
 | `python run.py status` | Estado de la cuenta y posiciones vivas | no |
 | `python run.py report` | Analítica del histórico en consola | **no** |
-| `python run.py serve` | Dashboard web | **no** |
+| `python run.py api` | API REST + la interfaz web | **no** |
 
-`report` y `serve` solo leen la base de datos, y la abren en modo solo lectura.
-Por eso no piden claves: puedes revisar la operativa desde cualquier sitio sin
-exponer credenciales, y un `.env` a medio rellenar no te impide ver los datos.
+`report` y `api` no tocan el histórico: `report` abre la base en modo solo
+lectura y la API escribe únicamente en las tablas de configuración, porque su
+conexión pasa por el autorizador de SQLite. Por eso no piden claves: puedes
+revisar la operativa sin exponer credenciales, y un `.env` a medio rellenar no te
+impide ver los datos.
 
 ---
 
@@ -694,7 +695,7 @@ order by p.realized_pnl asc limit 10;
 ```
 Dockerfile              Imagen multietapa: Node compila React, Python lo sirve
 docker-compose.yml      api + ingestor + scheduler + comandos puntuales
-run.py                  CLI: check / cycle / status / report / api / serve
+run.py                  CLI: check / cycle / status / report / api / profiles
                         + profiles / new-profile / import-profile / activate
 schema.sql              Esquema SQLite; se aplica solo en cada arranque
 src/
@@ -717,7 +718,7 @@ src/
   db.py                 Persistencia y reconciliación
   dashboard.py          Ensamblado de datos para report
   cycle.py              Orquestación del ciclo
-api/                    FastAPI: 24 endpoints y el SSE de precios
+api/                    FastAPI: 22 rutas, incluido el SSE de precios
   guard.py              Conexión con autorizador: el histórico es de solo lectura
   queries.py            Lecturas; models.py, los tipos que salen por la red
   runner.py             Lanza `run.py cycle` como subproceso
@@ -726,7 +727,6 @@ app/                    React + Vite + Tailwind (se compila en la imagen)
   src/api/              Cliente, hooks de TanStack Query y el hook de SSE
   src/api/types.ts      Tipos generados del OpenAPI; no se editan a mano
   src/paginas/          Resumen, Posiciones, Decisiones, Órdenes, Riesgo, Ciclos
-web/                    El dashboard viejo, hasta que se retire (F8.2)
 tools/
   fetch_universe.py     Descarga la lista de componentes del S&P 500
   ingestor.py           Bucle de ingesta (proceso del contenedor)
@@ -737,7 +737,7 @@ tools/
 universe/
   sp500.txt             503 símbolos, en notación de Yahoo
   eurostoxx50_ibex35.txt  89 símbolos de la zona euro, verificados
-tests/                  606 tests, sin red ni credenciales
+tests/                  607 tests, sin red ni credenciales
   helpers.py            Dobles del LLM y de los datos, compartidos
                         (incluye un ciclo completo de integración)
 ```

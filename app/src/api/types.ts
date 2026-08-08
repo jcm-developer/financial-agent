@@ -547,8 +547,6 @@ export interface ApiOperations {
   "POST /api/cycles/stop": ActionResult;
   /** Cycle Detail */
   "GET /api/cycles/{cycle_id}": CycleDetail;
-  /** Dashboard */
-  "GET /api/dashboard": Record<string, unknown>;
   /** Decisions */
   "GET /api/decisions": Page_DecisionRow;
   /** Ingest Status */

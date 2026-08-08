@@ -30,8 +30,8 @@ en Analítica. Sin Framer Motion, sin fuentes externas.
 
 Los colores dependientes del tema son variables CSS definidas en
 [app/src/index.css](app/src/index.css): `:root` es el tema **claro** y `.dark` el
-**oscuro**, que es el de partida. La paleta viene del dashboard viejo valor por
-valor, con dos correcciones de contraste hechas en F4.9.
+**oscuro**, que es el de partida. La paleta se heredó del dashboard viejo valor
+por valor, con dos correcciones de contraste hechas en F4.9.
 
 | Token | Claro | Oscuro | Papel |
 |---|---|---|---|
@@ -542,6 +542,8 @@ Escrito para que no se reintroduzca por descuido:
 | Esqueletos, barridos, orbes de carga | Las consultas van contra SQLite local: no hay espera que amortice el placeholder |
 | Animaciones de entrada | Retrasan la lectura del dato, que es lo único que se viene a hacer |
 
-El dashboard viejo, [web/index.html](web/index.html), es el **origen** de esta
-paleta pero no lo gobierna este documento: es un fichero de 1.510 líneas que
-`run.py serve` todavía sirve y que se borra cuando el panel nuevo lo cubra.
+El dashboard viejo —`web/index.html`, 1.510 líneas— fue el **origen** de esta
+paleta y **ya no existe**: se borró en F4.11, junto con el `run.py serve` que lo
+servía. Este documento es desde entonces la única definición del sistema visual,
+que es justo lo que hacía falta: mientras hubo dos pantallas, «lo que hace el
+viejo» era una autoridad tácita que ningún fichero recogía.

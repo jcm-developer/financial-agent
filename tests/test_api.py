@@ -270,14 +270,14 @@ def test_los_endpoints_de_escritura_no_mueven_el_historico(client, db_path, prof
     assert history_counts(db_path) == antes
 
 
-def test_el_dashboard_se_sirve_de_una_conexion_de_solo_lectura(client, db_path, profile):
+def test_el_historico_se_sirve_de_una_conexion_de_solo_lectura(client, db_path, profile):
     """La garantia que ya existia antes de F3 y que no se ha perdido.
 
     Los endpoints de lectura siguen abriendo SQLite en modo `ro`: por ahi no se
     escribe aunque el codigo lo intente.
     """
     seed_history(db_path, profile["id"])
-    assert client.get(f"/api/dashboard?profile={profile['id']}").status_code == 200
+    assert client.get(f"/api/positions?profile={profile['id']}").status_code == 200
 
     with Database(path=db_path, read_only=True) as db:
         with pytest.raises(Exception):
@@ -311,13 +311,19 @@ def test_el_suelo_de_liquidez_lo_pone_el_mercado(profile):
     assert profile["settings"]["screener_min_dollar_volume"] == 5_000_000
 
 
-def test_dashboard_lleva_perfil_y_mercado(client, db_path, profile):
-    seed_history(db_path, profile["id"])
-    data = client.get(f"/api/dashboard?profile=europa-01").json()
+def test_el_endpoint_legado_del_dashboard_ya_no_existe(client, db_path, profile):
+    """F4.11: `/api/dashboard` se retiro con el dashboard viejo al que servia.
 
-    assert data["profile"]["name"] == "europa-01"
-    assert data["market"]["currency"] == "EUR"
-    assert data["summary"]["cycles"] == 1
+    Se comprueba que responde **404 en JSON** y no el `index.html` del SPA. Es la
+    excepcion de F3.7 puesta a prueba justo donde importa: si la vuelta a
+    `index.html` se tragara esta ruta, el endpoint parecerian estar vivo con un
+    200 y el sintoma seria un `JSON.parse` fallando en el navegador.
+    """
+    seed_history(db_path, profile["id"])
+    respuesta = client.get("/api/dashboard?profile=europa-01")
+
+    assert respuesta.status_code == 404
+    assert respuesta.headers["content-type"].startswith("application/json")
 
 
 def test_posiciones_se_valoran_con_la_cotizacion_en_vivo(client, db_path, profile):

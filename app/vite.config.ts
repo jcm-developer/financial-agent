@@ -30,15 +30,14 @@ export default defineConfig({
     // Nada de `open: true`: el contenedor no tiene navegador.
     proxy: {
       "/api": {
-        // El 8000 es el default de `python run.py api`, pero ahi tambien escucha
-        // el dashboard viejo (`run.py serve`), y los dos no caben. Mientras F8.2
-        // no lo retire hay que poder mover uno de sitio:
+        // El 8000 es el default de `python run.py api` y el puerto que publica
+        // el contenedor, asi que `docker compose up -d api ingestor` y
+        // `npm run dev` se entienden sin configurar nada. Se deja movible porque
+        // el 8000 es un puerto disputado —lo ocupa cualquier cosa— y descubrirlo
+        // sin salida cuesta un rato:
         //
         //   python run.py api --port 8001
         //   VITE_API_TARGET=http://127.0.0.1:8001 npm run dev
-        //
-        // Y hace falta de verdad: el experimento de dos semanas se vigila con el
-        // dashboard viejo mientras esto se construye.
         target: process.env.VITE_API_TARGET ?? "http://127.0.0.1:8000",
         changeOrigin: true,
       },

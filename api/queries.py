@@ -628,8 +628,8 @@ def analytics(db: Database, portfolio_id: str) -> dict[str, Any]:
 
     Tres de ellas salen de vistas que ya existen en `schema.sql`
     (`v_conviction_calibration`, `v_risk_rejections`, `v_performance_by_symbol`),
-    asi que la consola y la web no pueden acabar contando cosas distintas: es la
-    misma regla que llevo a reutilizar `build_dashboard` en `/api/dashboard`.
+    asi que la consola y la web no pueden acabar contando cosas distintas: cada
+    numero tiene una sola definicion, y esta en el esquema.
     """
     curva = db.query(
         "select as_of, equity, cash, positions_value, open_positions, day_pnl_pct "

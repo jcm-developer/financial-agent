@@ -185,11 +185,12 @@ resto junto.
   [app/src/api/keys.ts](app/src/api/keys.ts).
 - **El evento `ingest` se funde, no reemplaza**: manda 5 campos y el endpoint devuelve 13.
 - **El perfil activo vive en la URL** (`/p/europa-01/posiciones`), por su nombre y no por id.
-- Las pantallas se arman con los endpoints tipados, no con `/api/dashboard`, que es legado y se
-  borra con `web/` en F8.2.
+- **Las pantallas se arman con los endpoints tipados.** Todos los endpoints tienen modelo
+  Pydantic desde F4.11: el único que no lo tenía, `/api/dashboard`, se retiró con el dashboard
+  viejo. Un cambio del backend rompe el build del frontend, no la pantalla en caliente.
 
-`web/index.html` (1.510 líneas) es el dashboard viejo, todavía servido por `run.py serve`. Se
-retira en F4.11/F8.2; no se le añaden funciones.
+`web/` ya no existe: el dashboard de 1.510 líneas y su `run.py serve` se borraron en F4.11
+(F8.2). La interfaz es `app/`, servida por `run.py api`.
 
 ---
 

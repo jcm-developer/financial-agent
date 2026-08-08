@@ -1,23 +1,20 @@
-"""Historico de operativa: dashboard, posiciones, decisiones, ordenes, ciclos.
+"""Historico de operativa: posiciones, decisiones, ordenes, ciclos, analitica.
 
 Todo de solo lectura, y no por convencion: estos endpoints reciben `ReadDb`, que
 es SQLite abierto en modo `ro`. Aunque alguien escribiera aqui un UPDATE por
 error, el motor lo rechazaria.
 
-`/api/dashboard` es la excepcion de forma: devuelve el payload de
-`src/dashboard.py` tal cual, el mismo que consume `run.py report`. Se sirve
-entero y sin modelo Pydantic a proposito —ver la cabecera de `models.py`—:
-volver a describir aqui un ensamblado de doce consultas seria tener dos
-definiciones de lo mismo condenadas a discrepar.
+Aqui vivia `/api/dashboard`, que devolvia el ensamblado de doce consultas de
+`src/dashboard.py` entero y sin modelo Pydantic. Se retiro en F4.11 con el
+dashboard viejo al que servia: el frontend nunca llego a usarlo —se arma con los
+endpoints tipados de abajo, que era la decision de F4— y dejarlo habria sido
+mantener una segunda forma de contar el mismo experimento, sin tipos y sin nadie
+que la ejercitara. `build_dashboard` sigue donde estaba: lo usa `run.py report`.
 """
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, HTTPException, Query, status
-
-from src.dashboard import build_dashboard
 
 from .. import queries
 from ..deps import ProfileQuery, ReadDb, resolve_portfolio
@@ -35,36 +32,14 @@ from ..models import (
 router = APIRouter(prefix="/api", tags=["operativa"])
 
 
-@router.get("/dashboard")
-def dashboard(db: ReadDb, profile: ProfileQuery) -> dict[str, Any]:
-    """El payload completo de una cartera, en un solo viaje.
-
-    Reutiliza `build_dashboard`, el mismo ensamblado que la consola: asi la web
-    y `run.py report` no pueden llegar a contar cosas distintas del mismo
-    experimento.
-    """
-    profile_row, _ = resolve_portfolio(db, profile)
-    payload = build_dashboard(db, portfolio_name=profile_row["name"])
-    payload["profile"] = {
-        "id": profile_row["id"],
-        "name": profile_row["name"],
-        "status": profile_row["status"],
-    }
-    # La divisa acompaña siempre a las cifras: un presupuesto europeo escrito
-    # con '$' invita a compararlo con el de otro perfil como si fuera la misma
-    # unidad, y con dos experimentos en paralelo eso pasa solo (FE.8).
-    settings = db.get_settings(profile_row["id"])
-    payload["market"] = queries.market_info(settings["market"])
-    return payload
-
-
 @router.get("/analytics", response_model=Analytics)
 def analytics(db: ReadDb, profile: ProfileQuery):
     """Las cinco series de las graficas (F4.6).
 
     Tres salen de vistas que ya existen en `schema.sql`, asi que la consola y la
-    web no pueden acabar contando cosas distintas del mismo experimento: es la
-    misma regla por la que `/api/dashboard` reutiliza `build_dashboard`.
+    web no pueden acabar contando cosas distintas del mismo experimento. Es la
+    regla de la que salio tambien `/api/dashboard`: una sola definicion de cada
+    numero, en el sitio donde ya estaba.
     """
     _, portfolio_id = resolve_portfolio(db, profile)
     return queries.analytics(db, portfolio_id)

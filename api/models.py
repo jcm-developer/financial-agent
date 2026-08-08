@@ -6,19 +6,18 @@ esten aqui y no repartidos por los endpoints: si el frontend repitiera las
 definiciones a mano, la primera columna que cambiara dejaria la interfaz
 mintiendo sin que nada fallara.
 
-Dos decisiones que conviene entender:
+La decision que conviene entender: **`SettingsUpdate` enumera las columnas de
+`agent_settings` una a una**, con sus rangos. Es largo y es a proposito: es el
+formulario de F6.8, y un `dict[str, Any]` daria un `Record<string, unknown>` en
+TypeScript, o sea ninguna ayuda justo en la pantalla con cuarenta campos. Un
+test compara esta lista con las columnas reales de la tabla, asi que no puede
+quedarse atras.
 
-  * **`SettingsUpdate` enumera las columnas de `agent_settings` una a una**, con
-    sus rangos. Es largo y es a proposito: es el formulario de F6.8, y un
-    `dict[str, Any]` daria un `Record<string, unknown>` en TypeScript, o sea
-    ninguna ayuda justo en la pantalla con cuarenta campos. Un test compara esta
-    lista con las columnas reales de la tabla, asi que no puede quedarse atras.
-
-  * **`/api/dashboard` NO tiene modelo.** Su cuerpo lo arma `build_dashboard`
-    (src/dashboard.py), que es un ensamblado de doce consultas y ya es la
-    definicion de esa forma. Escribirla otra vez aqui seria tener dos y
-    descubrir que discrepan en produccion. Sale tipado como objeto libre y el
-    generador de TypeScript lo marca como tal.
+Aqui habia una segunda decision, y F4.11 la ha dejado sin objeto: `/api/dashboard`
+era el unico endpoint sin modelo Pydantic —devolvia el ensamblado de doce
+consultas de `build_dashboard` tal cual— y se retiro con `web/`. Desde entonces
+**todos los endpoints tienen modelo**, que es lo que hace que un cambio del
+backend rompa el build del frontend en vez de romper la pantalla en caliente.
 """
 
 from __future__ import annotations

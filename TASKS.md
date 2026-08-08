@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-08 (noche: F3 completa — API FastAPI; decisiones 1–3 resueltas)
+Última actualización: 2026-08-09 (F4 cerrada: F4.11 retira `web/` y `/api/dashboard`; F8.2 con ella)
 
 ---
 
@@ -617,7 +617,7 @@ esperan a que F4 tenga frontend que servir.
 **Orden de ataque (decidido 2026-08-08).** Seis tramos, y el primero va solo porque es el que
 falla: **A** andamiaje y toolchain (F4.1, F4.2, F4.10) ✅ → **B** capa de datos (F4.4, F4.5,
 F4.12) ✅ → **C** layout y selector de perfil (F4.3, F5.5) ✅ → **D** pantallas (F4.7, F4.8) ✅
-→ **E** gráficas (F4.6) ✅ → **F** cierre (F4.9, F4.11).
+→ **E** gráficas (F4.6) ✅ → **F** cierre (F4.9, F4.11) ✅. **F4 cerrada (2026-08-09).**
 
 El tramo A termina en una página que pinta `/api/markets` con los tipos generados. Es
 deliberadamente un cartel de "estoy vivo" y no una pantalla: demuestra las cuatro cosas que
@@ -636,7 +636,7 @@ diez sesiones en silencio.
   `Record<string, unknown>`: castear campo a campo y ningún cambio del backend rompería el
   build, que es exactamente la garantía por la que se generaron los 32 tipos. Cuesta 5-6
   peticiones en paralelo en lugar de una, y TanStack Query las cachea. **`/api/dashboard`
-  pasa a legado y se borra con `web/` en F8.2.**
+  pasó a legado y se borró con `web/` en F4.11**, sin haberse usado nunca desde el frontend.
 - **El SSE escribe en la caché de TanStack Query** (`setQueryData`), no en un estado paralelo
   de React. Con dos fuentes para el mismo precio, la pantalla acaba enseñando dos números
   distintos y no hay un sitio donde arreglarlo.
@@ -881,7 +881,49 @@ diez sesiones en silencio.
 
       Detalle de Windows que cuesta un rato: **Vite escucha en `localhost` (`::1`), no en
       `127.0.0.1`**, así que un `curl` a la IP no responde aunque el servidor esté arriba.
-- [ ] **F4.11** Retirar `web/index.html` y `web/server.py`.
+- [x] **F4.11** **`web/` borrado, y con él `run.py serve`.** Se cierra a la vez que F8.2: son
+      la misma tarea escrita en dos fases, y separarlas solo habría dejado una de las dos
+      esperando a la otra.
+
+      Se ha hecho ahora y no el lunes porque la condición ya se cumplía —F3 verde y F4 con
+      todas sus pantallas— y **la razón para conservarlo se ha invertido**: el plan de las dos
+      semanas decía vigilar el experimento con el dashboard viejo mientras se construía el
+      nuevo, pero el experimento arranca mañana y el nuevo ya cubre las seis pantallas más
+      Ingesta, que es justo lo que el viejo **no** tenía. Entrar en el experimento con dos
+      paneles vivos era entrar con dos formas de contar lo mismo disputándose el 8000.
+
+      Cuatro decisiones que costaron pensarlo:
+      - **`/api/dashboard` se va con él, como estaba escrito.** Era el único endpoint sin
+        modelo Pydantic (F3.6) y por tanto el único que llegaba al frontend como
+        `Record<string, unknown>`; el frontend nunca lo usó —las pantallas se arman con los
+        endpoints tipados, que era la decisión de la cabecera de F4—. Dejarlo habría sido
+        mantener una segunda definición del mismo experimento, sin tipos y sin nadie que la
+        ejercitara: la clase de código que sigue compilando mientras deja de ser verdad.
+        **Desde hoy todos los endpoints tienen modelo**, así que un cambio del backend rompe
+        el build del frontend en vez de romper la pantalla en caliente.
+      - **`src/dashboard.py` se queda.** `build_dashboard` lo usa `run.py report`, y sus 15
+        tests con él. Lo que sobraba era el endpoint, no el ensamblado.
+      - **El test que se borra se sustituye por su inverso.** Donde había un
+        `test_dashboard_lleva_perfil_y_mercado` ahora hay uno que comprueba que
+        `/api/dashboard` responde **404 en JSON** y no el `index.html` del SPA. Sin él, un
+        futuro cambio en la vuelta a `index.html` (F3.7) devolvería 200 con HTML a esa ruta y
+        el síntoma sería un `JSON.parse` fallando en el navegador. La garantía de solo lectura
+        que ese endpoint sostenía se ha movido a `/api/positions`, que es la misma conexión
+        `ro`.
+      - **Los comentarios que lo citaban se han puesto en pasado, no borrado.** `api/runner.py`
+        explica que copió el `CycleRunner` en vez de importarlo *porque* aquel módulo tenía
+        fecha de caducidad; borrar la frase al cumplirse la fecha dejaría la copia pareciendo
+        una duplicación gratuita. Lo mismo en `api/main.py`, `api/deps.py` y
+        `requirements.txt`: el registro de por qué la API es FastAPI y no `http.server` sigue
+        valiendo aunque el fichero al que sustituyó ya no esté.
+
+      Lo que también cae: la advertencia del puerto 8000 disputado en
+      [app/vite.config.ts](app/vite.config.ts) y en el README (§2.7). `VITE_API_TARGET` se
+      conserva —el 8000 lo ocupa cualquier cosa— pero ya no hay dos servidores nuestros
+      peleándose por él.
+
+      **607 tests en verde, typecheck limpio, 14 tests del frontend.** Tipos regenerados
+      (`app/src/api/types.ts`, 38 → sin la entrada de `/api/dashboard`).
 
 ### F5 — Pantalla de perfiles / experimentos
 
@@ -1112,7 +1154,7 @@ diez sesiones en silencio.
 ### F7 — Docker y puesta en marcha
 
 - [x] **F7.1** Estructura del repo tal como se planificó: `app/`, `api/`, `src/`, `tools/`,
-      `tests/`. Solo sobra `web/`, que se retira en F8.2.
+      `tests/`. `web/` ya no está: se borró en F4.11.
 - [x] **F7.2** [Dockerfile](Dockerfile) multietapa: etapa `node:22-slim` que compila React y
       etapa Python que copia `app/dist`. **Una imagen (507 MB), un puerto.**
 
@@ -1164,7 +1206,8 @@ diez sesiones en silencio.
       `backup/trading.db.pre-F6-20260808` (mismo criterio que F1.1: borrarla sería
       irreversible) y `docker compose down -v` ejecutado, volumen `trading-data` eliminado.
       Bórralos de `backup/` cuando quieras.
-- [ ] **F8.2** Borrar `web/index.html` y `web/server.py` cuando F3 y F4 estén verdes.
+- [x] **F8.2** Hecho en **F4.11**, donde está el registro. Eran la misma tarea vista desde F4
+      («cerrar el frontend») y desde F8 («limpiar»), y se cerraron juntas.
 - [ ] **F8.3** ⚠️ **A medias.** Las variables de estrategia ya **no las lee el ciclo** (F6.4)
       y [.env.example](.env.example) está partido en dos mitades rotuladas: infraestructura
       arriba, heredadas abajo. La mitad de abajo sigue ahí porque `run.py import-profile` la
@@ -1235,10 +1278,14 @@ FE se coló delante de F3 porque cambiaba el esquema (`agent_settings.market`) y
 reescribía la pregunta de F2.1c: medir la sesión americana ya no era lo que interesaba.
 Hacerlo después habría significado rehacer los endpoints de F3 y la medición del lunes.
 
-**Dónde estamos (2026-08-08, noche):** F1, F2 (salvo F2.1c), FE, F6 (salvo F6.8, F6.9 y
-F6.10) y **F3** cerradas. Lo siguiente es **F4**, y ya tiene contra qué programar: 24
-endpoints publicados en `/openapi.json` y sus 32 tipos de TypeScript en
-`app/src/api/types.ts`.
+**Dónde estamos (2026-08-09):** F1, F2 (salvo F2.1c), FE, F3, **F4** y F7 cerradas; F6 salvo
+F6.8 y F6.10. La interfaz nueva es la única que hay —`web/` se borró en F4.11— y corre en
+Docker sobre 22 rutas de la API, todas con modelo Pydantic.
+
+Lo siguiente, por este orden: **F2.1c** mañana en cuanto abra Madrid, que es lo único
+bloqueante y solo se puede medir en sesión; y luego **F5** (las pantallas de perfiles: alta,
+acciones y comparador) con **F6.8** (el formulario de los 41 parámetros), que son los dos
+huecos que la interfaz enseña hoy con un cartel.
 
 **Plan de las dos próximas semanas:**
 
@@ -1246,9 +1293,14 @@ endpoints publicados en `/openapi.json` y sus 32 tipos de TypeScript en
    como `failed` con el recuento de llamadas, no como una sesión tranquila.
 2. **Lunes 2026-08-10, 09:00 Madrid: F2.1c.** La medición del feed europeo, que decide entre
    `1d` con un ciclo y `1h` con ocho.
-3. **Lunes: arranca el experimento** con el dashboard viejo, un solo perfil europeo.
-4. **Los diez días siguientes: F4**, en los seis tramos de su cabecera. La API abre el
-   histórico en modo `ro`, así que desarrollar no puede tocar el experimento en marcha.
+3. **Lunes: arranca el experimento**, un solo perfil europeo. ⚠️ **Ya no con el dashboard
+   viejo:** F4 se cerró antes de tiempo, así que el experimento se vigila con la interfaz
+   nueva desde el primer día. Es lo que había que conseguir —y de paso la única que enseña la
+   salud del ingestor y la antigüedad de los precios, que son los dos números de estas dos
+   semanas— pero conviene saber que se estrena con datos de verdad y sin la de repuesto.
+4. **Los diez días siguientes: F5 y F6.8**, las dos pantallas que faltan. Las lecturas de la
+   API abren el histórico en modo `ro` y las escrituras solo alcanzan la configuración (F3.3),
+   así que desarrollar no puede tocar el experimento en marcha.
 
 ---
 

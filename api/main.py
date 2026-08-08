@@ -1,9 +1,10 @@
 """La aplicacion FastAPI: monta los routers y sirve el frontend.
 
-Sustituye a `web/server.py`, que era `http.server` de la biblioteca estandar sin
-dependencias a proposito. Con ~20 endpoints, escrituras y SSE esa decision dejo
-de compensar: enrutado a mano, validacion a mano y sin async (D5). Dentro de
-Docker las dependencias son gratis.
+Sustituyo al `http.server` de la biblioteca estandar con el que servia el
+dashboard viejo, sin dependencias a proposito. Con ~20 endpoints, escrituras y
+SSE esa decision dejo de compensar: enrutado a mano, validacion a mano y sin
+async (D5). Dentro de Docker las dependencias son gratis. Desde F4.11 esto es lo
+unico que sirve la interfaz.
 
 Cuatro cosas que decide este modulo:
 
@@ -12,8 +13,9 @@ Cuatro cosas que decide este modulo:
     hasta que alguien ejecutara un ciclo, y `docker compose up` tiene que
     levantar algo que funcione.
   * **El frontend se sirve desde `app/dist`** con vuelta a `index.html` para las
-    rutas del SPA (F3.7). Mientras F4 no exista, ese hueco se rellena con una
-    pagina que dice que falta, no con un 404 que parezca una averia.
+    rutas del SPA (F3.7). Si ese build falta —`npm run build` sin ejecutar—, el
+    hueco se rellena con una pagina que lo dice, no con un 404 que parezca una
+    averia. En Docker no puede faltar: lo compila la etapa 1 del Dockerfile.
   * **La vuelta a `index.html` no se traga los 404 de la API.** Cualquier ruta
     bajo `/api/` que no exista responde 404 en JSON. Sin esa excepcion, una
     errata en una URL de la interfaz devolveria el HTML de la aplicacion con un
