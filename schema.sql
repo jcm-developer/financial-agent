@@ -283,8 +283,9 @@ create table if not exists bar_cache_state (
 -- Estas tablas son el libro contable del broker, deliberadamente separado de
 -- `positions`, que es el registro de *por que* se abrio cada posicion. Podrian
 -- fusionarse, pero entonces la reconciliacion del ciclo compararia una tabla
--- consigo misma y dejaria de detectar nada. Manteniendolas aparte, el codigo del
--- ciclo es identico con broker simulado y con Alpaca.
+-- consigo misma y dejaria de detectar nada. Manteniendolas aparte, el ciclo
+-- reconcilia contra una fuente externa de verdad igual que lo haria con un
+-- broker real.
 -- ===========================================================================
 
 create table if not exists sim_accounts (
@@ -363,27 +364,37 @@ create table if not exists agent_settings (
     diversification        integer not null default 5
                            check (diversification between 1 and 10),
     horizon_days           integer not null default 10 check (horizon_days > 0),
+
+    -- Universo. `universe_file` vacio o NULL = no hay embudo: se analiza la
+    -- watchlist de `profile_universe` tal cual. Con fichero, el screener criba
+    -- ese universo y `profile_universe` deja de mandar.
+    universe_file          text,
     screener_mode          text not null default 'score'
                            check (screener_mode in ('score', 'random')),
     screener_top_n         integer not null default 20
                            check (screener_top_n between 1 and 200),
+    screener_min_dollar_volume real not null default 20000000,
+    screener_min_price     real not null default 5,
+    screener_max_volatility_pct real not null default 120,
+
     allow_shorts           integer not null default 0,
     excluded_sectors_json  text not null default '[]',
     cash_reserve_pct       real not null default 0
                            check (cash_reserve_pct between 0 and 100),
     benchmark              text not null default 'SPY',
 
-    -- Ejecucion
-    broker                 text not null default 'sim'
-                           check (broker in ('sim', 'alpaca')),
+    -- Ejecucion. No hay columna de broker: la unica implementacion es el
+    -- simulador de `sim_broker.py`.
     initial_budget         real not null default 10000 check (initial_budget > 0),
     bar_interval           text not null default '1d'
                            check (bar_interval in ('1m', '1h', '1d')),
+    lookback_days          integer not null default 200,
     cycle_times            text not null default '22:15',
     cycle_tz               text not null default 'Europe/Madrid',
     sim_slippage_bps       real not null default 5 check (sim_slippage_bps >= 0),
     sim_commission         real not null default 0 check (sim_commission >= 0),
     dry_run                integer not null default 0,
+    skip_when_market_closed integer not null default 1,
 
     -- Limites duros. NULL = derivado de los sliders (ver comentario de arriba).
     advanced_overrides     integer not null default 0,

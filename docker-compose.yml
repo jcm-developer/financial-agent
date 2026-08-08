@@ -29,8 +29,8 @@ x-app: &app
 
 services:
   # ---------------------------------------------------------------------------
-  # Dashboard. No hace llamadas a Alpaca ni al modelo: solo lee la base en modo
-  # solo lectura, asi que funciona aunque el .env este a medio rellenar.
+  # Dashboard. No llama al modelo ni a la red: solo lee la base en modo solo
+  # lectura, asi que funciona aunque el .env este a medio rellenar.
   # ---------------------------------------------------------------------------
   dashboard:
     <<: *app

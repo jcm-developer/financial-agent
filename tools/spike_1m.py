@@ -283,7 +283,7 @@ def resumen(resultados: list[dict]) -> None:
             print("  hace ~%.0f min, no del momento." % (mediana / 60))
         else:
             print("  VEREDICTO: demasiado retraso para llamarlo tiempo real.")
-            print("  Toca evaluar el plan B (Alpaca IEX, gratis y ya integrado).")
+            print("  Habria que buscar otra fuente de datos de 1 minuto.")
     print()
 
 

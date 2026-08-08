@@ -13,10 +13,10 @@ commits y conversaciones. Marcar `[x]` al cerrarla.
 
 - Agente en Python: [src/cycle.py](src/cycle.py) orquesta screener → datos → LLM
   ([src/analyst.py](src/analyst.py)) → risk manager ([src/risk.py](src/risk.py)) → broker
-  (simulado en [src/sim_broker.py](src/sim_broker.py) o Alpaca).
+  (simulado en [src/sim_broker.py](src/sim_broker.py)).
 - Persistencia en SQLite ([src/db.py](src/db.py) + [schema.sql](schema.sql)).
-- Configuración por variables de entorno ([src/config.py](src/config.py)) — un solo
-  experimento por `.env`.
+- Configuración por perfil en `agent_settings`; del `.env` solo sale la
+  infraestructura ([src/config.py](src/config.py)).
 - Dashboard: HTML de 1.500 líneas ([web/index.html](web/index.html)) servido por
   `http.server` ([web/server.py](web/server.py)).
 - Datos de mercado con `yfinance`, barras 1d/1h, caché en `bar_cache`.
@@ -27,6 +27,13 @@ horario de bolsa US, frontend React + Tailwind, perfiles de experimento con par�
 editables, y NVIDIA NIM (capa gratuita) como proveedor de modelo.
 
 **Coste: 0 €.** Sin nube, sin servicios de pago.
+
+**Alpaca fuera (2026-08-08).** Se ha eliminado del proyecto entero: el broker, el
+proveedor de datos, las claves, el extra de dependencias y la documentación. El
+único broker es el simulador de [src/sim_broker.py](src/sim_broker.py), y
+[src/broker.py](src/broker.py) queda como el protocolo que el ciclo espera —así
+añadir uno real más adelante no toca `cycle.py`. **Consecuencia que hay que
+asumir: desaparece el plan B de datos de mercado** (ver R2).
 
 ---
 
@@ -122,6 +129,10 @@ se hace **multi-proveedor desde el principio** (F6.6): cuando el experimento dé
 interesantes, pasar a un modelo premium debe ser cambiar un parámetro del perfil, no
 reescribir el analista.
 
+**Alcance real tras F6.6:** NIM y **OpenAI**, que comparten el formato
+`/chat/completions` y por tanto salen gratis en dependencias. **Anthropic no**: su API tiene
+otra forma y pide su SDK, así que queda en F9.1.
+
 ---
 
 ## 2. Fases
@@ -156,7 +167,7 @@ reescribir el analista.
       una segunda tabla diaria sería un duplicado con dos fuentes que podrían discrepar.
       `prune_bars_1m(keep_days=90)` y se acabó. Falta engancharla a una tarea diaria (F2.10).
 - [x] **F1.10** [tests/test_profiles.py](tests/test_profiles.py): 23 tests. **Suite completa
-      en verde: 307 pasan.**
+      en verde: 307 pasan.** (Tras F6.3–F6.7 la suite va por **444**.)
 
 ### F2 — Ingesta de precios cada minuto
 
@@ -250,7 +261,7 @@ reescribir el analista.
       [src/db.py](src/db.py) (`create_profile`, `list_profiles`, `set_profile_status`,
       `delete_profile`) y tests de cascada.
 - [ ] **F5.2** Listado en tarjetas con las métricas clave: capital, P&L total y del día, nº
-      de posiciones, win rate, último ciclo.
+      de posiciones, win rate, último ciclo. (En consola ya existe: `run.py profiles`.)
 - [ ] **F5.3** Alta de perfil: nombre, descripción, capital inicial, universo y parámetros
       (formulario de F6).
 - [ ] **F5.4** Acciones: activar, pausar, archivar, **duplicar** (clonar y cambiar un solo
@@ -267,27 +278,86 @@ reescribir el analista.
       y validación de nombres de campo contra las columnas reales.
 - [x] **F6.2** **Historial de cambios** — hecho en F1.2. Registra solo los cambios reales:
       reescribir el mismo valor no ensucia el historial.
-- [ ] **F6.3** ⚠️ **A medias**: la columna `cycles.settings_json` existe, pero **nadie la
-      escribe todavía**. Hasta que el ciclo vuelque ahí sus parámetros, un experimento cuyos
-      ajustes se editen a mitad no será interpretable. Va junto con F6.4.
-- [ ] **F6.4** El ciclo lee de aquí, no del `.env`. [src/config.py](src/config.py) queda solo
-      para infraestructura (rutas, claves, log level).
-- [ ] **F6.5** Función determinista `risk_profile (1–10) + diversification (1–10)` → límites
-      del risk manager, con **modo avanzado** para sobreescribir cada uno a mano. Propuesta:
-      | Perfil | `risk_per_trade` | `max_position` | `max_exposure` | `min_conviction` | `stop_atr` | `min_rr` |
-      |---|---|---|---|---|---|---|
-      | 1 muy conservador | 0,25 % | 5 % | 30 % | 85 | 3,0 | 2,5 |
-      | 5 equilibrado | 1,0 % | 20 % | 70 % | 65 | 2,0 | 1,5 |
-      | 10 muy agresivo | 3,0 % | 40 % | 100 % | 45 | 1,2 | 1,0 |
+- [x] **F6.3** El ciclo volca `settings.snapshot()` en `cycles.settings_json`. Se hizo
+      con F6.4 porque son la misma cosa: en cuanto los parámetros son editables en
+      caliente, un ciclo sin copia de los suyos deja de ser interpretable. El snapshot
+      **excluye la clave del modelo** a propósito — el histórico se exporta y se abre con
+      DB Browser, y una clave dentro de una columna JSON no se ve venir.
+- [x] **F6.4** El ciclo lee del perfil, no del `.env`.
+      [src/profile_settings.py](src/profile_settings.py) resuelve una fila de
+      `agent_settings` + el universo del perfil + la infraestructura a los `Settings` que
+      ya consumían `cycle.py` y `market_data.py`. **`Settings` no desaparece**: sigue
+      siendo el contrato, solo cambia de dónde se rellena, y por eso el refactor no toca
+      el código del ciclo ni sus tests.
 
-      Diversificación 1 → máx. 3 posiciones, concentración permitida; 10 → máx. 25 posiciones
-      y tope por sector.
-- [ ] **F6.6** Cliente LLM multi-proveedor en [src/llm.py](src/llm.py): NVIDIA NIM (por
-      defecto), Anthropic y OpenAI tras la misma interfaz. Hoy solo se usa NVIDIA; el día que
-      convenga probar un modelo premium es cambiar un parámetro del perfil.
-- [ ] **F6.7** Clave de API por perfil, guardada en la base y **enmascarada en la UI**
-      (`nvapi-…abcd`). Local y sin autenticación: no es un secreto fuerte, pero al menos no
-      se muestra en pantalla.
+      [src/config.py](src/config.py) queda con `Infra` (DB_PATH, NVIDIA_API_KEY,
+      LOG_LEVEL, PROFILE) y nada de estrategia. `Settings.load()` sobrevive con un único
+      propósito: `run.py import-profile`, que convierte un `.env` heredado en un perfil.
+
+      Detalles que costaron una decisión:
+      - **Elegir perfil es explícito.** Con varios activos, el comando exige `--profile`
+        en lugar de coger uno «razonable»: operar contra el experimento equivocado ensucia
+        dos históricos a la vez y no se deshace.
+      - **`cycle` y `status` exigen perfil; `check` puede caer al `.env`.** `check` es el
+        diagnóstico y tiene que funcionar en una instalación recién clonada.
+      - **Hicieron falta 6 columnas nuevas** en `agent_settings` (`universe_file`,
+        `lookback_days`, `skip_when_market_closed` y los tres descartes del screener), y
+        con ellas una migración real: `create table if not exists` **no añade columnas a
+        una tabla que ya existe**, así que sin `_add_missing_columns` una columna nueva
+        funcionaría en una base recién creada y faltaría en la que está corriendo.
+      - Se ha quitado la columna `broker`: ya no hay nada que elegir.
+      - Comandos nuevos: `run.py profiles`, `import-profile`, `activate`.
+- [x] **F6.5** [src/risk_presets.py](src/risk_presets.py): `derive_limits(risk_profile,
+      diversification)` → los 9 límites, con **modo avanzado** campo a campo. Las tres
+      filas de la tabla son las anclas y los niveles intermedios se **interpolan** por
+      tramos, para que mover el deslizador un punto siempre cambie algo — una tabla
+      escrita a ojo tiende a repetir valores y entonces el deslizador parece roto.
+      | Perfil | `risk_per_trade` | `max_position` | `max_exposure` | `min_conviction` | `stop_atr` | `min_rr` | kill switch |
+      |---|---|---|---|---|---|---|---|
+      | 1 muy conservador | 0,25 % | 5 % | 30 % | 85 | 3,0 | 2,5 | −2 % |
+      | 5 equilibrado | 1,0 % | 20 % | 70 % | 65 | 2,0 | 1,5 | −5 % |
+      | 10 muy agresivo | 3,0 % | 40 % | 100 % | 45 | 1,2 | 1,0 | −10 % |
+
+      Diversificación 1 → máx. 3 posiciones; 10 → máx. 25. `min_order_notional` queda fijo
+      en 100 $: es fricción de ejecución, no apetito de riesgo.
+
+      Dos decisiones con consecuencia:
+      - **`advanced_overrides` es el interruptor maestro.** Con él apagado mandan los
+        deslizadores *aunque las columnas conserven números de una sesión anterior*. Si los
+        viejos siguieran ganando, apagarlo no haría nada visible y se seguiría operando con
+        límites que el usuario cree descartados.
+      - ⚠️ **El tope por sector se calcula pero NO se aplica.** `sector_cap()` da el número
+        y la interfaz puede enseñarlo, pero el Risk Manager no lo hace cumplir porque **no
+        hay dato de sector por símbolo en tiempo de ejecución**: `universe/sp500.txt` solo
+        lleva el reparto en un comentario. Falta llevar el sector a una tabla; hasta
+        entonces, diversificación limita el número de posiciones pero no su concentración
+        sectorial.
+- [x] **F6.6** ⚠️ **Dos de tres proveedores.** [src/llm.py](src/llm.py) lleva una tabla
+      `PROVIDERS` con **NVIDIA NIM** (por defecto) y **OpenAI**. Los dos exponen
+      `/chat/completions` con el mismo formato, así que no hay dos implementaciones: hay una
+      con una fila por proveedor. Cambiar de uno a otro es un parámetro del perfil, y **no
+      añade ninguna dependencia**.
+
+      **Anthropic se queda fuera, y es una decisión, no un olvido.** Su API tiene otra forma
+      (`/v1/messages`, otras cabeceras, el `system` fuera de `messages`, `input_tokens` en
+      lugar de `prompt_tokens`) y su documentación pide usar el SDK oficial en vez de hablar
+      HTTP a mano. Eso es una dependencia nueva y una segunda implementación de verdad, para
+      un proveedor que hoy nadie va a usar. Pasa a F9.1.
+
+      Para que el fallo sea honesto, `llm_provider='anthropic'` —que el esquema sigue
+      admitiendo— se rechaza **al resolver el perfil** con "no implementado todavía (F9.1)",
+      no con "proveedor desconocido": lo primero es una tarea pendiente, lo segundo sería una
+      errata.
+- [x] **F6.7** Clave de API por perfil en `agent_settings.llm_api_key`, con
+      `mask_secret()` para enseñarla sin enseñarla (`nvapi-...7f3a`). Ya la usa
+      `run.py profiles`; la UI de F6.8 tirará de la misma función.
+
+      Dos detalles que salieron al probarlo:
+      - **`NVIDIA_API_KEY` del entorno sigue valiendo como respaldo, pero solo para NIM.**
+        Aceptarla para OpenAI no fallaría al resolver: fallaría a mitad del ciclo con un 401
+        que nadie relaciona con el perfil. Igual con `NVIDIA_BASE_URL`.
+      - Con NIM, una columna vacía **no** significa "sin clave" sino "usa la del entorno", y
+        la pantalla lo dice así. Poner "(sin clave)" mandaba a buscar un problema inexistente.
 - [ ] **F6.8** Formulario con sliders y **valores derivados visibles en vivo** ("con estos
       ajustes: máx. 8 posiciones, 1,5 % de riesgo por operación").
 
@@ -311,7 +381,6 @@ reescribir el analista.
 - Benchmark de comparación (por defecto SPY)
 
 *Ejecución*
-- Broker: simulado / Alpaca paper / Alpaca live
 - Capital inicial
 - Frecuencia del ciclo y horas de ejecución
 - Intervalo de barras (1m / 1h / 1d)
@@ -350,10 +419,15 @@ reescribir el analista.
 
 ### F8 — Limpieza
 
-- [ ] **F8.1** Borrar `data/trading.db` y el volumen de Docker.
+- [x] **F8.1** Base a cero (2026-08-08): `data/trading.db` apartada en
+      `backup/trading.db.pre-F6-20260808` (mismo criterio que F1.1: borrarla sería
+      irreversible) y `docker compose down -v` ejecutado, volumen `trading-data` eliminado.
+      Bórralos de `backup/` cuando quieras.
 - [ ] **F8.2** Borrar `web/index.html` y `web/server.py` cuando F3 y F4 estén verdes.
-- [ ] **F8.3** Podar [.env.example](.env.example): solo infraestructura. Las ~35 variables de
-      estrategia pasan a `agent_settings`.
+- [ ] **F8.3** ⚠️ **A medias.** Las variables de estrategia ya **no las lee el ciclo** (F6.4)
+      y [.env.example](.env.example) está partido en dos mitades rotuladas: infraestructura
+      arriba, heredadas abajo. La mitad de abajo sigue ahí porque `run.py import-profile` la
+      necesita; se borra cuando ya no haya ningún `.env` que migrar.
 - [ ] **F8.4** `.gitignore`: falta `node_modules/`, `app/dist/`, `.vite/` (cuando exista el
       frontend). Ya añadidos `backup/` y `spike_*.jsonl`.
 - [ ] **F8.5** ⚠️ **Hay un `.env` con claves reales en el directorio.** Está en `.gitignore`,
@@ -362,8 +436,14 @@ reescribir el analista.
 
 ### F9 — Futuro (no bloquea)
 
-- [ ] **F9.1** Modelo premium (Claude, GPT) cuando el experimento dé señales. La fontanería la
-      deja lista F6.6; solo hay que meter la clave y elegir el modelo.
+- [ ] **F9.1** Modelo premium cuando el experimento dé señales.
+      - **GPT: ya se puede.** F6.6 lo dejó operativo — `llm_provider='openai'`, la clave en
+        el perfil y el modelo que quieras. Cero código pendiente.
+      - **Claude: falta implementarlo.** Su API no es compatible con `/chat/completions`, así
+        que hay que añadir el SDK `anthropic` a `requirements.txt` y un dialecto propio en
+        [src/llm.py](src/llm.py) que traduzca `system`, `max_tokens` y los campos de `usage`.
+      - ⚠️ **Cualquiera de los dos rompe la premisa de 0 €** del plan. Es el momento de
+        decidirlo a propósito, no de descubrirlo en la factura.
 - [ ] **F9.2** Backtesting sobre el histórico de `bars_1m` que se vaya acumulando — es la
       razón de peso para empezar a guardarlo ya.
 - [ ] **F9.3** Ejecución intradía real aprovechando los datos de 1 minuto.
@@ -398,8 +478,10 @@ lo demás. F3 y F4 pueden solaparse en cuanto los endpoints estén definidos.
   sesión son ~19.500 peticiones al día desde la misma IP doméstica. No apareció ningún 429 en
   las pruebas, pero fueron pasadas sueltas con el mercado cerrado; el riesgo real solo se ve
   sosteniendo el ritmo una sesión entera (F2.1). Palancas si aparece: bajar el número de
-  símbolos, espaciar las peticiones dentro del minuto en vez de lanzarlas de golpe, o pasar al
-  plan B (Alpaca IEX, gratis y ya integrado).
+  símbolos o espaciar las peticiones dentro del minuto en vez de lanzarlas de golpe.
+  ⚠️ **Ya no hay plan B de proveedor**: al quitar Alpaca, Yahoo es la única fuente. Si
+  empieza a limitar de verdad, hay que integrar otra fuente, y eso es trabajo, no una
+  variable de entorno.
 - **R3 — Contención de escritura en SQLite.** Dos escritores (ingestor y ciclo) sobre el
   mismo fichero. WAL y `busy_timeout` ya lo cubren a este volumen, pero hay que medirlo
   (F2.9) antes de dar por hecho que escala a más perfiles.
@@ -407,8 +489,12 @@ lo demás. F3 y F4 pueden solaparse en cuanto los endpoints estén definidos.
   para siempre. Lo resuelve F1.9.
 - **R5 — La API pasa a poder escribir.** Se pierde la garantía de solo lectura del dashboard
   actual. Acotado a las tablas de configuración y verificado con un test (F3.3).
-- **R6 — Parámetros editables en caliente.** Cambiar el perfil de riesgo a mitad de un
-  experimento invalida la comparación si no queda registrado. Lo resuelven F6.2 y F6.3.
+- **R6 — Parámetros editables en caliente.** ✅ **Cubierto.** `agent_settings_history`
+  registra cada cambio real (F6.2) y cada ciclo guarda copia de los parámetros con los que
+  corrió en `cycles.settings_json` (F6.3). Queda un hueco pequeño: el ciclo hace la copia
+  **al arrancar**, así que editar un parámetro con un ciclo de 20 minutos ya en marcha deja
+  ese ciclo registrado con los valores de antes. Es el comportamiento correcto —el ciclo lee
+  los ajustes una vez y no los recarga— pero conviene saberlo.
 - **R7 — Calidad del modelo gratuito.** Llama 3.3 70B puede no dar señal útil, y entonces el
   experimento mide el modelo, no la estrategia. Por eso F5.7 (perfil de control aleatorio):
   sin algo contra lo que comparar, no se sabe distinguir un caso del otro.
@@ -422,4 +508,5 @@ lo demás. F3 y F4 pueden solaparse en cuanto los endpoints estén definidos.
    aprovechan los datos de 1 minuto para varios ciclos intradía? Afecta al gasto de modelo.
 3. **Tamaño del universo a seguir minuto a minuto**: 50 es el punto de partida; condiciona R2
    y R4.
-4. ¿Se conserva el broker simulado como opción por defecto, o se pasa a Alpaca paper?
+4. ~~¿Se conserva el broker simulado, o se pasa a Alpaca paper?~~ **Resuelto: solo
+   simulador.** Alpaca fuera del proyecto.

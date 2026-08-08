@@ -1,10 +1,9 @@
-"""Obtencion de barras e indicadores. Tres proveedores intercambiables.
+"""Obtencion de barras e indicadores. Dos proveedores intercambiables.
 
   * `UniverseMarketData` (recomendado para 500 activos) refresca la cache de
     barras, pasa el universo por el screener y devuelve solo los mejores
     candidatos. Es el embudo que hace viable un universo grande.
   * `YahooMarketData` descarga la watchlist directamente. Sin cuenta ni clave.
-  * `AlpacaMarketData` para quien ya tenga credenciales o vaya a operar en real.
 
 **Contrato comun:** `fetch_snapshots(must_include)` devuelve los snapshots de todo
 lo que hay que analizar. `must_include` son los simbolos obligatorios —las
@@ -245,92 +244,12 @@ class YahooMarketData:
 
 
 # ----------------------------------------------------------------------
-# Alpaca
-# ----------------------------------------------------------------------
-
-class AlpacaMarketData:
-    """Barras diarias desde Alpaca. Requiere credenciales.
-
-    El feed `iex` es gratuito y en tiempo real, pero solo cubre el volumen de
-    IEX (en torno al 2% del mercado): los cierres diarios son fiables, el volumen
-    es una fraccion del real. Tenlo en cuenta al leer `volume_ratio`.
-    """
-
-    def __init__(
-        self,
-        *,
-        api_key: str,
-        secret_key: str,
-        feed: str = "iex",
-        watchlist: tuple[str, ...] | list[str] = (),
-        lookback_days: int = 200,
-    ) -> None:
-        from alpaca.data.enums import DataFeed
-        from alpaca.data.historical import StockHistoricalDataClient
-
-        self._client = StockHistoricalDataClient(api_key=api_key, secret_key=secret_key)
-        self._feed = DataFeed.SIP if feed == "sip" else DataFeed.IEX
-        self.watchlist = tuple(watchlist)
-        self.lookback_days = lookback_days
-
-    def fetch_snapshots(
-        self, must_include: tuple[str, ...] | list[str] = ()
-    ) -> dict[str, MarketSnapshot]:
-        symbols = sorted(set(self.watchlist) | set(must_include))
-        if not symbols:
-            return {}
-
-        lookback_days = self.lookback_days
-
-        from alpaca.data.requests import StockBarsRequest
-        from alpaca.data.timeframe import TimeFrame
-
-        start = datetime.now(timezone.utc) - timedelta(days=int(lookback_days * 1.8) + 40)
-        request = StockBarsRequest(
-            symbol_or_symbols=list(symbols),
-            timeframe=TimeFrame.Day,
-            start=start,
-            feed=self._feed,
-        )
-        try:
-            barset = self._client.get_stock_bars(request)
-        except Exception as exc:  # noqa: BLE001 - el SDK lanza tipos variados
-            raise MarketDataError(f"No se pudieron descargar las barras: {exc}") from exc
-
-        raw = getattr(barset, "data", None) or {}
-        snapshots: dict[str, MarketSnapshot] = {}
-
-        for symbol in symbols:
-            raw_bars = raw.get(symbol) or []
-            bars = [
-                Bar(
-                    timestamp=b.timestamp,
-                    open=float(b.open),
-                    high=float(b.high),
-                    low=float(b.low),
-                    close=float(b.close),
-                    volume=float(b.volume),
-                )
-                for b in raw_bars
-            ]
-            bars.sort(key=lambda b: b.timestamp)
-            snapshot = build_snapshot(symbol, bars)
-            if snapshot is not None:
-                snapshots[symbol] = snapshot
-
-        log.info(
-            "Datos de Alpaca listos para %d/%d simbolos.", len(snapshots), len(symbols)
-        )
-        return snapshots
-
-
-# ----------------------------------------------------------------------
 
 def build_market_data(settings, database=None) -> MarketDataProvider:
     """Elige el proveedor segun la configuracion.
 
-    Con `UNIVERSE_FILE` puesto se usa el embudo, que necesita la base de datos
-    para la cache de barras.
+    Con universo puesto se usa el embudo, que necesita la base de datos para la
+    cache de barras. Sin universo se descarga la watchlist tal cual.
     """
     if settings.screener.enabled:
         if database is None:
@@ -338,26 +257,12 @@ def build_market_data(settings, database=None) -> MarketDataProvider:
                 "El embudo por universo necesita la base de datos para la cache "
                 "de barras."
             )
-        if settings.data_provider != "yahoo":
-            raise MarketDataError(
-                "El embudo por universo solo esta implementado sobre Yahoo. "
-                "Quita UNIVERSE_FILE o pon DATA_PROVIDER=yahoo."
-            )
         from .universe_data import UniverseMarketData
 
         return UniverseMarketData(
             database=database,
             screener=settings.screener,
             interval=settings.bar_interval,
-            lookback_days=settings.lookback_days,
-        )
-
-    if settings.data_provider == "alpaca":
-        return AlpacaMarketData(
-            api_key=settings.alpaca_api_key,
-            secret_key=settings.alpaca_secret_key,
-            feed=settings.alpaca_data_feed,
-            watchlist=settings.watchlist,
             lookback_days=settings.lookback_days,
         )
 

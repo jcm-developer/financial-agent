@@ -1,14 +1,30 @@
-"""Carga y validacion de configuracion desde el entorno.
+"""Configuracion: que es infraestructura y que es del experimento.
 
-Toda la configuracion se resuelve una vez al arrancar y se valida de forma
-estricta: preferimos fallar al inicio con un mensaje claro antes que descubrir
-una clave vacia a mitad de un ciclo con ordenes ya enviadas.
+Desde F6.4 hay dos cosas distintas y conviene no confundirlas:
+
+  * **`Infra`** son las variables de entorno que quedan: donde esta la base de
+    datos, la clave del modelo y el nivel de log. Cosas de la maquina, no del
+    experimento. Es lo unico que sigue viniendo del `.env`.
+  * **`Settings`** son los parametros con los que corre un ciclo. Ya **no** se
+    leen del entorno: salen de `agent_settings`, la tabla del perfil, via
+    [profile_settings.py](profile_settings.py). `Settings` sigue existiendo
+    porque es el contrato que consumen `cycle.py`, `market_data.py` y el
+    analista; lo que ha cambiado es de donde se rellena.
+
+`Settings.load()` y los `from_env()` que la acompanan sobreviven con un unico
+proposito: **importar un `.env` existente a un perfil** (`run.py import-profile`)
+y dar diagnostico en `run.py check` cuando todavia no hay ningun perfil. No los
+use el ciclo.
+
+En los dos caminos la validacion es estricta y temprana: preferimos fallar al
+arrancar con un mensaje claro antes que descubrir una clave vacia a mitad de un
+ciclo con ordenes ya enviadas.
 """
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -114,12 +130,56 @@ class RiskLimits:
 
 
 @dataclass(frozen=True)
+class Infra:
+    """Lo unico que sigue viniendo del entorno: rutas, clave del modelo, logs.
+
+    No lleva ningun parametro de estrategia. Si alguna vez hace falta anadir uno
+    aqui, es senal de que su sitio era `agent_settings`.
+
+    `load()` no exige nada: se puede construir en una maquina sin credenciales
+    para mirar el historico. Los comandos que si necesitan la clave del modelo
+    llaman a `require_model_key()`, que falla con un mensaje concreto en lugar de
+    dejar que el fallo aparezca dentro de la primera llamada al LLM.
+    """
+
+    db_path: str = "data/trading.db"
+    log_level: str = "INFO"
+    model_api_key: str = ""
+    model_base_url: str = "https://integrate.api.nvidia.com/v1"
+    # Perfil que se usa cuando no se pasa `--profile`. Vacio = si hay un solo
+    # perfil activo, ese.
+    default_profile: str = ""
+
+    @classmethod
+    def load(cls, *, env_file: str | None = None) -> Infra:
+        load_dotenv(dotenv_path=env_file, override=False)
+        return cls(
+            db_path=(os.getenv("DB_PATH") or "data/trading.db").strip(),
+            log_level=(os.getenv("LOG_LEVEL") or "INFO").strip().upper(),
+            model_api_key=(os.getenv("NVIDIA_API_KEY") or "").strip(),
+            model_base_url=(os.getenv("NVIDIA_BASE_URL")
+                            or "https://integrate.api.nvidia.com/v1").rstrip("/"),
+            default_profile=(os.getenv("PROFILE") or os.getenv("PORTFOLIO_NAME") or "").strip(),
+        )
+
+    def require_model_key(self) -> str:
+        if not self.model_api_key:
+            expected = Path.cwd() / ".env"
+            raise ConfigError(
+                "Falta NVIDIA_API_KEY: sin clave no se puede llamar al modelo.\n"
+                f"  Ponla en {expected} (copia la plantilla con: copy .env.example .env).\n"
+                "  Para mirar el historico sin ninguna clave:  python run.py report"
+            )
+        return self.model_api_key
+
+
+@dataclass(frozen=True)
 class DashboardSettings:
     """Configuracion de los comandos que solo leen (`report`, `serve`).
 
-    Existe por separado a proposito: mirar el historico no debe requerir las
-    claves de Alpaca ni de NVIDIA. Asi se puede revisar la operativa desde una
-    maquina sin credenciales, y un `.env` a medio rellenar no impide ver datos.
+    Existe por separado a proposito: mirar el historico no debe requerir la clave
+    del modelo. Asi se puede revisar la operativa desde una maquina sin
+    credenciales, y un `.env` a medio rellenar no impide ver datos.
     """
 
     db_path: str
@@ -172,21 +232,18 @@ class ScreenerSettings:
 
 @dataclass(frozen=True)
 class Settings:
-    # sim = broker simulado sobre SQLite (por defecto, no necesita cuenta).
-    # alpaca = cuenta real de Alpaca, paper o live.
-    broker: str
-    # yahoo = yfinance (sin clave). alpaca = feed de Alpaca.
-    data_provider: str
+    """Los parametros efectivos de un ciclo.
+
+    Se rellena desde `agent_settings` (ver
+    [profile_settings.py](profile_settings.py)); `load()` es solo el camino de
+    importacion desde un `.env` heredado.
+    """
+
     sim_slippage_bps: float
     sim_commission: float
 
-    alpaca_api_key: str
-    alpaca_secret_key: str
-    alpaca_paper: bool
-    alpaca_data_feed: str
-
-    nvidia_api_key: str
-    nvidia_base_url: str
+    model_api_key: str
+    model_base_url: str
     llm_model: str
     llm_temperature: float
     llm_timeout_seconds: float
@@ -201,6 +258,9 @@ class Settings:
     dry_run: bool
     log_level: str
 
+    # nvidia (por defecto) u openai. Ver [llm.py](llm.py).
+    llm_provider: str = "nvidia"
+
     # 1d = barras diarias. 1h = barras horarias, para acumular operaciones
     # cerradas en semanas en lugar de meses.
     bar_interval: str = "1d"
@@ -210,33 +270,50 @@ class Settings:
     risk: RiskLimits = field(default_factory=RiskLimits)
     screener: ScreenerSettings = field(default_factory=ScreenerSettings)
 
-    @property
-    def uses_alpaca(self) -> bool:
-        """True si alguna pieza necesita credenciales de Alpaca."""
-        return self.broker == "alpaca" or self.data_provider == "alpaca"
+    # Perfil del que salieron estos parametros. None cuando vienen de un `.env`.
+    profile_id: str | None = None
+    # Texto de F6.5 con lo que implican los deslizadores, o None si los limites
+    # se fijaron a mano en el `.env`.
+    risk_summary: str | None = None
 
     @property
     def mode(self) -> str:
-        """El simulador es paper por definicion: no hay dinero de verdad."""
-        if self.broker == "sim":
-            return "paper"
-        return "paper" if self.alpaca_paper else "live"
+        """Siempre paper: la unica implementacion de broker es el simulador.
+
+        Se conserva la propiedad porque `portfolios.mode` distingue paper de live
+        y el dia que haya un broker real vuelve a tener dos valores.
+        """
+        return "paper"
+
+    # -- Registro de lo que corrio ----------------------------------------
+
+    def snapshot(self) -> dict:
+        """Los parametros efectivos, sin secretos, para `cycles.settings_json`.
+
+        Es lo que hace interpretable un experimento cuyos ajustes se editan a
+        mitad (F6.3): sin esta copia no se sabria que configuracion produjo cada
+        decision, solo la que hay ahora.
+
+        Se excluye la clave del modelo. No es paranoia mal puesta: el historico se
+        exporta, se comparte para pedir opinion y se abre con DB Browser, y una
+        clave dentro de una columna JSON no se ve venir.
+        """
+        data = asdict(self)
+        for secret in ("model_api_key", "db_path"):
+            data.pop(secret, None)
+        data["watchlist"] = list(self.watchlist)
+        data["mode"] = self.mode
+        return data
+
+    # -- Importacion desde un .env heredado -------------------------------
 
     @classmethod
     def load(cls, *, env_file: str | None = None) -> Settings:
+        """Lee un `.env` completo. **Solo para `import-profile` y `check`.**
+
+        El ciclo no pasa por aqui desde F6.4: sus parametros salen del perfil.
+        """
         load_dotenv(dotenv_path=env_file, override=False)
-
-        broker = (os.getenv("BROKER") or "sim").strip().lower()
-        if broker not in {"sim", "alpaca"}:
-            raise ConfigError(f"BROKER debe ser sim o alpaca, no {broker!r}.")
-
-        data_provider = (os.getenv("DATA_PROVIDER") or "yahoo").strip().lower()
-        if data_provider not in {"yahoo", "alpaca"}:
-            raise ConfigError(
-                f"DATA_PROVIDER debe ser yahoo o alpaca, no {data_provider!r}."
-            )
-
-        needs_alpaca = broker == "alpaca" or data_provider == "alpaca"
 
         # Diagnostico del caso mas comun: no hay .env todavia. Sin esto el primer
         # error seria "WATCHLIST esta vacia", que no orienta a nada.
@@ -247,8 +324,7 @@ class Settings:
                     f"No se encontro el fichero de configuracion {expected}.\n"
                     "  Crealo copiando la plantilla y rellena la clave del modelo:\n"
                     "      copy .env.example .env\n"
-                    "  Con los valores por defecto (BROKER=sim, DATA_PROVIDER=yahoo)\n"
-                    "  solo hace falta NVIDIA_API_KEY.\n"
+                    "  Solo hace falta NVIDIA_API_KEY.\n"
                     "  Para ver el dashboard sin ninguna clave:\n"
                     "      python tools/seed_demo.py  &&  python run.py serve"
                 )
@@ -272,34 +348,12 @@ class Settings:
                 "sirve unos 700 dias de historico horario."
             )
 
-        feed = (os.getenv("ALPACA_DATA_FEED") or "iex").strip().lower()
-        if feed not in {"iex", "sip"}:
-            raise ConfigError(f"ALPACA_DATA_FEED debe ser iex o sip, no {feed!r}.")
-
-        paper = _get_bool("ALPACA_PAPER", True)
-        dry_run = _get_bool("DRY_RUN", False)
-
-        # Las claves de Alpaca solo se exigen si algo las va a usar: con los
-        # valores por defecto el experimento arranca con una sola clave, la del
-        # modelo.
-        if needs_alpaca:
-            alpaca_key = _require("ALPACA_API_KEY")
-            alpaca_secret = _require("ALPACA_SECRET_KEY")
-        else:
-            alpaca_key = alpaca_secret = ""
-
         settings = cls(
-            broker=broker,
-            data_provider=data_provider,
             sim_slippage_bps=_get_float("SIM_SLIPPAGE_BPS", 5.0, minimum=0.0, maximum=500.0),
             sim_commission=_get_float("SIM_COMMISSION", 0.0, minimum=0.0),
-            alpaca_api_key=alpaca_key,
-            alpaca_secret_key=alpaca_secret,
-            alpaca_paper=paper,
-            alpaca_data_feed=feed,
-            nvidia_api_key=_require("NVIDIA_API_KEY"),
-            nvidia_base_url=(os.getenv("NVIDIA_BASE_URL")
-                             or "https://integrate.api.nvidia.com/v1").rstrip("/"),
+            model_api_key=_require("NVIDIA_API_KEY"),
+            model_base_url=(os.getenv("NVIDIA_BASE_URL")
+                            or "https://integrate.api.nvidia.com/v1").rstrip("/"),
             llm_model=(os.getenv("LLM_MODEL") or "meta/llama-3.3-70b-instruct").strip(),
             llm_temperature=_get_float("LLM_TEMPERATURE", 0.2, minimum=0.0, maximum=2.0),
             llm_timeout_seconds=_get_float("LLM_TIMEOUT_SECONDS", 120.0, minimum=5.0),
@@ -309,7 +363,7 @@ class Settings:
             initial_budget=_get_float("INITIAL_BUDGET", 10_000.0, minimum=1.0),
             watchlist=watchlist,
             lookback_days=_get_int("LOOKBACK_DAYS", 200, minimum=60, maximum=2000),
-            dry_run=dry_run,
+            dry_run=_get_bool("DRY_RUN", False),
             log_level=(os.getenv("LOG_LEVEL") or "INFO").strip().upper(),
             bar_interval=bar_interval,
             skip_when_market_closed=_get_bool("SKIP_WHEN_MARKET_CLOSED", True),
@@ -326,12 +380,7 @@ class Settings:
 
     def describe(self) -> str:
         """Resumen legible para el log de arranque, sin filtrar secretos."""
-        flags = []
-        if self.dry_run:
-            flags.append("DRY_RUN")
-        if self.broker == "alpaca" and not self.alpaca_paper:
-            flags.append("!! DINERO REAL !!")
-        suffix = f"  [{' '.join(flags)}]" if flags else ""
+        suffix = "  [DRY_RUN]" if self.dry_run else ""
         if self.screener.enabled:
             universe = (
                 f"universo={self.screener.universe_file} "
@@ -339,9 +388,9 @@ class Settings:
             )
         else:
             universe = f"watchlist={len(self.watchlist)}"
+        origin = f"perfil={self.portfolio_name}" if self.profile_id else ".env"
         return (
-            f"cartera={self.portfolio_name} broker={self.broker} "
-            f"datos={self.data_provider}/{self.bar_interval} modo={self.mode} "
+            f"{origin} datos=yahoo/{self.bar_interval} "
             f"presupuesto=${self.initial_budget:,.2f} "
             f"{universe} modelo={self.llm_model}"
             f"{suffix}"

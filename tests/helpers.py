@@ -89,11 +89,8 @@ def rising(count: int = 80, start: float = 100.0, step: float = 0.4) -> list[flo
 
 def make_settings(**overrides) -> Settings:
     defaults = dict(
-        broker="sim", data_provider="yahoo",
         sim_slippage_bps=0.0, sim_commission=0.0,
-        alpaca_api_key="", alpaca_secret_key="", alpaca_paper=True,
-        alpaca_data_feed="iex",
-        nvidia_api_key="stub", nvidia_base_url="http://stub",
+        model_api_key="stub", model_base_url="http://stub",
         llm_model="stub-model", llm_temperature=0.0,
         llm_timeout_seconds=30.0, llm_max_retries=1,
         db_path=":memory:", portfolio_name="integracion",

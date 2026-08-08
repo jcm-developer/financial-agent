@@ -33,6 +33,26 @@ log = logging.getLogger(__name__)
 
 SCHEMA_PATH = Path(__file__).resolve().parent.parent / "schema.sql"
 
+# Columnas anadidas despues de la primera version del esquema.
+#
+# `schema.sql` es idempotente para tablas, pero `create table if not exists` no
+# anade columnas a una tabla que ya existe: sobre una base viva, una columna
+# nueva en el CREATE TABLE simplemente no aparece. Aqui van esas columnas con su
+# definicion **identica** a la de `schema.sql`, y `_add_missing_columns` las
+# inserta con ALTER TABLE cuando faltan.
+#
+# En una base recien creada esto no hace nada: el CREATE TABLE ya las trajo.
+ADDED_COLUMNS: dict[str, dict[str, str]] = {
+    "agent_settings": {
+        "universe_file": "text",
+        "screener_min_dollar_volume": "real not null default 20000000",
+        "screener_min_price": "real not null default 5",
+        "screener_max_volatility_pct": "real not null default 120",
+        "lookback_days": "integer not null default 200",
+        "skip_when_market_closed": "integer not null default 1",
+    },
+}
+
 
 class DatabaseError(RuntimeError):
     pass
@@ -108,6 +128,25 @@ class Database:
             self._conn.executescript(sql)
         except sqlite3.Error as exc:
             raise DatabaseError(f"Fallo al aplicar schema.sql: {exc}") from exc
+        self._add_missing_columns()
+
+    def _add_missing_columns(self) -> None:
+        """Anade con ALTER TABLE las columnas de `ADDED_COLUMNS` que falten.
+
+        Se ejecuta en cada arranque y normalmente no hace nada. Es lo que
+        completa la promesa de "schema.sql hace de migracion": sin esto, anadir
+        una columna funcionaria en una base nueva y fallaria en la que ya esta
+        corriendo, que es el peor reparto posible.
+        """
+        for table, columns in ADDED_COLUMNS.items():
+            existing = self._columns(table)
+            if not existing:
+                continue  # la tabla no existe todavia; el CREATE la traera entera
+            for column, definition in columns.items():
+                if column in existing:
+                    continue
+                self._execute(f"alter table {table} add column {column} {definition}")
+                log.info("Columna %s.%s anadida a una base existente.", table, column)
 
     def close(self) -> None:
         try:
@@ -217,9 +256,10 @@ class Database:
             self.update_settings(profile_id, settings, source="create")
 
         current = self.get_settings(profile_id)
+        # Siempre paper: la unica implementacion de broker es el simulador.
         self.ensure_portfolio(
             name=name,
-            mode="paper" if current["broker"] == "sim" else "paper",
+            mode="paper",
             initial_budget=float(current["initial_budget"]),
             profile_id=profile_id,
         )
@@ -422,7 +462,14 @@ class Database:
         market_open: bool,
         symbols: list[str],
         llm_model: str,
+        settings: dict[str, Any] | None = None,
     ) -> str:
+        """`settings` es la copia de los parametros con los que corre el ciclo.
+
+        Opcional en la firma para no obligar a los tests que no la miran, pero el
+        ciclo real siempre la manda: es lo que permite leer una decision vieja con
+        la configuracion que la produjo y no con la de hoy (F6.3).
+        """
         cycle_id = _new_id()
         self._insert(
             "cycles",
@@ -436,6 +483,7 @@ class Database:
                 "market_open": int(market_open),
                 "symbols_scanned_json": _dumps(symbols),
                 "llm_model": llm_model,
+                "settings_json": _dumps(settings) if settings is not None else None,
             },
         )
         return cycle_id

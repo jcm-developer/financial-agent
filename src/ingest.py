@@ -74,7 +74,7 @@ class QuoteProvider(Protocol):
     """Fuente de barras de un minuto.
 
     Existe como interfaz por una razon practica y otra de diseno: los tests
-    necesitan una fuente sin red, y cambiar a Alpaca IEX si Yahoo empieza a
+    necesitan una fuente sin red, y cambiar de proveedor si Yahoo empieza a
     limitar por IP no deberia tocar nada mas que esta pieza.
     """
 

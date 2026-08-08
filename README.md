@@ -43,7 +43,7 @@ Barras diarias (Yahoo Finance)
                                         │
                               aprobada  │  rechazada
                                         ▼         └──► se registra el motivo
-                          Broker simulado  (o Alpaca)
+                             Broker simulado
                                         │
                                         ▼
                                    SQLite local
@@ -51,7 +51,7 @@ Barras diarias (Yahoo Finance)
 
 **El modelo aporta dirección y convicción. El dinero lo decide el código.**
 El LLM nunca elige cuántas acciones comprar; eso sale de la volatilidad del
-activo y de los límites que tú fijas en `.env`.
+activo y de los límites del perfil de experimento.
 
 Dos defensas concretas, ambas con test:
 
@@ -98,7 +98,7 @@ barra en cada ciclo mientras el mercado está abierto sin acumular duplicados.
 **Sobre la puntuación del screener, honestamente:** los pesos son una heurística
 razonable, no una ventaja demostrada. Si el experimento acaba mostrando algo, será
 imposible saber cuánto viene del filtro y cuánto del modelo. Por eso existe
-`SCREENER_MODE=random`, que selecciona candidatos arbitrarios respetando solo los
+`screener_mode=random`, que selecciona candidatos arbitrarios respetando solo los
 descartes duros: es el grupo de control. Si el agente rinde igual con `random`, el
 filtro no aporta nada.
 
@@ -142,9 +142,9 @@ cae en sábado, cierra el viernes 3) y los días de media sesión que cierran a 
 13:00 ET. La tabla llega hasta 2027 y avisa por log en lugar de mentir cuando se
 pasa de ahí.
 
-### Broker simulado vs. Alpaca
+### Broker simulado
 
-Por defecto (`BROKER=sim`) la ejecución es local: sin cuenta, sin MFA. El
+La ejecución es local: sin cuenta de broker, sin MFA, sin dinero real. El
 simulador aplica deslizamiento y comisión configurables, no permite comprar sin
 efectivo ni vender lo que no se tiene, y no hay apalancamiento.
 
@@ -153,9 +153,9 @@ intradía, órdenes parciales, horarios de mercado ni reglas de patrón day trad
 A frecuencia diaria y en valores muy líquidos importa poco; en ilíquidos los
 resultados serían optimistas.
 
-Alpaca (`BROKER=alpaca`) solo hace falta el día que quieras dinero real. Como
-`cycle.py` habla con el broker a través de una interfaz estrecha, el cambio es
-una variable de entorno y el código que se ejecuta es el mismo.
+`cycle.py` habla con el broker a través del protocolo estrecho de
+[`src/broker.py`](src/broker.py), así que el día que se añada un broker real el
+ciclo no cambia.
 
 ---
 
@@ -191,8 +191,18 @@ notepad .env
 ```
 
 Solo `NVIDIA_API_KEY`. La consigues en [build.nvidia.com](https://build.nvidia.com)
-→ busca `llama-3.3-70b-instruct` → **Get API Key**. Empieza por `nvapi-`.
-Los valores por defecto (`BROKER=sim`, `DATA_PROVIDER=yahoo`) no piden nada más.
+→ busca `llama-3.3-70b-instruct` → **Get API Key**. Empieza por `nvapi-`. Es la
+única clave del proyecto: los datos son de Yahoo y el broker es local.
+
+**2. Crea el perfil de experimento.** Los parámetros del agente viven en la base
+de datos, no en el `.env`. Para partir de los valores de la plantilla:
+
+```powershell
+docker compose run --rm bot python run.py import-profile --name experimento-01
+```
+
+Eso crea el perfil, su cartera y sus parámetros, y lo deja activo. Compruébalo
+con `run.py profiles`.
 
 **2. Comprueba que conecta:**
 
@@ -200,9 +210,10 @@ Los valores por defecto (`BROKER=sim`, `DATA_PROVIDER=yahoo`) no piden nada más
 docker compose run --rm bot python run.py check
 ```
 
-Cuatro bloques: datos de mercado, broker simulado, NVIDIA NIM y base de datos. El
-de datos te muestra los precios de decisión y de ejecución uno al lado del otro,
-que es la forma rápida de ver que la separación funciona.
+Cinco bloques: configuración del perfil, calendario, datos de mercado, broker
+simulado, NVIDIA NIM y base de datos. El de datos te muestra los precios de
+decisión y de ejecución uno al lado del otro, que es la forma rápida de ver que
+la separación funciona.
 
 **3. Ciclo en seco**, que analiza y registra pero no ejecuta:
 
@@ -269,15 +280,11 @@ son datos de una cuenta de inversión. Si de verdad quieres abrirlo al resto de
 tu red, cambia el mapeo a `"8000:8000"` en `docker-compose.yml` sabiendo lo que
 implica.
 
-**El planificador no pide confirmación en modo real.** La confirmación
-interactiva (`CONFIRMO`) solo existe al ejecutar `run.py cycle` a mano; un
-contenedor no tiene con quién hablar. Si pones `ALPACA_PAPER=false`, el
-planificador operará con dinero real sin preguntar — lo avisa en el log al
-arrancar.
-
-**Si falta el `.env`, el servicio `scheduler` se para** con un mensaje
-explicando qué falta, en lugar de entrar en bucle de reinicios. El `dashboard`
-sigue funcionando.
+**Si falta el `.env` o no hay perfil activo, el servicio `scheduler` se para**
+con un mensaje explicando qué falta, en lugar de entrar en bucle de reinicios. El
+perfil se resuelve al arrancar el planificador, no al lanzar el ciclo: descubrir
+que no hay ninguno activo a las 22:15, tras ocho horas dormido, es la peor hora
+posible para enterarse. El `dashboard` sigue funcionando.
 
 ---
 
@@ -294,7 +301,6 @@ python -m pip install -r requirements.txt
 `pytest`. La base de datos es SQLite de la biblioteca estándar y el dashboard no
 usa ninguna librería de gráficos.
 
-Solo si vas a usar Alpaca: `pip install -r requirements-alpaca.txt`.
 
 ### 3.2 Ver el dashboard sin credenciales
 
@@ -320,11 +326,6 @@ notepad .env
 **NVIDIA NIM** es lo único obligatorio — [build.nvidia.com](https://build.nvidia.com)
 → elige un modelo → *Get API Key*. Da créditos gratuitos y solo pide un email.
 
-**Alpaca** solo si pones `BROKER=alpaca`: [app.alpaca.markets](https://app.alpaca.markets)
-→ arriba a la izquierda cambia a **Paper Trading** → sidebar *API* →
-*Generate New Key*. Exige activar antes la verificación en dos pasos con una app
-autenticadora.
-
 ```
 NVIDIA_API_KEY=nvapi-...
 LLM_MODEL=meta/llama-3.3-70b-instruct
@@ -347,8 +348,8 @@ No hace falta configurar nada de base de datos: se crea sola en `data/trading.db
 python run.py check
 ```
 
-Verifica las cuatro piezas por separado (Alpaca, datos de mercado, NVIDIA NIM,
-SQLite) y dice exactamente cuál falla. No opera.
+Verifica cada pieza por separado (perfil, calendario, datos de mercado, broker
+simulado, NVIDIA NIM, SQLite) y dice exactamente cuál falla. No opera.
 
 ### 3.5 Primer ciclo en seco
 
@@ -476,8 +477,8 @@ Al **modelo**: una por activo analizado más una por posición abierta.
 
 A **Yahoo**: una sola petición para toda la watchlist, no una por activo.
 
-Al **broker**: ninguna. Con `BROKER=sim` la ejecución y la contabilidad son
-locales, así que no hay red ni cuotas por ese lado.
+Al **broker**: ninguna. La ejecución y la contabilidad son locales, así que no
+hay red ni cuotas por ese lado.
 
 ### Cadencia recomendada
 
@@ -541,24 +542,45 @@ solo lee el fichero SQLite cuando refrescas la página.
 
 ## 8. Configuración de riesgo
 
-Los valores por defecto de `.env.example` son conservadores. Los importantes:
+**Los parámetros viven en la base de datos, uno por perfil de experimento, no en
+el `.env`.** Del entorno solo sale la infraestructura: `DB_PATH`,
+`NVIDIA_API_KEY`, `LOG_LEVEL`. Cámbialos con `db.update_settings(...)`, o desde
+la interfaz cuando exista; cada cambio real queda en `agent_settings_history`,
+que es lo que permite explicar después por qué el agente cambió de conducta.
 
-| Variable | Def. | Qué controla |
-|---|---|---|
-| `RISK_PER_TRADE_PCT` | 1.0 | % del equity que se arriesga hasta el stop en cada operación |
-| `MAX_POSITION_PCT` | 20.0 | % máximo del equity en una sola posición |
-| `MAX_TOTAL_EXPOSURE_PCT` | 80.0 | % máximo invertido en total |
-| `MAX_OPEN_POSITIONS` | 5 | Posiciones simultáneas |
-| `MAX_DAILY_LOSS_PCT` | 5.0 | Pérdida diaria que activa el kill switch |
-| `MIN_CONVICTION` | 65 | Convicción mínima que debe declarar el LLM |
-| `STOP_ATR_MULTIPLE` | 2.0 | Distancia del stop en múltiplos de ATR(14) |
-| `MIN_REWARD_RISK` | 1.5 | Ratio beneficio/riesgo mínimo exigido |
-| `SIM_SLIPPAGE_BPS` | 5 | Deslizamiento del simulador, siempre en contra |
-| `SIM_COMMISSION` | 0 | Comisión por orden en USD |
-| `SCREENER_TOP_N` | 20 | Candidatos que pasan al modelo |
-| `SCREENER_MODE` | score | `random` es el grupo de control |
-| `BAR_INTERVAL` | 1d | `1h` para varios ciclos por sesión |
-| `SKIP_WHEN_MARKET_CLOSED` | true | No gastar cuota con el mercado cerrado |
+Los nueve límites duros no se editan de uno en uno: **salen de dos deslizadores**
+([`src/risk_presets.py`](src/risk_presets.py)).
+
+| `risk_profile` | Riesgo/op. | Máx. posición | Máx. exposición | Convicción mín. | Stop×ATR | R/R mín. | Kill switch |
+|---|---|---|---|---|---|---|---|
+| 1 muy conservador | 0,25 % | 5 % | 30 % | 85 | 3,0 | 2,5 | −2 % |
+| 5 equilibrado | 1,0 % | 20 % | 70 % | 65 | 2,0 | 1,5 | −5 % |
+| 10 muy agresivo | 3,0 % | 40 % | 100 % | 45 | 1,2 | 1,0 | −10 % |
+
+Los niveles intermedios se interpolan, así que mover el deslizador un punto
+siempre cambia algo. `diversification` (1–10) controla aparte el número máximo de
+posiciones: 3 en el nivel 1, 25 en el 10.
+
+Que sean dos deslizadores y no dieciséis casillas es el punto: el experimento
+consiste en clonar un perfil, cambiar **un** parámetro y comparar. Para fijar un
+límite a mano hay modo avanzado (`advanced_overrides`), campo a campo; apagarlo
+devuelve el mando a los deslizadores.
+
+**Proveedor de modelo** (F6.6): `llm_provider` acepta `nvidia` (NVIDIA NIM, por
+defecto y gratis) u `openai`. Los dos hablan `/chat/completions`, así que cambiar de
+uno a otro es un parámetro del perfil y no añade dependencias. La clave va en
+`llm_api_key` del perfil (F6.7) y se muestra enmascarada; con NIM, si la dejas
+vacía se usa `NVIDIA_API_KEY` del entorno. Anthropic todavía no está
+implementado — su API no es compatible y necesitaría su SDK.
+
+Otros parámetros del perfil: `llm_model`, `llm_temperature`, `initial_budget`,
+`bar_interval` (`1h` para varios ciclos por sesión), `screener_top_n`,
+`screener_mode` (`random` es el grupo de control), `sim_slippage_bps`,
+`sim_commission`, `dry_run` y `skip_when_market_closed`. Los ves todos con:
+
+```powershell
+python run.py profiles
+```
 
 Hay una interacción de estos valores que conviene entender: un stop de 2×ATR
 ronda el 4% del precio en una acción típica, así que arriesgar el 1% del equity
@@ -602,25 +624,27 @@ order by p.realized_pnl asc limit 10;
 ## 10. Estructura
 
 ```
-requirements-alpaca.txt Extra opcional para operar contra Alpaca
 Dockerfile              Imagen unica para los tres servicios
 docker-compose.yml      dashboard + scheduler + comandos puntuales
 run.py                  CLI: check / cycle / status / report / serve
+                        + profiles / import-profile / activate
 schema.sql              Esquema SQLite; se aplica solo en cada arranque
 src/
-  config.py             Configuración validada desde .env
+  config.py             Infra desde .env (rutas, clave, log)
+  profile_settings.py   agent_settings -> Settings del ciclo
+  risk_presets.py       Deslizadores 1-10 -> límites del Risk Manager
   models.py             Tipos de dominio compartidos
   indicators.py         RSI, ATR, MACD… funciones puras, sin numpy
-  market_data.py        Barras: Yahoo (por defecto) o Alpaca
+  market_data.py        Barras desde Yahoo (yfinance)
   bar_cache.py          Cache de barras con refresco incremental
   screener.py           Filtro determinista: universo -> candidatos
   universe_data.py      El embudo: cache + screener + snapshots
   market_calendar.py    Sesiones, festivos y medias sesiones de NYSE
-  sim_broker.py         Broker simulado sobre SQLite (por defecto)
+  sim_broker.py         Broker simulado sobre SQLite
   llm.py                Cliente NVIDIA NIM y parseo defensivo de JSON
   analyst.py            Prompts y validación de la salida del modelo
   risk.py               Risk Manager  ← la pieza crítica
-  broker.py             Alpaca; el único módulo que mueve dinero real
+  broker.py             El contrato que el ciclo espera de un broker
   db.py                 Persistencia y reconciliación
   dashboard.py          Ensamblado de datos para report y web
   cycle.py              Orquestación del ciclo
@@ -647,20 +671,16 @@ del LLM y la capa de datos son deterministas y se prueban en aislamiento.
 
 ---
 
-## 11. Pasar a dinero real
+## 11. Dinero real: hoy no se puede
 
-Cuando tengas suficientes ciclos para juzgar (mira la calibración, el profit
-factor y la caída máxima, no el P&L de una semana):
+**No hay integración con ningún broker real, y es deliberado.** La única
+implementación es el simulador de [`src/sim_broker.py`](src/sim_broker.py), que
+lleva la contabilidad en SQLite. El proyecto es un experimento para medir si el
+criterio de un LLM aporta señal; hasta que esa pregunta tenga respuesta, poder
+enviar órdenes reales solo añade formas de perder dinero.
 
-1. Instala el extra y da de alta la cuenta: `pip install -r requirements-alpaca.txt`,
-   luego `BROKER=alpaca`, `DATA_PROVIDER=alpaca` y `ALPACA_PAPER=false`.
-   Alpaca exige activar la verificación en dos pasos antes de darte claves.
-   **Pasa primero por `ALPACA_PAPER=true`**: es la única forma de comprobar que
-   los fills reales se parecen a los del simulador.
-2. **Cambia también `PORTFOLIO_NAME`.** El sistema se niega a reutilizar una
-   cartera de paper en modo real: mezclar ambos históricos los haría
-   incomparables.
-3. Baja `INITIAL_BUDGET` a una cantidad que puedas perder por completo.
-
-`run.py cycle` pedirá que escribas `CONFIRMO` antes de enviar la primera orden
-real.
+La fontanería para añadirlo está hecha: `cycle.py` solo conoce el protocolo
+`Broker` de [`src/broker.py`](src/broker.py), así que una implementación nueva no
+toca el ciclo. Lo que haría falta antes es tener con qué juzgar: calibración de
+la convicción, profit factor y caída máxima sobre suficientes operaciones
+cerradas — no el P&L de una semana.

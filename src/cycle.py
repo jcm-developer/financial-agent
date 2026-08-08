@@ -107,7 +107,7 @@ class TradingCycle:
 
     @classmethod
     def build(cls, settings: Settings, llm: LLMClient) -> TradingCycle:
-        """Monta el ciclo con el broker y el proveedor de datos configurados.
+        """Monta el ciclo con el proveedor de datos configurado.
 
         El broker simulado necesita la base de datos y el id de cartera, asi que
         se crean primero.
@@ -119,20 +119,13 @@ class TradingCycle:
             initial_budget=settings.initial_budget,
         )
 
-        if settings.broker == "sim":
-            broker = SimBroker(
-                database=database,
-                portfolio_id=portfolio_id,
-                initial_cash=settings.initial_budget,
-                slippage_bps=settings.sim_slippage_bps,
-                commission_per_order=settings.sim_commission,
-            )
-        else:
-            broker = Broker(
-                api_key=settings.alpaca_api_key,
-                secret_key=settings.alpaca_secret_key,
-                paper=settings.alpaca_paper,
-            )
+        broker = SimBroker(
+            database=database,
+            portfolio_id=portfolio_id,
+            initial_cash=settings.initial_budget,
+            slippage_bps=settings.sim_slippage_bps,
+            commission_per_order=settings.sim_commission,
+        )
 
         return cls(
             settings=settings,
@@ -184,7 +177,7 @@ class TradingCycle:
 
         # Los datos van ANTES de leer la cuenta: el broker simulado no tiene
         # fuente de precios propia, asi que sin ellos no puede valorar la cartera
-        # ni ejecutar. Con Alpaca el orden es indiferente.
+        # ni ejecutar.
         snapshots = self.market_data.fetch_snapshots(required)
         symbols = tuple(sorted(snapshots))
         self._prime_broker(snapshots)
@@ -198,6 +191,10 @@ class TradingCycle:
 
         self._warn_if_budget_exceeds_account(account)
 
+        # `settings.snapshot()` deja en la fila los parametros exactos de este
+        # ciclo (F6.3). Sin esa copia, editar los ajustes a mitad de un
+        # experimento haria ilegible el historico: las decisiones de ayer se
+        # leerian con la configuracion de hoy.
         cycle_id = self.db.start_cycle(
             portfolio_id=portfolio_id,
             equity_start=account.equity,
@@ -205,9 +202,12 @@ class TradingCycle:
             market_open=market_open,
             symbols=list(symbols),
             llm_model=settings.llm_model,
+            settings=settings.snapshot(),
         )
         report.cycle_id = cycle_id
         log.info("Ciclo %s iniciado. %s", cycle_id, settings.describe())
+        if settings.risk_summary:
+            log.info("Riesgo: %s", settings.risk_summary)
         log.info("Calendario: %s", market_calendar.describe())
 
         describe_selection = getattr(self.market_data, "describe_selection", None)
@@ -738,7 +738,8 @@ class TradingCycle:
         el analista, y la orden resultante se llena a la apertura posterior, que
         es el orden real de los acontecimientos.
 
-        Con Alpaca no hace nada: los precios los pone el broker.
+        Con un broker que tuviera precios propios no haria nada, y por eso la
+        comprobacion de tipo sigue aqui.
         """
         if not isinstance(self.broker, SimBroker):
             return

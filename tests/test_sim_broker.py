@@ -290,7 +290,7 @@ def test_rolling_the_same_session_twice_does_not_move_the_reference(broker):
     assert account.day_pnl == pytest.approx(-200.0)
 
 
-# -- Interfaz compartida con Alpaca ------------------------------------------
+# -- Cumplimiento del contrato de broker -------------------------------------
 
 def test_is_tradable_only_with_a_price(broker):
     broker.set_quotes({"AAPL": quote(100.0)})
@@ -315,9 +315,12 @@ def test_held_symbols_reports_open_positions(broker):
     assert broker.held_symbols() == {"AAPL", "MSFT"}
 
 
-def test_sim_broker_exposes_the_same_surface_as_the_alpaca_broker():
-    """`cycle.py` habla con los dos indistintamente: si la interfaz se separa, el
-    simulador deja de probar el mismo camino de codigo que se usaria en real."""
+def test_sim_broker_cumple_el_protocolo_de_broker():
+    """`cycle.py` solo conoce el protocolo de `broker.py`.
+
+    Si el simulador se desvia de el, el dia que se anada un broker real el ciclo
+    dejaria de funcionar con uno de los dos y el test que lo dice es este.
+    """
     from src.broker import Broker
 
     for name in ("get_account_state", "is_market_open", "is_tradable",

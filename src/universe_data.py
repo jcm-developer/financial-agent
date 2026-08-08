@@ -1,8 +1,8 @@
 """El embudo: universo grande -> cache -> screener -> candidatos para el LLM.
 
 Vive en su propio modulo para que `market_data` no dependa de la base de datos ni
-del screener: los proveedores simples (Yahoo, Alpaca) siguen siendo objetos sin
-estado que solo hablan con la red.
+del screener: `YahooMarketData` sigue siendo un objeto sin estado que solo habla
+con la red.
 
 **Los dos intervalos van por separado, y es la clave de que esto sea viable.** El
 screener criba siempre con barras DIARIAS; el analisis usa el intervalo

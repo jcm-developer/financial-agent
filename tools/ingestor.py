@@ -205,8 +205,9 @@ def main() -> int:
                 if fallos_seguidos == max_failures:
                     log.error(
                         "%d fallos seguidos. Esto ya no parece un tropiezo puntual: "
-                        "revisa la red, si Yahoo esta limitando por IP, o pasa al "
-                        "plan B (DATA_PROVIDER=alpaca).", max_failures,
+                        "revisa la red y si Yahoo esta limitando por IP. Palancas: "
+                        "menos simbolos en el universo, o espaciar las peticiones "
+                        "dentro del minuto.", max_failures,
                     )
 
             if not sleep_until(next_tick(offset)):

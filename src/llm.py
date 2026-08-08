@@ -1,16 +1,27 @@
-"""Cliente para los endpoints de NVIDIA NIM (build.nvidia.com).
+"""Cliente de modelo, multi-proveedor (F6.6).
 
-NIM expone una API compatible con OpenAI, asi que basta con httpx: no hace
-falta arrastrar un SDK entero para una sola llamada POST.
+Dos proveedores tras la misma interfaz: **NVIDIA NIM** (por defecto, capa
+gratuita) y **OpenAI**. Los dos exponen `/chat/completions` con el mismo formato
+de peticion y respuesta, asi que la diferencia entre ellos es literalmente la URL
+base y la clave: no hay dos implementaciones, hay una con una tabla de
+proveedores. Por eso basta con httpx y el proyecto sigue sin arrastrar ningun
+SDK.
+
+**Anthropic no esta aqui a proposito.** Su API tiene otra forma —`/v1/messages`,
+otras cabeceras, el system fuera de `messages`, `input_tokens`/`output_tokens` en
+lugar de `prompt_tokens`/`completion_tokens`— y su documentacion pide usar el SDK
+oficial en lugar de hablar HTTP a mano. Eso es una dependencia nueva y una segunda
+implementacion de verdad, no una fila en una tabla; se queda para F9.1, cuando
+haya una razon para pagar por un modelo premium.
 
 El modulo asume lo peor del modelo y lo tolera:
 
   * Los modelos de razonamiento (deepseek-r1, nemotron) escriben su cadena de
     pensamiento en `<think>...</think>` antes del JSON.
   * Casi cualquier modelo envuelve el JSON en ```json ... ``` alguna vez.
-  * `response_format` no esta soportado por todos los modelos de NIM, asi que
-    se intenta y se desactiva para el resto de la sesion si el servidor lo rechaza.
-  * El nivel gratuito devuelve 429 con frecuencia: reintentos con espera
+  * `response_format` no lo soportan todos los modelos, asi que se intenta y se
+    desactiva para el resto de la sesion si el servidor lo rechaza.
+  * La capa gratuita devuelve 429 con frecuencia: reintentos con espera
     exponencial, respetando `Retry-After` cuando viene.
 """
 
@@ -36,6 +47,49 @@ class LLMError(RuntimeError):
     """La llamada al modelo fallo o devolvio algo inutilizable."""
 
 
+@dataclass(frozen=True)
+class Provider:
+    """Lo que distingue a un proveedor de otro. Nada mas."""
+
+    name: str
+    label: str            # para los mensajes de error, que los lee una persona
+    default_base_url: str
+
+
+PROVIDERS: dict[str, Provider] = {
+    "nvidia": Provider(
+        "nvidia", "NVIDIA NIM", "https://integrate.api.nvidia.com/v1"
+    ),
+    "openai": Provider("openai", "OpenAI", "https://api.openai.com/v1"),
+}
+
+# Proveedores que la columna `agent_settings.llm_provider` admite pero que
+# todavia no estan implementados. Se nombran para que el fallo diga "aun no",
+# que es la verdad, en lugar de "proveedor desconocido", que confunde.
+PLANNED_PROVIDERS = {
+    "anthropic": (
+        "El proveedor 'anthropic' no esta implementado todavia (queda en F9.1). "
+        "Su API tiene otra forma que la de NIM y OpenAI y necesita su SDK "
+        "oficial, que hoy no es una dependencia del proyecto. "
+        f"Proveedores disponibles: {', '.join(sorted(PROVIDERS))}."
+    ),
+}
+
+
+def resolve_provider(name: str) -> Provider:
+    """Devuelve el proveedor, o falla con un mensaje que distingue los casos."""
+    key = (name or "nvidia").strip().lower()
+    provider = PROVIDERS.get(key)
+    if provider is not None:
+        return provider
+    if key in PLANNED_PROVIDERS:
+        raise LLMError(PLANNED_PROVIDERS[key])
+    raise LLMError(
+        f"Proveedor de modelo desconocido: {name!r}. "
+        f"Validos: {', '.join(sorted(PROVIDERS))}."
+    )
+
+
 @dataclass
 class LLMResponse:
     content: str
@@ -52,18 +106,28 @@ class LLMClient:
         self,
         *,
         api_key: str,
-        base_url: str,
         model: str,
+        provider: str = "nvidia",
+        base_url: str = "",
         temperature: float = 0.2,
         timeout: float = 120.0,
         max_retries: int = 3,
     ) -> None:
+        """`base_url` vacio = la del proveedor. Se puede fijar para apuntar a un
+        proxy o a un despliegue propio compatible con OpenAI."""
+        self.provider = resolve_provider(provider)
         self.model = model
         self.temperature = temperature
         self.max_retries = max_retries
         self._supports_json_mode = True
+        if not api_key:
+            raise LLMError(
+                f"Falta la clave de API de {self.provider.label}. "
+                "Ponla en el perfil (llm_api_key) o, para NVIDIA NIM, en "
+                "NVIDIA_API_KEY."
+            )
         self._client = httpx.Client(
-            base_url=base_url,
+            base_url=(base_url or self.provider.default_base_url).rstrip("/"),
             timeout=httpx.Timeout(timeout),
             headers={
                 "Authorization": f"Bearer {api_key}",
@@ -126,8 +190,8 @@ class LLMClient:
                 http_response = self._client.post("/chat/completions", json=body)
             except httpx.HTTPError as exc:
                 last_error = exc
-                log.warning("Error de red hablando con NIM (intento %d/%d): %s",
-                            attempt, self.max_retries, exc)
+                log.warning("Error de red hablando con %s (intento %d/%d): %s",
+                            self.provider.label, attempt, self.max_retries, exc)
                 self._sleep_backoff(attempt)
                 continue
 
@@ -145,12 +209,14 @@ class LLMClient:
 
             if http_response.status_code == 429 or http_response.status_code >= 500:
                 last_error = LLMError(
-                    f"NIM devolvio {http_response.status_code}: {http_response.text[:200]}"
+                    f"{self.provider.label} devolvio {http_response.status_code}: "
+                    f"{http_response.text[:200]}"
                 )
                 retry_after = _parse_retry_after(http_response.headers.get("Retry-After"))
                 log.warning(
-                    "NIM devolvio %d (intento %d/%d).",
-                    http_response.status_code, attempt, self.max_retries,
+                    "%s devolvio %d (intento %d/%d).",
+                    self.provider.label, http_response.status_code,
+                    attempt, self.max_retries,
                 )
                 self._sleep_backoff(attempt, override=retry_after)
                 continue
@@ -158,13 +224,16 @@ class LLMClient:
             if http_response.status_code >= 400:
                 # 401/403/404 no se arreglan reintentando.
                 raise LLMError(
-                    f"NIM devolvio {http_response.status_code}: {http_response.text[:400]}"
+                    f"{self.provider.label} devolvio {http_response.status_code}: "
+                    f"{http_response.text[:400]}"
                 )
 
             try:
                 data = http_response.json()
             except ValueError as exc:
-                raise LLMError(f"NIM devolvio una respuesta no-JSON: {exc}") from exc
+                raise LLMError(
+                    f"{self.provider.label} devolvio una respuesta no-JSON: {exc}"
+                ) from exc
 
             content = _extract_message_content(data)
             usage = data.get("usage") or {}
@@ -179,7 +248,8 @@ class LLMClient:
             )
 
         raise LLMError(
-            f"No se pudo completar la llamada a NIM tras {self.max_retries} intentos: {last_error}"
+            f"No se pudo completar la llamada a {self.provider.label} tras "
+            f"{self.max_retries} intentos: {last_error}"
         )
 
     def _sleep_backoff(self, attempt: int, *, override: float | None = None) -> None:

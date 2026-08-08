@@ -113,11 +113,18 @@ def run_cycle() -> int:
 
 
 def validate_config() -> bool:
-    """Comprueba las credenciales una vez, antes de dormir horas en balde."""
-    from src.config import ConfigError, Settings
+    """Comprueba perfil y credenciales una vez, antes de dormir horas en balde.
+
+    Se resuelve el perfil aqui aunque el ciclo lo vuelva a resolver en su
+    subproceso: descubrir que no hay ningun perfil activo a las 22:15, tras ocho
+    horas dormido, es la peor hora posible para enterarse.
+    """
+    from src.config import ConfigError, Infra
 
     try:
-        settings = Settings.load()
+        from src.profile_settings import load_for_cycle
+
+        _, settings = load_for_cycle(Infra.load())
     except ConfigError as exc:
         log.error("Configuracion incompleta, el planificador no puede operar:\n%s", exc)
         log.error(
@@ -127,12 +134,7 @@ def validate_config() -> bool:
         return False
 
     log.info("Configuracion cargada: %s", settings.describe())
-    if not settings.alpaca_paper:
-        log.warning(
-            "ALPACA_PAPER=false: los ciclos programados enviaran ordenes con DINERO "
-            "REAL sin pedir confirmacion. La confirmacion interactiva solo existe "
-            "al ejecutar `run.py cycle` a mano."
-        )
+    log.info("Riesgo: %s", settings.risk_summary)
     return True
 
 

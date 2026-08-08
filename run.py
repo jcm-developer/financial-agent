@@ -1,15 +1,26 @@
 #!/usr/bin/env python
 """Punto de entrada del agente.
 
-    python run.py check     Verifica configuracion y conectividad. Empieza aqui.
-    python run.py status    Muestra el estado de la cuenta y las posiciones.
-    python run.py cycle     Ejecuta un ciclo completo de analisis y operativa.
-    python run.py report    Analitica del historico: P&L, calibracion, rechazos.
-    python run.py serve     Dashboard web en http://127.0.0.1:8000
+    python run.py check       Verifica configuracion y conectividad. Empieza aqui.
+    python run.py status      Muestra el estado de la cuenta y las posiciones.
+    python run.py cycle       Ejecuta un ciclo completo de analisis y operativa.
+    python run.py report      Analitica del historico: P&L, calibracion, rechazos.
+    python run.py serve       Dashboard web en http://127.0.0.1:8000
+    python run.py profiles    Lista los perfiles de experimento.
 
-`cycle` esta pensado para lanzarse desde el Programador de tareas de Windows o
-cron una o dos veces al dia, no en bucle continuo: los modelos gratuitos de NIM
-tienen limites de peticiones y el horizonte del agente es de dias.
+**Los parametros del agente viven en la base de datos, no en el `.env`** (F6.4):
+cada perfil de experimento lleva los suyos en `agent_settings`. Del entorno solo
+sale la infraestructura (`DB_PATH`, `NVIDIA_API_KEY`, `LOG_LEVEL`).
+
+Si vienes de la version anterior, importa tu `.env` a un perfil una sola vez:
+
+    python run.py import-profile --name experimento-01
+
+Con varios perfiles activos, `--profile <nombre>` elige contra cual se opera.
+
+`cycle` esta pensado para lanzarse desde el planificador una o dos veces al dia,
+no en bucle continuo: los modelos gratuitos de NIM tienen limites de peticiones y
+el horizonte del agente es de dias.
 """
 
 from __future__ import annotations
@@ -18,8 +29,9 @@ import argparse
 import logging
 import os
 import sys
+from dataclasses import replace
 
-from src.config import ConfigError, DashboardSettings, Settings
+from src.config import ConfigError, DashboardSettings, Infra, Settings
 from src.cycle import TradingCycle
 from src.llm import LLMClient, LLMError
 
@@ -31,7 +43,7 @@ def setup_logging(level: str) -> None:
         datefmt="%Y-%m-%d %H:%M:%S",
         stream=sys.stdout,
     )
-    # El SDK de Alpaca y httpx son muy verbosos en DEBUG.
+    # httpx y sus dependencias son muy verbosos en DEBUG.
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("hpack").setLevel(logging.WARNING)
@@ -47,7 +59,7 @@ def _print_header(title: str) -> None:
 # ----------------------------------------------------------------------
 
 def command_check(settings: Settings) -> int:
-    """Comprueba las tres integraciones por separado para que un fallo diga
+    """Comprueba las integraciones por separado para que un fallo diga
     exactamente que pieza esta mal configurada."""
     failures: list[str] = []
 
@@ -56,16 +68,23 @@ def command_check(settings: Settings) -> int:
     if settings.screener.enabled:
         # Se dice explicitamente: con embudo la watchlist no se usa, y verla
         # impresa hacia pensar lo contrario.
-        print("  WATCHLIST ignorada: manda UNIVERSE_FILE.")
+        print("  Watchlist ignorada: manda el fichero de universo.")
     else:
         print(f"  Watchlist: {', '.join(settings.watchlist)}")
-    risk = settings.risk
-    print(
-        f"  Riesgo: {risk.risk_per_trade_pct}% por operacion, "
-        f"max {risk.max_position_pct}% por posicion, "
-        f"max {risk.max_open_positions} posiciones, "
-        f"kill switch a -{risk.max_daily_loss_pct}%"
-    )
+
+    if settings.risk_summary:
+        # Ya lleva los nueve limites y de donde salen, asi que no se repiten.
+        print(f"  {settings.risk_summary}")
+    else:
+        risk = settings.risk
+        print(
+            f"  Riesgo: {risk.risk_per_trade_pct}% por operacion, "
+            f"max {risk.max_position_pct}% por posicion, "
+            f"max {risk.max_open_positions} posiciones, "
+            f"kill switch a -{risk.max_daily_loss_pct}%"
+        )
+        print("  Parametros leidos del .env: todavia no hay perfil. Crealo con "
+              "python run.py import-profile")
 
     _print_header("Calendario de mercado")
     from src import market_calendar
@@ -109,9 +128,8 @@ def command_check(settings: Settings) -> int:
                 f"No se obtuvieron barras para {', '.join(probe)}. "
                 "Comprueba la conexion y que los simbolos existan."
             )
-        source = ("Yahoo Finance (yfinance)" if settings.data_provider == "yahoo"
-                  else f"Alpaca, feed {settings.alpaca_data_feed}")
-        print(f"  OK  fuente={source}  intervalo={settings.bar_interval}")
+        print(f"  OK  fuente=Yahoo Finance (yfinance)  "
+              f"intervalo={settings.bar_interval}")
         print(f"      {'ACTIVO':<8}{'DECISION':>10}{'EJECUCION':>11}"
               f"{'RSI':>7}{'ATR':>8}{'BARRAS':>8}  SESION")
         for symbol, snapshot in snapshots.items():
@@ -130,80 +148,55 @@ def command_check(settings: Settings) -> int:
         print("      con informacion del futuro.")
     except Exception as exc:  # noqa: BLE001
         print(f"  FALLO  {exc}")
-        if settings.data_provider == "yahoo":
-            print("      Si el error viene de yfinance, prueba: pip install -U yfinance")
+        print("      Si el error viene de yfinance, prueba: pip install -U yfinance")
         failures.append("Datos de mercado")
 
-    if settings.broker == "sim":
-        _print_header("Broker simulado")
-        try:
-            from src.db import Database
-            from src.sim_broker import SimBroker
+    _print_header("Broker simulado")
+    try:
+        from src.db import Database
+        from src.sim_broker import SimBroker
 
-            with Database(path=settings.db_path) as database:
-                portfolio_id = database.ensure_portfolio(
-                    name=settings.portfolio_name,
-                    mode=settings.mode,
-                    initial_budget=settings.initial_budget,
-                )
-                broker = SimBroker(
-                    database=database,
-                    portfolio_id=portfolio_id,
-                    initial_cash=settings.initial_budget,
-                    slippage_bps=settings.sim_slippage_bps,
-                    commission_per_order=settings.sim_commission,
-                )
-                account = broker.get_account_state()
-                fills = database.query(
-                    "select count(*) as n from sim_fills where account_id = ?",
-                    (portfolio_id,),
-                )[0]["n"]
-
-            print(f"  OK  sin cuenta de broker: la contabilidad es local")
-            print(f"      efectivo=${account.cash:,.2f}  equity=${account.equity:,.2f}")
-            print(f"      posiciones={len(account.positions)}  ejecuciones registradas={fills}")
-            print(f"      deslizamiento={settings.sim_slippage_bps:.0f} pb  "
-                  f"comision=${settings.sim_commission:,.2f} por orden")
-            for position in account.positions:
-                print(
-                    f"        {position.symbol:<6} {position.qty:>8g} @ "
-                    f"{position.avg_entry_price:>8.2f}"
-                )
-        except Exception as exc:  # noqa: BLE001
-            print(f"  FALLO  {exc}")
-            failures.append("Broker simulado")
-    else:
-        _print_header("Alpaca")
-        try:
-            from src.broker import Broker
-
-            broker = Broker(
-                api_key=settings.alpaca_api_key,
-                secret_key=settings.alpaca_secret_key,
-                paper=settings.alpaca_paper,
+        with Database(path=settings.db_path) as database:
+            portfolio_id = database.ensure_portfolio(
+                name=settings.portfolio_name,
+                mode=settings.mode,
+                initial_budget=settings.initial_budget,
+            )
+            broker = SimBroker(
+                database=database,
+                portfolio_id=portfolio_id,
+                initial_cash=settings.initial_budget,
+                slippage_bps=settings.sim_slippage_bps,
+                commission_per_order=settings.sim_commission,
             )
             account = broker.get_account_state()
-            is_open = broker.is_market_open()
-            print(f"  OK  modo={settings.mode}  "
-                  f"mercado={'abierto' if is_open else 'cerrado'}")
-            print(f"      equity=${account.equity:,.2f}  cash=${account.cash:,.2f}")
-            print(f"      posiciones abiertas={len(account.positions)}")
-            for position in account.positions:
-                print(
-                    f"        {position.symbol:<6} {position.qty:>8g} @ "
-                    f"{position.avg_entry_price:>8.2f}  "
-                    f"P&L {position.unrealized_pl:+.2f} "
-                    f"({position.unrealized_pl_pct:+.2f}%)"
-                )
-        except Exception as exc:  # noqa: BLE001
-            print(f"  FALLO  {exc}")
-            failures.append("Alpaca")
+            fills = database.query(
+                "select count(*) as n from sim_fills where account_id = ?",
+                (portfolio_id,),
+            )[0]["n"]
 
-    _print_header("NVIDIA NIM")
+        print(f"  OK  sin cuenta de broker: la contabilidad es local")
+        print(f"      efectivo=${account.cash:,.2f}  equity=${account.equity:,.2f}")
+        print(f"      posiciones={len(account.positions)}  ejecuciones registradas={fills}")
+        print(f"      deslizamiento={settings.sim_slippage_bps:.0f} pb  "
+              f"comision=${settings.sim_commission:,.2f} por orden")
+        for position in account.positions:
+            print(
+                f"        {position.symbol:<6} {position.qty:>8g} @ "
+                f"{position.avg_entry_price:>8.2f}"
+            )
+    except Exception as exc:  # noqa: BLE001
+        print(f"  FALLO  {exc}")
+        failures.append("Broker simulado")
+
+    from src.llm import resolve_provider
+
+    _print_header(f"Modelo ({resolve_provider(settings.llm_provider).label})")
     try:
         with LLMClient(
-            api_key=settings.nvidia_api_key,
-            base_url=settings.nvidia_base_url,
+            api_key=settings.model_api_key,
+            provider=settings.llm_provider,
+            base_url=settings.model_base_url,
             model=settings.llm_model,
             temperature=0.0,
             timeout=settings.llm_timeout_seconds,
@@ -220,11 +213,12 @@ def command_check(settings: Settings) -> int:
               f"{response.completion_tokens} salida")
     except LLMError as exc:
         print(f"  FALLO  {exc}")
-        print("      Revisa NVIDIA_API_KEY y que LLM_MODEL exista en build.nvidia.com.")
-        failures.append("NVIDIA NIM")
+        print("      Revisa la clave del perfil (llm_api_key) y que el modelo exista")
+        print("      en el proveedor elegido.")
+        failures.append("Modelo")
     except Exception as exc:  # noqa: BLE001
         print(f"  FALLO  {exc}")
-        failures.append("NVIDIA NIM")
+        failures.append("Modelo")
 
     _print_header("Base de datos (SQLite)")
     try:
@@ -278,7 +272,7 @@ def command_status(settings: Settings) -> int:
     que ve el analista.
     """
     from src.db import Database
-    from src.market_data import build_market_data
+    from src.sim_broker import Quote, SimBroker
 
     with Database(path=settings.db_path) as database:
         portfolio_id = database.ensure_portfolio(
@@ -287,51 +281,35 @@ def command_status(settings: Settings) -> int:
         )
         tracked = database.get_open_positions(portfolio_id)
 
-        if settings.broker == "sim":
-            from src.sim_broker import Quote, SimBroker
+        broker = SimBroker(
+            database=database,
+            portfolio_id=portfolio_id,
+            initial_cash=settings.initial_budget,
+            slippage_bps=settings.sim_slippage_bps,
+            commission_per_order=settings.sim_commission,
+        )
+        held = broker.held_symbols()
+        if held:
+            # Se piden solo las posiciones abiertas: `status` no necesita cribar
+            # el universo ni gastar peticiones en candidatos nuevos.
+            from src.market_data import YahooMarketData
 
-            broker = SimBroker(
-                database=database,
-                portfolio_id=portfolio_id,
-                initial_cash=settings.initial_budget,
-                slippage_bps=settings.sim_slippage_bps,
-                commission_per_order=settings.sim_commission,
-            )
-            held = broker.held_symbols()
-            if held:
-                # Se piden solo las posiciones abiertas: `status` no necesita
-                # cribar el universo ni gastar peticiones en candidatos nuevos.
-                from src.market_data import YahooMarketData
-
-                provider = (
-                    YahooMarketData(
-                        watchlist=sorted(held),
-                        lookback_days=settings.lookback_days,
-                        interval=settings.bar_interval,
-                    )
-                    if settings.data_provider == "yahoo"
-                    else build_market_data(settings, database)
+            snapshots = YahooMarketData(
+                watchlist=sorted(held),
+                lookback_days=settings.lookback_days,
+                interval=settings.bar_interval,
+            ).fetch_snapshots(sorted(held))
+            broker.set_quotes({
+                symbol: Quote(
+                    fill_price=snapshot.execution_price,
+                    mark_price=snapshot.price,
+                    basis=snapshot.fill_basis,
                 )
-                snapshots = provider.fetch_snapshots(sorted(held))
-                broker.set_quotes({
-                    symbol: Quote(
-                        fill_price=snapshot.execution_price,
-                        mark_price=snapshot.price,
-                        basis=snapshot.fill_basis,
-                    )
-                    for symbol, snapshot in snapshots.items()
-                })
-            account = broker.get_account_state()
-        else:
-            from src.broker import Broker
+                for symbol, snapshot in snapshots.items()
+            })
+        account = broker.get_account_state()
 
-            account = Broker(
-                api_key=settings.alpaca_api_key,
-                secret_key=settings.alpaca_secret_key,
-                paper=settings.alpaca_paper,
-            ).get_account_state()
-
-    _print_header(f"Cuenta ({settings.broker}, {settings.mode})")
+    _print_header(f"Cuenta ({settings.portfolio_name}, {settings.mode})")
     print(f"  Equity          ${account.equity:>14,.2f}")
     print(f"  Cash            ${account.cash:>14,.2f}")
     print(f"  En posiciones   ${account.positions_value:>14,.2f}")
@@ -509,8 +487,9 @@ def _pct(value: object) -> str:
 
 def command_cycle(settings: Settings) -> int:
     with LLMClient(
-        api_key=settings.nvidia_api_key,
-        base_url=settings.nvidia_base_url,
+        api_key=settings.model_api_key,
+        provider=settings.llm_provider,
+        base_url=settings.model_base_url,
         model=settings.llm_model,
         temperature=settings.llm_temperature,
         timeout=settings.llm_timeout_seconds,
@@ -538,6 +517,89 @@ def command_serve(dash: DashboardSettings, *, host: str, port: int) -> int:
 
 
 # ----------------------------------------------------------------------
+# Perfiles de experimento
+# ----------------------------------------------------------------------
+
+def command_profiles(infra: Infra) -> int:
+    from src.db import Database
+    from src.profile_settings import mask_secret
+    from src.risk_presets import describe
+
+    with Database(path=infra.db_path) as database:
+        profiles = database.list_profiles(include_archived=True)
+        if not profiles:
+            print("\n  No hay ningun perfil todavia.")
+            print("  Importa el .env actual con:  "
+                  "python run.py import-profile --name experimento-01")
+            return 0
+
+        _print_header(f"Perfiles ({len(profiles)})")
+        for profile in profiles:
+            settings = database.get_settings(profile["id"])
+            symbols = database.get_profile_universe(profile["id"])
+            universe = (
+                settings["universe_file"] or f"{len(symbols)} simbolos propios"
+            )
+            print(f"  {profile['name']}  [{profile['status']}]")
+            print(f"      {describe(settings)}")
+            # Con NVIDIA, una columna vacia no significa "sin clave": significa
+            # que se usa NVIDIA_API_KEY del entorno. Decir "(sin clave)" ahi
+            # mandaria a buscar un problema que no existe.
+            sin_clave = (
+                "(NVIDIA_API_KEY del entorno)"
+                if settings["llm_provider"] == "nvidia" else "(sin clave)"
+            )
+            print(f"      modelo={settings['llm_provider']}/{settings['llm_model']}"
+                  f"  clave={mask_secret(settings['llm_api_key'], empty=sin_clave)}")
+            print(f"      universo={universe}  "
+                  f"presupuesto=${float(settings['initial_budget']):,.2f}")
+    return 0
+
+
+def command_import_profile(infra: Infra, *, name: str, env_file: str | None) -> int:
+    """Crea un perfil que reproduce el `.env`. Puente de un solo uso hacia F6.4."""
+    from src.db import Database, DatabaseError
+    from src.profile_settings import import_env_profile
+
+    try:
+        env_settings = Settings.load(env_file=env_file)
+    except ConfigError as exc:
+        print(f"No se pudo leer el .env: {exc}", file=sys.stderr)
+        return 2
+
+    with Database(path=infra.db_path) as database:
+        try:
+            profile_id = import_env_profile(database, env_settings, name=name)
+        except DatabaseError as exc:
+            print(f"No se pudo crear el perfil: {exc}", file=sys.stderr)
+            return 1
+        settings = database.get_settings(profile_id)
+
+    from src.risk_presets import describe
+
+    _print_header(f"Perfil {name or env_settings.portfolio_name!r} creado y activado")
+    print(f"  {describe(settings)}")
+    print("\n  Los limites de riesgo se han importado en MODO AVANZADO, con los")
+    print("  numeros exactos que traia el .env, para no cambiar el comportamiento")
+    print("  del agente al mover la configuracion de sitio. Para pasarte a los")
+    print("  deslizadores de F6.5, apaga advanced_overrides.")
+    print("\n  Ya puedes ejecutar:  python run.py cycle")
+    return 0
+
+
+def command_activate(infra: Infra, *, name: str) -> int:
+    from src.db import Database
+    from src.profile_settings import select_profile
+
+    with Database(path=infra.db_path) as database:
+        profile_id = select_profile(database, name=name)
+        database.set_profile_status(profile_id, "active")
+        profile = database.get_profile(profile_id)
+    print(f"  Perfil {profile['name']!r} activado.")
+    return 0
+
+
+# ----------------------------------------------------------------------
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
@@ -548,15 +610,28 @@ def main(argv: list[str] | None = None) -> int:
         "command",
         nargs="?",
         default="check",
-        choices=["check", "status", "cycle", "report", "serve"],
+        choices=["check", "status", "cycle", "report", "serve",
+                 "profiles", "import-profile", "activate"],
         help="check: diagnostico (por defecto). status: estado de la cuenta. "
              "cycle: ejecutar un ciclo. report: analitica en consola. "
-             "serve: dashboard web.",
+             "serve: dashboard web. profiles: listar experimentos. "
+             "import-profile: crear un perfil a partir del .env. "
+             "activate: marcar un perfil como activo.",
+    )
+    parser.add_argument(
+        "--profile", default="",
+        help="Nombre del perfil de experimento. Sin esto se usa el unico activo.",
+    )
+    parser.add_argument(
+        "--name", default="",
+        help="Nombre del perfil a crear (solo import-profile). Por defecto, "
+             "PORTFOLIO_NAME del .env.",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Analiza y registra en la base de datos pero no envia ordenes al broker.",
+        help="Analiza y registra en la base de datos pero no envia ordenes al broker. "
+             "Solo para esta ejecucion; no toca el parametro del perfil.",
     )
     parser.add_argument("--env-file", default=None, help="Ruta a un .env alternativo.")
     parser.add_argument(
@@ -567,9 +642,6 @@ def main(argv: list[str] | None = None) -> int:
         help="Interfaz del dashboard (solo serve). Por defecto solo local.",
     )
     args = parser.parse_args(argv)
-
-    if args.dry_run:
-        os.environ["DRY_RUN"] = "true"
 
     # `report` y `serve` solo leen la base: no se les exigen credenciales, para
     # poder revisar la operativa con el .env a medio rellenar.
@@ -584,22 +656,30 @@ def main(argv: list[str] | None = None) -> int:
             print("\nInterrumpido por el usuario.", file=sys.stderr)
             return 130
 
+    infra = Infra.load(env_file=args.env_file)
+    setup_logging(infra.log_level)
+
     try:
-        settings = Settings.load(env_file=args.env_file)
+        if args.command == "profiles":
+            return command_profiles(infra)
+        if args.command == "import-profile":
+            return command_import_profile(
+                infra, name=args.name or args.profile, env_file=args.env_file
+            )
+        if args.command == "activate":
+            target = args.profile or args.name
+            if not target:
+                print("activate necesita --profile <nombre>.", file=sys.stderr)
+                return 2
+            return command_activate(infra, name=target)
+
+        settings = _settings_for(args, infra, allow_env_fallback=args.command == "check")
     except ConfigError as exc:
         print(f"Error de configuracion: {exc}", file=sys.stderr)
         return 2
-
-    setup_logging(settings.log_level)
-
-    if not settings.alpaca_paper and args.command == "cycle" and not settings.dry_run:
-        print("\n" + "!" * 70)
-        print("  ALPACA_PAPER=false: este ciclo enviara ordenes con DINERO REAL.")
-        print("!" * 70)
-        answer = input("  Escribe 'CONFIRMO' para continuar: ").strip()
-        if answer != "CONFIRMO":
-            print("  Cancelado.")
-            return 1
+    except KeyboardInterrupt:
+        print("\nInterrumpido por el usuario.", file=sys.stderr)
+        return 130
 
     handlers = {
         "check": command_check,
@@ -611,6 +691,29 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\nInterrumpido por el usuario.", file=sys.stderr)
         return 130
+
+
+def _settings_for(args, infra: Infra, *, allow_env_fallback: bool) -> Settings:
+    """Resuelve los parametros del perfil. `check` puede caer al `.env`.
+
+    Esa excepcion es deliberada: `check` es la herramienta de diagnostico y tiene
+    que poder correr en una instalacion recien clonada, antes de que exista
+    ningun perfil. `cycle` y `status`, en cambio, exigen perfil: operar con
+    parametros que no quedan registrados en ningun sitio es justo lo que F6.4
+    viene a arreglar.
+    """
+    from src.profile_settings import load_for_cycle
+
+    try:
+        _, settings = load_for_cycle(infra, profile_name=args.profile)
+    except ConfigError:
+        if not allow_env_fallback:
+            raise
+        settings = Settings.load(env_file=args.env_file)
+
+    if args.dry_run:
+        settings = replace(settings, dry_run=True)
+    return settings
 
 
 if __name__ == "__main__":

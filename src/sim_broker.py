@@ -1,12 +1,11 @@
-"""Broker simulado. Sustituto directo de `Broker` (Alpaca).
+"""Broker simulado: la contabilidad del experimento en SQLite.
 
 Existe para que el experimento no exija dar de alta una cuenta de broker: el
 objetivo es ver operar al agente y medir la calidad de sus decisiones, y para eso
 un libro contable propio sirve igual.
 
-Expone los mismos metodos que `broker.Broker`, asi que `cycle.py` no distingue
-uno de otro y el codigo que se prueba con el simulador es el mismo que correria
-contra Alpaca.
+Implementa el protocolo `Broker` de [broker.py](broker.py), que es lo unico que
+`cycle.py` conoce: el ciclo no sabe que esta hablando con un simulador.
 
 Honestidad de la simulacion, que es lo unico que la hace util:
 
@@ -145,8 +144,8 @@ class SimBroker:
     def is_market_open(self) -> bool:
         """El simulador ejecuta siempre que tenga precios.
 
-        No modela horarios: si hay una barra nueva, hay sesion que operar. Con
-        Alpaca esto consulta el reloj real del mercado.
+        No modela horarios: si hay una barra nueva, hay sesion que operar. Un
+        broker real consultaria aqui el reloj del mercado.
         """
         return bool(self._quotes)
 
