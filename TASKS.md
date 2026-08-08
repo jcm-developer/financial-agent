@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-08 (tarde: mercado europeo)
+Última actualización: 2026-08-08 (tarde: mercado europeo + FE.11)
 
 ---
 
@@ -294,7 +294,8 @@ otra forma y pide su SDK, así que queda en F9.1.
 
 ### FE — Mercado europeo ✅ (2026-08-08)
 
-Ver D8. Todo cerrado salvo lo que depende de la sesión del lunes (F2.1c).
+Ver D8. Cerrado salvo lo que depende de la sesión del lunes (F2.1c) y el tope por sector
+(FE.12), que sigue bloqueado por lo mismo que F6.5.
 
 - [x] **FE.1** [src/market_calendar.py](src/market_calendar.py) reescrito como registro:
       `Market` (zona, horario, festivos, divisa, benchmark, sufijos de bolsa) y `MARKETS`
@@ -341,14 +342,23 @@ Ver D8. Todo cerrado salvo lo que depende de la sesión del lunes (F2.1c).
       valor toma la sesión entera del mercado elegido. Sin esto, F2.1c no se podía medir el
       lunes: el spike habría consultado el calendario de NYSE y habría dicho "mercado
       cerrado" a las 9 de la mañana.
-- [x] **FE.10** [tests/test_markets.py](tests/test_markets.py): 79 tests. **Suite completa:
-      523 en verde.**
-- [ ] **FE.11** ⚠️ **Pendiente, y es lo único que queda:** bajar
-      `screener_min_dollar_volume` a 5.000.000 en el perfil europeo. Medido el 2026-08-08
-      sobre las últimas 20 sesiones, el default de 20 M (pensado para el S&P 500) deja
+- [x] **FE.10** [tests/test_markets.py](tests/test_markets.py): 79 tests (83 tras FE.11).
+      **Suite completa: 523 en verde** (527 tras FE.11).
+- [x] **FE.11** Liquidez mínima del screener a 5.000.000 € en Europa. Medido el 2026-08-08
+      sobre las últimas 20 sesiones, el default de 20 M (pensado para el S&P 500) dejaba
       fuera 15 de los 89 — ANE.MC, LOG.MC, COL.MC, PUIG.MC, FDR.MC, ROVI.MC, SCYR.MC,
       MAP.MC… — que son precisamente las medianas españolas por las que se añadió el IBEX.
-      Con 5 M pasan los 89: el menos líquido negocia 5,4 M €/día.
+      Con 5 M pasan los 89: el menos líquido negocia 5,4 M €/día, así que el umbral sigue
+      filtrando y no está puesto por debajo de todo.
+
+      **No se ha hecho editando la base, que era el plan.** El número vive en
+      `Market.min_turnover` y `new-profile` lo aplica al crear el perfil: es una propiedad
+      del universo, no una preferencia del usuario, y como columna con default único
+      significaba cosas distintas según el mercado. Lo que había antes era un **aviso
+      impreso** pidiendo bajarlo a mano; un aviso que exige trabajo manual acaba sin
+      aplicarse, y el síntoma —15 valores menos— no es un error, es un universo más
+      pequeño del que uno cree. `_check_markets` rechaza un suelo no positivo por lo mismo:
+      un 0 apaga el filtro sin decirlo. **Suite: 527 en verde** (4 tests nuevos).
 - [x] **FE.13** **Ventana operativa 09:15–17:45**, distinta de la sesión (09:00–17:30).
       Pedida explícitamente, y con motivo en las dos puntas: los 15 primeros minutos son la
       resaca de la subasta de apertura —las barras más ruidosas del día, y las peores para
@@ -600,7 +610,8 @@ Ver D8. Todo cerrado salvo lo que depende de la sesión del lunes (F2.1c).
       cifra está en la divisa del mercado, así que el nombre miente en los perfiles
       europeos. No es urgente —hay un comentario en el esquema y otro en el fichero de
       universo— pero toca esquema, `db.py`, `profile_settings.py`, `config.py`, el screener
-      y sus tests, así que conviene hacerlo de una vez y no a medias.
+      y sus tests, así que conviene hacerlo de una vez y no a medias. FE.11 ya usa el
+      nombre bueno en `Market.min_turnover`, así que hoy el código convive con los dos.
 
 ### F9 — Futuro (no bloquea)
 

@@ -714,6 +714,12 @@ def command_new_profile(
                     "market": mercado.code,
                     "benchmark": mercado.benchmark,
                     "universe_file": mercado.universe_file,
+                    # El suelo de liquidez sale del mercado, no del default del
+                    # esquema (FE.11). Antes esto era un aviso impreso que habia
+                    # que aplicar a mano abriendo la base, y un aviso que exige
+                    # trabajo manual es un fallo esperando: con los 20 M de 'us'
+                    # el screener europeo descarta en silencio 15 de los 89.
+                    "screener_min_dollar_volume": mercado.min_turnover,
                     "initial_budget": budget,
                 },
             )
@@ -734,9 +740,10 @@ def command_new_profile(
     print(f"  Ingesta en vivo de {len(seguidos)} simbolos")
     print(f"  Presupuesto inicial: {mercado.currency_symbol}{budget:,.2f}")
     print(f"  Benchmark: {mercado.benchmark}")
-    if mercado.code == "eu":
-        print("\n  Baja screener_min_dollar_volume a 5.000.000: el default de")
-        print("  20 M esta pensado para el S&P 500 y aqui deja fuera 15 valores.")
+    # La cifra va en la divisa del mercado pese al nombre de la columna (F8.7):
+    # ensenarla con su simbolo evita que se lea como dolares.
+    print(f"  Liquidez minima del screener: "
+          f"{mercado.currency_symbol}{mercado.min_turnover:,.0f} al dia")
     print(f"\n  Actívalo cuando lo tengas revisado:  "
           f"python run.py activate --profile {name}")
     return 0

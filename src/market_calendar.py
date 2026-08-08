@@ -82,6 +82,12 @@ class Market:
     benchmark: str
     #: Fichero de universo que se propone para este mercado.
     universe_file: str
+    #: Suelo de liquidez del screener (`agent_settings.screener_min_dollar_volume`)
+    #: para un perfil de este mercado, **en la divisa del mercado**: el screener
+    #: multiplica precio por volumen y no convierte nada. Vive aqui porque el
+    #: numero no es una preferencia del usuario sino una propiedad del universo:
+    #: 20 M valen para el S&P 500 y dejan fuera 15 de los 89 europeos.
+    min_turnover: float
     #: Sufijos de bolsa que Yahoo usa para este mercado. Vacio = simbolos sin
     #: sufijo (Estados Unidos). Es lo que permite detectar un perfil con
     #: simbolos del mercado equivocado antes de que empiece a operar.
@@ -206,6 +212,9 @@ US = Market(
     currency_symbol="$",
     benchmark="SPY",
     universe_file="universe/sp500.txt",
+    # 20 M USD/dia: es el default historico del esquema y de donde salio la
+    # cifra. Con el S&P 500 no descarta practicamente nada.
+    min_turnover=20_000_000.0,
     symbol_suffixes=frozenset(),
     holidays=_US_HOLIDAYS,
     early_closes=_US_EARLY_CLOSES,
@@ -278,6 +287,13 @@ EU = Market(
     # SPY aqui: cotiza en Xetra, en euros y con el mismo horario que el universo.
     benchmark="EXW1.DE",
     universe_file="universe/eurostoxx50_ibex35.txt",
+    # 5 M EUR/dia. Medido el 2026-08-08 sobre las ultimas 20 sesiones: con el
+    # default de 20 M se caen 15 de los 89 —ANE.MC, LOG.MC, COL.MC, PUIG.MC,
+    # FDR.MC, ROVI.MC, SCYR.MC, MAP.MC...—, que son precisamente las medianas
+    # espanolas por las que se anadio el IBEX. Con 5 M pasan los 89: el menos
+    # liquido negocia 5,4 M EUR/dia, asi que el umbral sigue filtrando de verdad
+    # en lugar de estar puesto por debajo de todo.
+    min_turnover=5_000_000.0,
     # Las seis bolsas del universo. Faltan a proposito las que no cotizan en
     # euros: .L (Londres, en peniques), .SW (Zurich), .ST (Estocolmo), .CO, .OL.
     symbol_suffixes=frozenset({".MC", ".PA", ".DE", ".AS", ".MI", ".BR", ".HE"}),
@@ -318,6 +334,11 @@ def _check_markets(markets=None) -> None:
     for mkt in (MARKETS.values() if markets is None else markets):
         if mkt.open_time >= mkt.close_time:
             raise ValueError(f"{mkt.code}: la sesion cierra antes de abrir.")
+        if mkt.min_turnover <= 0:
+            # Un 0 no revienta: apaga el filtro de liquidez del screener sin
+            # decirlo, y el agente empieza a analizar valores que no se pueden
+            # comprar al tamano de la cartera.
+            raise ValueError(f"{mkt.code}: min_turnover tiene que ser positivo.")
         if mkt.warmup_minutes < 0 or mkt.drain_minutes < 0:
             raise ValueError(f"{mkt.code}: los desplazamientos van hacia adelante.")
         if mkt.operating_open >= mkt.operating_close:

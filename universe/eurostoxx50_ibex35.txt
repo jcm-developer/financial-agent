@@ -15,14 +15,15 @@
 # Horario: 09:00-17:30 CET/CEST, comun a las seis bolsas. Ver el mercado 'eu' en
 # src/market_calendar.py.
 #
-# BAJA screener_min_dollar_volume A 5.000.000 EN LOS PERFILES QUE USEN ESTE
-# FICHERO. El default de agent_settings son 20 M, pensado para el S&P 500, y
-# medido el 2026-08-08 sobre las ultimas 20 sesiones deja fuera 15 de los 89
-# —ANE.MC, LOG.MC, COL.MC, PUIG.MC, FDR.MC, ROVI.MC, SCYR.MC, MAP.MC...—, que
-# son precisamente las medianas espanolas por las que se anadio el IBEX. Con
-# 5 M pasan los 89: el menos liquido negocia 5,4 M EUR/dia.
-# Recuerda que la cifra esta en EUROS, no en dolares, pese al nombre de la
-# columna: el screener multiplica precio por volumen y no convierte nada.
+# LIQUIDEZ MINIMA DEL SCREENER: 5.000.000 EUR/dia, y la pone sola
+# `new-profile` desde `Market.min_turnover` (FE.11). El default del esquema son
+# 20 M, pensado para el S&P 500, y medido el 2026-08-08 sobre las ultimas 20
+# sesiones deja fuera 15 de los 89 —ANE.MC, LOG.MC, COL.MC, PUIG.MC, FDR.MC,
+# ROVI.MC, SCYR.MC, MAP.MC...—, que son precisamente las medianas espanolas por
+# las que se anadio el IBEX. Con 5 M pasan los 89: el menos liquido negocia
+# 5,4 M EUR/dia. Si creas un perfil a mano, comprueba esa columna.
+# La cifra esta en EUROS, no en dolares, pese al nombre de la columna: el
+# screener multiplica precio por volumen y no convierte nada.
 #
 # Composicion aproximada: la pertenencia exacta a los indices cambia varias veces
 # al ano y no se persigue. Lo que importa para el experimento es que sean valores

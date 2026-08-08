@@ -661,6 +661,53 @@ def test_el_perfil_creado_por_el_comando_resuelve_sin_quejarse(infra_tmp):
     assert len(settings.watchlist) == 89
 
 
+# -- Liquidez minima por mercado (FE.11) -------------------------------------
+
+
+def test_el_suelo_de_liquidez_europeo_es_mas_bajo_que_el_americano():
+    """Medido el 2026-08-08: con los 20 M del S&P 500, el screener europeo
+    descarta 15 de los 89 —las medianas del IBEX por las que se anadio el
+    indice— y lo hace en silencio, porque un valor filtrado no es un error."""
+    assert mc.EU.min_turnover == 5_000_000.0
+    assert mc.US.min_turnover == 20_000_000.0
+
+
+def test_un_suelo_de_liquidez_no_positivo_se_rechaza_al_validar():
+    """Un 0 no revienta: apaga el filtro sin decirlo."""
+    roto = dataclasses.replace(mc.EU, min_turnover=0.0)
+
+    with pytest.raises(ValueError, match="min_turnover"):
+        mc._check_markets([roto])
+
+
+@pytest.mark.parametrize("market, watch, esperado", [
+    ("eu", 0, 5_000_000.0),
+    ("us", 50, 20_000_000.0),
+])
+def test_new_profile_pone_el_suelo_de_liquidez_del_mercado(
+    infra_tmp, market, watch, esperado
+):
+    """FE.11: antes esto era un aviso impreso que habia que aplicar a mano
+    abriendo la base. Un aviso que exige trabajo manual acaba sin aplicarse, y
+    el sintoma es un universo mas pequeno del que se cree."""
+    from run import command_new_profile
+    from src.db import Database
+
+    command_new_profile(
+        infra_tmp, name=f"perfil-{market}", market=market, watch=watch,
+        budget=10_000.0,
+    )
+
+    with Database(path=infra_tmp.db_path) as database:
+        profile_id = database.get_profile_by_name(f"perfil-{market}")["id"]
+        settings = database.get_settings(profile_id)
+        resuelto = resolve_settings(database, profile_id, infra=INFRA)
+
+    assert settings["screener_min_dollar_volume"] == esperado
+    # Y llega hasta el screener, que es el unico sitio donde el numero hace algo.
+    assert resuelto.screener.min_dollar_volume == esperado
+
+
 def test_el_reparto_cuadra_con_el_universo_plano(db, perfil_eu):
     """`active_universe` y `active_universe_by_market` no pueden discrepar: la
     segunda es la primera con la bolsa puesta."""
