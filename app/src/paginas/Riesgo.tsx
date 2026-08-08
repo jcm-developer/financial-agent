@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import { useRiskEvents } from "@/api/hooks";
 import type { RiskEventRow } from "@/api/types";
+import { Insignia, Select, TituloPagina, TituloSeccion } from "@/components/piezas";
 import { Seccion } from "@/components/Seccion";
 import { Cabecera, Fila, Paginacion, Tabla, Td, Th, Vacio } from "@/components/Tabla";
 import { cantidad, dinero, fechaHora } from "@/lib/formato";
@@ -40,36 +41,32 @@ export function Riesgo() {
 
   return (
     <>
-      <h1 className="mb-5 text-[17px] font-semibold tracking-tight">Eventos de riesgo</h1>
+      <TituloPagina>Eventos de riesgo</TituloPagina>
 
-      <label className="mb-5 flex w-fit flex-col gap-1 text-[13px]">
-        <span className="text-text-muted">Veredicto</span>
-        <select
-          value={veredicto}
-          onChange={(evento) => {
-            setVeredicto(evento.target.value);
-            setDesplazamiento(0);
-          }}
-          className="min-h-8 rounded-md border border-border bg-card px-2 py-1"
-        >
-          <option value="rejected">Rechazados</option>
-          <option value="approved">Aprobados</option>
-          <option value="">Todos</option>
-        </select>
-      </label>
+      <Select
+        etiqueta="Veredicto"
+        value={veredicto}
+        opciones={[
+          ["rejected", "Rechazados"],
+          ["approved", "Aprobados"],
+          ["", "Todos"],
+        ]}
+        onChange={(evento) => {
+          setVeredicto(evento.target.value);
+          setDesplazamiento(0);
+        }}
+        claseCampo="mb-5 w-fit"
+      />
 
       {porRegla.length > 0 && (
         <section className="mb-6">
-          <h2 className="mb-2 text-[13px] font-semibold tracking-wide text-text-secondary uppercase">
-            Por regla
-          </h2>
+          <TituloSeccion className="mb-2">Por regla</TituloSeccion>
           <ul className="flex flex-wrap gap-2">
             {porRegla.map(([regla, veces]) => (
-              <li
-                key={regla}
-                className="rounded-full border border-border bg-card px-3 py-1 text-[13px]"
-              >
-                {regla} <span className="tabular font-semibold">{veces}</span>
+              <li key={regla}>
+                <Insignia>
+                  {regla} <span className="tabular font-semibold">{veces}</span>
+                </Insignia>
               </li>
             ))}
           </ul>

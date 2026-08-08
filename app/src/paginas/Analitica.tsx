@@ -2,6 +2,7 @@ import { useAnalytics } from "@/api/hooks";
 import { Calibracion, HistogramaConviccion } from "@/components/graficas/Calibracion";
 import { CurvaCapital, Drawdown } from "@/components/graficas/CurvaCapital";
 import { PnlPorSimbolo, RechazosPorRegla } from "@/components/graficas/PorSimbolo";
+import { TituloPagina } from "@/components/piezas";
 import { Seccion } from "@/components/Seccion";
 import { usePerfilActivo } from "@/perfil/usePerfilActivo";
 import { useTitulo } from "@/layout/useTitulo";
@@ -25,7 +26,7 @@ export function Analitica() {
 
   return (
     <>
-      <h1 className="mb-5 text-[17px] font-semibold tracking-tight">Analítica</h1>
+      <TituloPagina>Analítica</TituloPagina>
 
       <Seccion consulta={consulta}>
         {(datos) => (

@@ -3,6 +3,8 @@ import { Link } from "react-router";
 import { useCycles, usePositions } from "@/api/hooks";
 import type { CycleRow, PositionRow, ProfileSummary } from "@/api/types";
 import { EstadoCiclo } from "@/components/EstadoCiclo";
+import { Aviso, Cargando, CLASES_ENLACE, Tarjeta, TituloPagina } from "@/components/piezas";
+import { Procedencia } from "@/components/Procedencia";
 import { Seccion } from "@/components/Seccion";
 import { Cabecera, Fila, Tabla, Td, Th, Vacio } from "@/components/Tabla";
 import {
@@ -31,16 +33,13 @@ export function Resumen() {
   const posiciones = usePositions(referencia, { status: "open", limit: 100 });
   const ciclos = useCycles(referencia, { limit: 5 });
 
-  if (cargando) return <p className="text-[13px] text-text-muted">Cargando…</p>;
-  if (error) return <p className="text-[13px] text-negative-ink">{error.message}</p>;
+  if (cargando) return <Cargando />;
+  if (error) return <Aviso>{error.message}</Aviso>;
   if (!perfil) return null;
 
   return (
     <>
-      <div className="mb-5 flex flex-wrap items-baseline justify-between gap-3">
-        <h1 className="text-[17px] font-semibold tracking-tight">{perfil.name}</h1>
-        <p className="text-[13px] text-text-secondary">{perfil.risk_summary}</p>
-      </div>
+      <TituloPagina secundario={perfil.risk_summary}>{perfil.name}</TituloPagina>
 
       <Cifras perfil={perfil} />
 
@@ -82,7 +81,10 @@ export function Resumen() {
           pagina.items.length === 0 ? (
             <Vacio>
               Todavía no ha corrido ningún ciclo. Se lanzan desde la pantalla de{" "}
-              <Link className="underline" to={`/p/${encodeURIComponent(perfil.name)}/ciclos`}>
+              <Link
+                className={CLASES_ENLACE}
+                to={`/p/${encodeURIComponent(perfil.name)}/ciclos`}
+              >
                 Ciclos
               </Link>{" "}
               o los programa el planificador.
@@ -195,11 +197,11 @@ function Cifra({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-3 shadow-[var(--shadow-card)]">
+    <Tarjeta relleno="p-3">
       <p className="text-xs text-text-muted">{etiqueta}</p>
       <p className={cn("tabular mt-0.5 text-[17px] font-semibold", clase)}>{valor}</p>
       {children && <p className="mt-1 text-xs leading-snug">{children}</p>}
-    </div>
+    </Tarjeta>
   );
 }
 
@@ -213,24 +215,7 @@ function FilaAbierta({ fila, simbolo }: { fila: PositionRow; simbolo: string }) 
       <Td numerica>{dinero(fila.entry_price, simbolo)}</Td>
       <Td numerica>
         {dinero(fila.last_price, simbolo)}
-        {/* De dónde sale el precio (F3.2). Sumar una posición valorada con el
-            cierre de anteayer y otra con el precio de hace un minuto da un P&L
-            que no significa nada, así que se dice cuál es cuál. */}
-        {fila.price_source && (
-          <span
-            className={cn(
-              "ml-1.5 align-middle text-[10px] font-semibold",
-              fila.price_source === "live" ? "text-delta-good" : "text-warning",
-            )}
-            title={
-              fila.price_source === "live"
-                ? "Cotización del ingestor, de hace minutos"
-                : "El precio que vio el analista en su último ciclo, no en vivo"
-            }
-          >
-            {fila.price_source === "live" ? "VIVO" : "CICLO"}
-          </span>
-        )}
+        <Procedencia fila={fila} />
       </Td>
       <Td numerica>{dinero(fila.market_value, simbolo)}</Td>
       <Td numerica className={claseSigno(fila.unrealized_pnl)}>
@@ -262,7 +247,7 @@ function FilaCiclo({
     <Fila>
       <Td>
         <Link
-          className="underline decoration-border hover:decoration-current"
+          className={CLASES_ENLACE}
           to={`/p/${encodeURIComponent(perfil)}/ciclos?ciclo=${encodeURIComponent(ciclo.id)}`}
         >
           {fechaHora(ciclo.started_at)}

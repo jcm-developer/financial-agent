@@ -1,3 +1,4 @@
+import { Insignia } from "@/components/piezas";
 import { cn } from "@/lib/utils";
 import type { EstadoStream } from "@/api/stream";
 
@@ -28,11 +29,9 @@ export function IndicadorEnVivo({ estado, reconexiones = 0, aviso }: Props) {
   const { texto, clase } = APARIENCIA[estado];
 
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-2 rounded-full border bg-card px-[9px] py-0.5 text-xs font-semibold",
-        clase,
-      )}
+    <Insignia
+      compacta
+      className={cn("gap-2", clase)}
       // El color no puede ser el unico portador del significado (F4.9): el texto
       // ya lo dice, y el title añade el detalle para quien lo necesite.
       title={
@@ -51,6 +50,6 @@ export function IndicadorEnVivo({ estado, reconexiones = 0, aviso }: Props) {
         )}
       />
       {texto}
-    </span>
+    </Insignia>
   );
 }

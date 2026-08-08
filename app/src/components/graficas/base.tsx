@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react";
 
+import { BotonEnlace, Tarjeta, TituloBloque } from "@/components/piezas";
+
 /**
  * Lo compartido por todas las gráficas.
  *
@@ -23,6 +25,10 @@ export const COLORES = {
   neutro: "var(--color-text-muted)",
   rejilla: "var(--color-grid)",
   eje: "var(--color-axis)",
+  /** Las etiquetas que Recharts pinta como SVG y no como texto de la página. */
+  tenue: "var(--color-text-muted)",
+  /** El resalte de la barra o el punto sobre el que está el ratón. */
+  cursor: "var(--color-surface-sunken)",
 } as const;
 
 /** Ejes discretos: la rejilla es referencia, no protagonista. */
@@ -58,18 +64,17 @@ export function Grafica({
   const [verTabla, setVerTabla] = useState(false);
 
   return (
-    <section className="rounded-lg border border-border bg-card p-4">
+    <Tarjeta etiqueta="section">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-[13px] font-semibold">{titulo}</h3>
+        <TituloBloque>{titulo}</TituloBloque>
         {!vacia && (
-          <button
-            type="button"
+          <BotonEnlace
             onClick={() => setVerTabla((v) => !v)}
             aria-pressed={verTabla}
-            className="text-xs text-text-secondary underline decoration-border hover:decoration-current"
+            className="text-xs"
           >
             {verTabla ? "Ver gráfica" : "Ver tabla"}
-          </button>
+          </BotonEnlace>
         )}
       </div>
       {explicacion && (
@@ -83,7 +88,7 @@ export function Grafica({
       ) : (
         <div className="h-56 w-full">{children}</div>
       )}
-    </section>
+    </Tarjeta>
   );
 }
 
@@ -102,7 +107,7 @@ export function Globo({
   if (!active || !payload?.length) return null;
 
   return (
-    <div className="rounded-md border border-border bg-card px-2.5 py-1.5 text-xs shadow-[var(--shadow-card)]">
+    <Tarjeta relleno="px-2.5 py-1.5" className="rounded-md text-xs">
       {label !== undefined && (
         <p className="mb-0.5 font-medium text-foreground">{label}</p>
       )}
@@ -121,7 +126,7 @@ export function Globo({
           </span>
         </p>
       ))}
-    </div>
+    </Tarjeta>
   );
 }
 

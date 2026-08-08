@@ -60,7 +60,7 @@ export function PnlPorSimbolo({
           <ReferenceLine y={0} stroke={COLORES.eje} />
           <Tooltip
             content={<Globo formato={(v) => dinero(v, simbolo)} />}
-            cursor={{ fill: "var(--color-surface-sunken)" }}
+            cursor={{ fill: COLORES.cursor }}
           />
           <Bar dataKey="total_pnl" name="P&L" radius={[4, 4, 0, 0]}>
             {datos.map((f) => (
@@ -113,7 +113,7 @@ export function RechazosPorRegla({ filas }: { filas: RejectionCount[] }) {
           <YAxis type="category" dataKey="rule" {...EJE} width={140} />
           <Tooltip
             content={<Globo formato={(v) => entero(v)} />}
-            cursor={{ fill: "var(--color-surface-sunken)" }}
+            cursor={{ fill: COLORES.cursor }}
           />
           <Bar
             dataKey="rejections"

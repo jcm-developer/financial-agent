@@ -69,7 +69,7 @@ export function CurvaCapital({ puntos, simbolo, presupuesto }: Props) {
               y={presupuesto}
               stroke={COLORES.neutro}
               strokeDasharray="4 4"
-              label={{ value: "inicial", position: "insideTopRight", fontSize: 10, fill: "var(--color-text-muted)" }}
+              label={{ value: "inicial", position: "insideTopRight", fontSize: 10, fill: COLORES.tenue }}
             />
           ) : null}
           <Tooltip

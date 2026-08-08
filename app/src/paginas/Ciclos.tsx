@@ -10,6 +10,15 @@ import {
 } from "@/api/hooks";
 import type { CycleControl, CycleRow } from "@/api/types";
 import { EstadoCiclo } from "@/components/EstadoCiclo";
+import {
+  Aviso,
+  Bloque,
+  Boton,
+  BotonEnlace,
+  Tarjeta,
+  TituloPagina,
+  TituloSeccion,
+} from "@/components/piezas";
 import { Seccion } from "@/components/Seccion";
 import { Cabecera, Fila, Paginacion, Tabla, Td, Th, Vacio } from "@/components/Tabla";
 import { claseSigno, dineroConSigno, duracion, fechaHora } from "@/lib/formato";
@@ -38,7 +47,7 @@ export function Ciclos() {
 
   return (
     <>
-      <h1 className="mb-5 text-[17px] font-semibold tracking-tight">Ciclos</h1>
+      <TituloPagina>Ciclos</TituloPagina>
 
       {control.data && <Control estado={control.data} perfil={referencia} />}
 
@@ -122,15 +131,15 @@ function Control({
 
   if (!estado.enabled) {
     return (
-      <div className="mb-6 rounded-lg border border-border bg-card p-4 text-[13px] text-text-secondary">
+      <Tarjeta className="mb-6 text-[13px] text-text-secondary">
         Los controles de ciclo están apagados en el servidor
         (<code>API_CONTROLS=false</code>). Los ciclos los lanza el planificador.
-      </div>
+      </Tarjeta>
     );
   }
 
   return (
-    <div className="mb-6 rounded-lg border border-border bg-card p-4">
+    <Tarjeta className="mb-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[13px]">
@@ -155,43 +164,35 @@ function Control({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
+          <Boton
             disabled={estado.running || lanzar.isPending || !perfil}
             onClick={() => lanzar.mutate({})}
-            className="min-h-8 rounded-md border border-border bg-card px-3 py-1 text-[13px] hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-card"
           >
             Lanzar ciclo
-          </button>
+          </Boton>
           {/* En seco: analiza y decide pero no ejecuta. Es la forma de ver qué
               haría el modelo sin mover la cartera del experimento. */}
-          <button
-            type="button"
+          <Boton
+            variante="sutil"
             disabled={estado.running || lanzar.isPending || !perfil}
             onClick={() => lanzar.mutate({ dry_run: true })}
-            className="min-h-8 rounded-md border border-border bg-card px-3 py-1 text-[13px] text-text-secondary hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-card"
           >
             Lanzar en seco
-          </button>
-          <button
-            type="button"
+          </Boton>
+          <Boton
+            variante="peligro"
             disabled={!estado.running || parar.isPending}
             onClick={() => parar.mutate()}
-            className="min-h-8 rounded-md border border-border bg-card px-3 py-1 text-[13px] text-delta-bad hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-card"
           >
             Parar
-          </button>
+          </Boton>
         </div>
       </div>
 
-      {fallo && (
-        <p className="mt-3 rounded-md border border-negative/40 p-2 text-[13px] text-negative-ink">
-          {fallo.message}
-        </p>
-      )}
+      {fallo && <Aviso className="mt-3">{fallo.message}</Aviso>}
 
       <Log lineas={estado.lines ?? []} />
-    </div>
+    </Tarjeta>
   );
 }
 
@@ -219,24 +220,19 @@ function Log({ lineas }: { lineas: string[] }) {
 
   return (
     <div className="mt-3">
-      <button
-        type="button"
-        onClick={() => setAbierto((valor) => !valor)}
-        aria-expanded={abierto}
-        className="text-[13px] text-text-secondary underline decoration-border hover:decoration-current"
-      >
+      <BotonEnlace onClick={() => setAbierto((valor) => !valor)} aria-expanded={abierto}>
         {abierto ? "Ocultar" : "Ver"} el log ({lineas.length} líneas)
-      </button>
+      </BotonEnlace>
       {abierto && (
-        <pre
+        <Bloque
           ref={caja}
           // `aria-live` en polite y no assertive: son cientos de líneas y un
           // lector de pantalla las anunciaría todas.
           aria-live="polite"
-          className="mt-2 max-h-64 overflow-auto rounded-md bg-surface-sunken p-3 text-xs leading-relaxed whitespace-pre-wrap"
+          className="mt-2 max-h-64 leading-relaxed whitespace-pre-wrap"
         >
           {lineas.join("\n")}
-        </pre>
+        </Bloque>
       )}
     </div>
   );
@@ -247,18 +243,10 @@ function Detalle({ id, onCerrar }: { id: string; onCerrar: () => void }) {
   const consulta = useCycle(id);
 
   return (
-    <section className="mb-6 rounded-lg border border-border bg-card p-4">
+    <Tarjeta etiqueta="section" className="mb-6">
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="text-[13px] font-semibold tracking-wide text-text-secondary uppercase">
-          Detalle del ciclo
-        </h2>
-        <button
-          type="button"
-          onClick={onCerrar}
-          className="text-[13px] text-text-secondary underline decoration-border hover:decoration-current"
-        >
-          Cerrar
-        </button>
+        <TituloSeccion>Detalle del ciclo</TituloSeccion>
+        <BotonEnlace onClick={onCerrar}>Cerrar</BotonEnlace>
       </div>
 
       <Seccion consulta={consulta}>
@@ -283,11 +271,7 @@ function Detalle({ id, onCerrar }: { id: string; onCerrar: () => void }) {
               <Dato etiqueta="Mercado" valor={ciclo.market_open ? "abierto" : "cerrado"} />
             </dl>
 
-            {ciclo.error && (
-              <p className="mt-3 rounded-md border border-negative/40 p-2 text-[13px] text-negative-ink">
-                {ciclo.error}
-              </p>
-            )}
+            {ciclo.error && <Aviso className="mt-3">{ciclo.error}</Aviso>}
 
             {/* Los ajustes anteriores a F6.3 vienen a null. Es información que
                 falta, no un cero: quien compare experimentos necesita distinguir
@@ -301,15 +285,15 @@ function Detalle({ id, onCerrar }: { id: string; onCerrar: () => void }) {
                 <summary className="cursor-pointer text-[13px] text-text-secondary">
                   Parámetros con los que corrió
                 </summary>
-                <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-surface-sunken p-3 text-xs">
+                <Bloque className="mt-2 max-h-64">
                   {JSON.stringify(ciclo.settings, null, 2)}
-                </pre>
+                </Bloque>
               </details>
             )}
           </>
         )}
       </Seccion>
-    </section>
+    </Tarjeta>
   );
 }
 
@@ -336,18 +320,14 @@ function FilaCiclo({
   return (
     <Fila>
       <Td>
-        <button
-          type="button"
+        <BotonEnlace
+          variante="neutro"
           onClick={onElegir}
           aria-current={seleccionado ? "true" : undefined}
-          className={
-            seleccionado
-              ? "font-semibold underline"
-              : "underline decoration-border hover:decoration-current"
-          }
+          className={seleccionado ? "font-semibold decoration-current" : undefined}
         >
           {fechaHora(ciclo.started_at)}
-        </button>
+        </BotonEnlace>
       </Td>
       <Td numerica>
         {ciclo.finished_at

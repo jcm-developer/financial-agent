@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useDecisions } from "@/api/hooks";
 import type { DecisionRow } from "@/api/types";
+import { Entrada, Etiqueta, Select, TituloPagina } from "@/components/piezas";
 import { Seccion } from "@/components/Seccion";
 import { Cabecera, Fila, Paginacion, Tabla, Td, Th, Vacio } from "@/components/Tabla";
 import { dinero, fechaHora } from "@/lib/formato";
@@ -47,39 +48,37 @@ export function Decisiones() {
 
   return (
     <>
-      <h1 className="mb-5 text-[17px] font-semibold tracking-tight">Decisiones</h1>
+      <TituloPagina>Decisiones</TituloPagina>
 
-      <div className="mb-5 flex flex-wrap items-end gap-3 text-[13px]">
-        <label className="flex flex-col gap-1">
-          <span className="text-text-muted">Símbolo</span>
-          <input
-            type="search"
-            value={simboloFiltro}
-            placeholder="SAN.MC"
-            onChange={(evento) => cambiarFiltro(() => setSimboloFiltro(evento.target.value))}
-            className="min-h-8 w-32 rounded-md border border-border bg-card px-2 py-1"
-          />
-        </label>
-        <Selector
+      <div className="mb-5 flex flex-wrap items-end gap-3">
+        <Entrada
+          etiqueta="Símbolo"
+          type="search"
+          value={simboloFiltro}
+          placeholder="SAN.MC"
+          onChange={(evento) => cambiarFiltro(() => setSimboloFiltro(evento.target.value))}
+          className="w-32"
+        />
+        <Select
           etiqueta="Acción"
-          valor={accion}
+          value={accion}
           opciones={[
             ["", "Todas"],
             ["buy", "Compra"],
             ["sell", "Venta"],
             ["hold", "Mantener"],
           ]}
-          onCambio={(v) => cambiarFiltro(() => setAccion(v))}
+          onChange={(evento) => cambiarFiltro(() => setAccion(evento.target.value))}
         />
-        <Selector
+        <Select
           etiqueta="Veredicto"
-          valor={veredicto}
+          value={veredicto}
           opciones={[
             ["", "Todos"],
             ["approved", "Aprobadas"],
             ["rejected", "Rechazadas"],
           ]}
-          onCambio={(v) => cambiarFiltro(() => setVeredicto(v))}
+          onChange={(evento) => cambiarFiltro(() => setVeredicto(evento.target.value))}
         />
       </div>
 
@@ -122,35 +121,6 @@ export function Decisiones() {
   );
 }
 
-function Selector({
-  etiqueta,
-  valor,
-  opciones,
-  onCambio,
-}: {
-  etiqueta: string;
-  valor: string;
-  opciones: readonly (readonly [string, string])[];
-  onCambio: (valor: string) => void;
-}) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-text-muted">{etiqueta}</span>
-      <select
-        value={valor}
-        onChange={(evento) => onCambio(evento.target.value)}
-        className="min-h-8 rounded-md border border-border bg-card px-2 py-1"
-      >
-        {opciones.map(([codigo, texto]) => (
-          <option key={codigo} value={codigo}>
-            {texto}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
 function FilaDecision({ fila, simbolo }: { fila: DecisionRow; simbolo: string }) {
   return (
     <Fila>
@@ -161,7 +131,16 @@ function FilaDecision({ fila, simbolo }: { fila: DecisionRow; simbolo: string })
         <span className="font-medium">{fila.symbol}</span>
         {/* 'entry' o 'exit': la misma acción significa cosas distintas según si
             se estaba evaluando entrar o revisar una posición abierta. */}
-        <span className="ml-1.5 text-[10px] text-text-muted uppercase">{fila.kind}</span>
+        <Etiqueta
+          tono="neutro"
+          title={
+            fila.kind === "entry"
+              ? "Se evaluaba entrar en el activo"
+              : "Se revisaba una posición ya abierta"
+          }
+        >
+          {fila.kind}
+        </Etiqueta>
       </Td>
       <Td>
         <span

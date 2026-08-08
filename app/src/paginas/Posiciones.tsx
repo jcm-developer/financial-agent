@@ -2,6 +2,8 @@ import { useState } from "react";
 
 import { usePositions } from "@/api/hooks";
 import type { PositionRow } from "@/api/types";
+import { TituloPagina } from "@/components/piezas";
+import { Procedencia } from "@/components/Procedencia";
 import { Seccion } from "@/components/Seccion";
 import { Cabecera, Fila, Paginacion, Tabla, Td, Th, Vacio } from "@/components/Tabla";
 import {
@@ -12,7 +14,6 @@ import {
   fechaHora,
   porcentaje,
 } from "@/lib/formato";
-import { cn } from "@/lib/utils";
 import { usePerfilActivo } from "@/perfil/usePerfilActivo";
 import { useTitulo } from "@/layout/useTitulo";
 
@@ -42,7 +43,7 @@ export function Posiciones() {
 
   return (
     <>
-      <h1 className="mb-5 text-[17px] font-semibold tracking-tight">Posiciones</h1>
+      <TituloPagina>Posiciones</TituloPagina>
 
       <Seccion titulo="Abiertas" consulta={abiertas}>
         {(pagina) =>
@@ -107,42 +108,6 @@ export function Posiciones() {
         )}
       </Seccion>
     </>
-  );
-}
-
-/**
- * La etiqueta de procedencia del precio (F3.2).
- *
- * Se enseña siempre que haya precio porque es la diferencia entre un P&L que
- * significa algo y uno que mezcla el cierre de anteayer con el precio de hace un
- * minuto. Y cuando no hay ninguno se dice: la posición se valora al precio de
- * entrada, o sea que su P&L es cero por falta de datos, no por no haberse movido.
- */
-function Procedencia({ fila }: { fila: PositionRow }) {
-  if (!fila.price_source) {
-    return (
-      <span
-        className="ml-1.5 align-middle text-[10px] font-semibold text-delta-bad"
-        title="Sin precio: la posición se valora a su precio de entrada"
-      >
-        SIN PRECIO
-      </span>
-    );
-  }
-  return (
-    <span
-      className={cn(
-        "ml-1.5 align-middle text-[10px] font-semibold",
-        fila.price_source === "live" ? "text-delta-good" : "text-warning",
-      )}
-      title={
-        fila.price_source === "live"
-          ? `Cotización del ingestor (${fechaHora(fila.last_price_as_of)})`
-          : `El precio que vio el analista en su último ciclo (${fechaHora(fila.last_price_as_of)})`
-      }
-    >
-      {fila.price_source === "live" ? "VIVO" : "CICLO"}
-    </span>
   );
 }
 

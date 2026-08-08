@@ -1,6 +1,7 @@
 import { Navigate } from "react-router";
 
 import { useProfiles } from "@/api/hooks";
+import { Cargando } from "@/components/piezas";
 import { AvisoDeError } from "@/components/Seccion";
 
 /**
@@ -17,7 +18,7 @@ import { AvisoDeError } from "@/components/Seccion";
 export function Inicio() {
   const { data, isPending, error } = useProfiles();
 
-  if (isPending) return <p className="text-[13px] text-text-muted">Cargando…</p>;
+  if (isPending) return <Cargando />;
   if (error) return <AvisoDeError error={error} />;
 
   const activos = (data ?? []).filter((fila) => fila.status === "active");

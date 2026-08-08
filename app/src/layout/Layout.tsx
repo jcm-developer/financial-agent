@@ -2,6 +2,7 @@ import { Link, Outlet } from "react-router";
 
 import { useStream } from "@/api/stream";
 import { IndicadorEnVivo } from "@/components/IndicadorEnVivo";
+import { clasesBoton, Tarjeta, TituloBloque } from "@/components/piezas";
 import { BarraLateral } from "@/layout/BarraLateral";
 import { BotonTema } from "@/layout/BotonTema";
 import { SelectorPerfil } from "@/layout/SelectorPerfil";
@@ -65,20 +66,17 @@ export function Layout() {
  */
 function PerfilInexistente({ referencia }: { referencia: string }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-6">
-      <h1 className="text-[15px] font-semibold">
+    <Tarjeta relleno="p-6">
+      <TituloBloque como="h1" className="text-[15px]">
         No hay ningún experimento llamado «{referencia}»
-      </h1>
+      </TituloBloque>
       <p className="mt-2 text-[13px] text-text-secondary">
         Puede que lo hayas renombrado o borrado. La URL lleva el nombre del perfil, así que
         un enlace guardado deja de valer cuando el nombre cambia.
       </p>
-      <Link
-        to="/perfiles"
-        className="mt-4 inline-block rounded-md border border-border bg-card px-3 py-1.5 text-[13px] hover:bg-surface-sunken"
-      >
+      <Link to="/perfiles" className={clasesBoton("neutro", "mt-4")}>
         Ver los experimentos que hay
       </Link>
-    </div>
+    </Tarjeta>
   );
 }

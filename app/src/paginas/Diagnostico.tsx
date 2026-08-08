@@ -1,8 +1,11 @@
 import { useIngestStatus, useMarkets, useQuotes } from "@/api/hooks";
 import { antiguedadReal, useQuotesRecibidasEn } from "@/api/stream";
 import type { MarketInfo, QuoteRow } from "@/api/types";
+import { Tarjeta, TituloBloque, TituloPagina } from "@/components/piezas";
 import { Seccion } from "@/components/Seccion";
+import { Cabecera, Fila, Tabla, Td, Th } from "@/components/Tabla";
 import { useTitulo } from "@/layout/useTitulo";
+import { cn } from "@/lib/utils";
 
 /**
  * Estado de la ingesta y de las bolsas.
@@ -26,18 +29,17 @@ export function Diagnostico() {
 
   return (
     <>
-      <h1 className="mb-5 text-[17px] font-semibold tracking-tight">Ingesta y mercados</h1>
+      <TituloPagina>Ingesta y mercados</TituloPagina>
 
       <Seccion titulo="Salud del ingestor" consulta={ingesta}>
         {(datos) => (
-          <div className="rounded-lg border border-border bg-card p-4">
+          <Tarjeta>
             <p className="text-[13px]">
               <span
-                className={
-                  datos.healthy
-                    ? "font-semibold text-delta-good"
-                    : "font-semibold text-delta-bad"
-                }
+                className={cn(
+                  "font-semibold",
+                  datos.healthy ? "text-delta-good" : "text-delta-bad",
+                )}
               >
                 {datos.healthy ? "Sano" : "Con problemas"}
               </span>
@@ -60,7 +62,7 @@ export function Diagnostico() {
               />
               <Dato etiqueta="Fallos seguidos" valor={datos.consecutive_failures ?? 0} />
             </dl>
-          </div>
+          </Tarjeta>
         )}
       </Seccion>
 
@@ -72,38 +74,23 @@ export function Diagnostico() {
               solo de los símbolos de los perfiles activos.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-border bg-card">
-              <table className="w-full text-[13px]">
-                <caption className="sr-only">
-                  Último precio conocido de cada símbolo, con su antigüedad
-                </caption>
-                <thead className="text-left text-text-muted">
-                  <tr className="border-b border-border">
-                    <th scope="col" className="px-3 py-2 font-medium">
-                      Símbolo
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">
-                      Precio
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">
-                      Variación
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">
-                      Antigüedad
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {datos.map((fila) => (
-                    <FilaCotizacion
-                      key={fila.symbol}
-                      fila={fila}
-                      recibidasEn={quotesRecibidasEn}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Tabla titulo="Último precio conocido de cada símbolo, con su antigüedad">
+              <Cabecera>
+                <Th>Símbolo</Th>
+                <Th numerica>Precio</Th>
+                <Th numerica>Variación</Th>
+                <Th numerica>Antigüedad</Th>
+              </Cabecera>
+              <tbody>
+                {datos.map((fila) => (
+                  <FilaCotizacion
+                    key={fila.symbol}
+                    fila={fila}
+                    recibidasEn={quotesRecibidasEn}
+                  />
+                ))}
+              </tbody>
+            </Tabla>
           )
         }
       </Seccion>
@@ -132,9 +119,9 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: string | number })
 
 function TarjetaMercado({ mercado }: { mercado: MarketInfo }) {
   return (
-    <article className="rounded-lg border border-border bg-card p-4 shadow-[var(--shadow-card)]">
+    <Tarjeta etiqueta="article">
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="font-semibold">{mercado.label}</h3>
+        <TituloBloque>{mercado.label}</TituloBloque>
         <span
           className={
             mercado.is_operating
@@ -164,7 +151,7 @@ function TarjetaMercado({ mercado }: { mercado: MarketInfo }) {
           {mercado.min_turnover.toLocaleString("es-ES")} {mercado.currency}
         </dd>
       </dl>
-    </article>
+    </Tarjeta>
   );
 }
 
@@ -177,37 +164,34 @@ function FilaCotizacion({
 }) {
   const edad = antiguedadReal(fila, recibidasEn);
   const variacion = fila.change_pct;
+  const sinVariacion = variacion === null || variacion === undefined;
 
   return (
-    <tr className="border-b border-border last:border-0">
-      <th scope="row" className="px-3 py-1.5 text-left font-normal">
-        {fila.symbol}
-      </th>
-      <td className="tabular px-3 py-1.5 text-right">{fila.price.toFixed(2)}</td>
-      <td
+    <Fila>
+      <Td encabezado>{fila.symbol}</Td>
+      <Td numerica>{fila.price.toFixed(2)}</Td>
+      <Td
+        numerica
         className={
-          variacion === null || variacion === undefined
-            ? "tabular px-3 py-1.5 text-right text-text-muted"
+          sinVariacion
+            ? "text-text-muted"
             : variacion >= 0
-              ? "tabular px-3 py-1.5 text-right text-delta-good"
-              : "tabular px-3 py-1.5 text-right text-delta-bad"
+              ? "text-delta-good"
+              : "text-delta-bad"
         }
       >
-        {variacion === null || variacion === undefined
-          ? "—"
-          : `${variacion >= 0 ? "+" : ""}${variacion.toFixed(2)}%`}
-      </td>
+        {sinVariacion ? "—" : `${variacion >= 0 ? "+" : ""}${variacion.toFixed(2)}%`}
+      </Td>
       {/* Se avisa a partir de 5 minutos: es el umbral donde «en vivo» deja de
           serlo con barras de un minuto. */}
-      <td
+      <Td
+        numerica
         className={
-          edad !== null && edad > 300
-            ? "tabular px-3 py-1.5 text-right font-medium text-warning"
-            : "tabular px-3 py-1.5 text-right text-text-muted"
+          edad !== null && edad > 300 ? "font-medium text-warning" : "text-text-muted"
         }
       >
         {edad === null ? "n/d" : `${Math.round(edad)} s`}
-      </td>
-    </tr>
+      </Td>
+    </Fila>
   );
 }

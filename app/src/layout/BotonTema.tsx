@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 
+import { Boton } from "@/components/piezas";
+
 type Tema = "dark" | "light";
 
 /**
@@ -33,16 +35,15 @@ export function BotonTema() {
   const siguiente = tema === "dark" ? "light" : "dark";
 
   return (
-    <button
-      type="button"
+    <Boton
+      variante="sutil"
+      icono={tema === "dark" ? Moon : Sun}
       onClick={() => setTema(siguiente)}
-      className="flex min-h-8 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-[13px] text-text-secondary hover:bg-surface-sunken"
       // El icono solo no dice qué va a pasar, y un botón de tema sin etiqueta es
       // adivinanza para un lector de pantalla (F4.9).
       aria-label={siguiente === "dark" ? "Cambiar a tema oscuro" : "Cambiar a tema claro"}
     >
-      {tema === "dark" ? <Moon className="size-3.5" /> : <Sun className="size-3.5" />}
       {tema === "dark" ? "Oscuro" : "Claro"}
-    </button>
+    </Boton>
   );
 }

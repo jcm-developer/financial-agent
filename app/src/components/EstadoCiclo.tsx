@@ -1,4 +1,5 @@
 import type { CycleRow } from "@/api/types";
+import { Etiqueta } from "@/components/piezas";
 
 /**
  * El estado de un ciclo, con el matiz que aportó F6.9.
@@ -27,20 +28,17 @@ export function EstadoCiclo({ ciclo }: { ciclo: CycleRow }) {
     >
       {ciclo.status}
       {sinModelo && (
-        <span
-          className="ml-1.5 text-[10px] font-semibold"
-          title="Ninguna llamada al modelo obtuvo respuesta: este ciclo no analizó nada (F6.9)"
-        >
+        <Etiqueta title="Ninguna llamada al modelo obtuvo respuesta: este ciclo no analizó nada (F6.9)">
           SIN MODELO
-        </span>
+        </Etiqueta>
       )}
       {!sinModelo && fallos > 0 && (
-        <span
-          className="ml-1.5 text-[10px] font-semibold text-warning"
+        <Etiqueta
+          tono="atencion"
           title={`${fallos} de ${llamadas} llamadas al modelo se quedaron sin respuesta: a esos símbolos no se les llegó a mirar`}
         >
           {fallos}/{llamadas} SIN RESPUESTA
-        </span>
+        </Etiqueta>
       )}
     </span>
   );

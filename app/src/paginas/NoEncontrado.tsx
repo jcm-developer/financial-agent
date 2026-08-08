@@ -1,5 +1,7 @@
 import { Link, useLocation } from "react-router";
 
+import { clasesBoton, Tarjeta, TituloBloque } from "@/components/piezas";
+
 /**
  * 404 del enrutador, que no es lo mismo que el 404 de la API.
  *
@@ -12,17 +14,16 @@ export function NoEncontrado() {
   const { pathname } = useLocation();
 
   return (
-    <div className="rounded-lg border border-border bg-card p-6">
-      <h1 className="text-[15px] font-semibold">Esta página no existe</h1>
+    <Tarjeta relleno="p-6">
+      <TituloBloque como="h1" className="text-[15px]">
+        Esta página no existe
+      </TituloBloque>
       <p className="mt-2 text-[13px] text-text-secondary">
         No hay nada en <code className="text-foreground">{pathname}</code>.
       </p>
-      <Link
-        to="/"
-        className="mt-4 inline-block rounded-md border border-border bg-card px-3 py-1.5 text-[13px] hover:bg-surface-sunken"
-      >
+      <Link to="/" className={clasesBoton("neutro", "mt-4")}>
         Volver al inicio
       </Link>
-    </div>
+    </Tarjeta>
   );
 }

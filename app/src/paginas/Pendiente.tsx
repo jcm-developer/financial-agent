@@ -1,3 +1,5 @@
+import { Tarjeta, TituloPagina } from "@/components/piezas";
+
 /**
  * Hueco de una pantalla que llega en el tramo D, diciendo **qué** tarea la trae.
  *
@@ -17,14 +19,14 @@ export function Pendiente({
 }) {
   return (
     <>
-      <h1 className="mb-5 text-[17px] font-semibold tracking-tight">{titulo}</h1>
-      <div className="rounded-lg border border-dashed border-border bg-card p-6">
+      <TituloPagina>{titulo}</TituloPagina>
+      <Tarjeta discontinua relleno="p-6">
         <p className="text-[13px] text-text-secondary">{descripcion}</p>
         <p className="mt-3 text-[13px] text-text-muted">
           Pendiente de <span className="font-semibold text-foreground">{tarea}</span>. Los
           datos ya están publicados en la API; falta la pantalla.
         </p>
-      </div>
+      </Tarjeta>
     </>
   );
 }

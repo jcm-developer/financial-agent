@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { Aviso, Cargando, TituloSeccion } from "@/components/piezas";
+
 /**
  * Los tres estados de F4.8 en un sitio: cargando, error y datos.
  *
@@ -20,12 +22,8 @@ interface Props<T> {
 export function Seccion<T>({ titulo, consulta, children }: Props<T>) {
   return (
     <section className="mb-8">
-      {titulo && (
-        <h2 className="mb-3 text-[13px] font-semibold tracking-wide text-text-secondary uppercase">
-          {titulo}
-        </h2>
-      )}
-      {consulta.isPending && <p className="text-[13px] text-text-muted">Cargando…</p>}
+      {titulo && <TituloSeccion className="mb-3">{titulo}</TituloSeccion>}
+      {consulta.isPending && <Cargando />}
       {consulta.error && <AvisoDeError error={consulta.error} />}
       {consulta.data !== undefined && children(consulta.data)}
     </section>
@@ -34,12 +32,12 @@ export function Seccion<T>({ titulo, consulta, children }: Props<T>) {
 
 export function AvisoDeError({ error }: { error: Error }) {
   return (
-    <p className="rounded-md border border-negative/40 bg-card p-3 text-[13px] text-negative-ink">
+    <Aviso>
       {error.message}
       <br />
       <span className="text-text-muted">
         En desarrollo hace falta la API escuchando: <code>python run.py api</code>
       </span>
-    </p>
+    </Aviso>
   );
 }

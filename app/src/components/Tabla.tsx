@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { Boton, Tarjeta } from "@/components/piezas";
 import { cn } from "@/lib/utils";
 
 /**
@@ -25,12 +26,12 @@ export function Tabla({
   className?: string;
 }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-card">
+    <Tarjeta relleno="p-0" className="overflow-x-auto">
       <table className={cn("w-full text-[13px]", className)}>
         <caption className="sr-only">{titulo}</caption>
         {children}
       </table>
-    </div>
+    </Tarjeta>
   );
 }
 
@@ -60,23 +61,40 @@ export function Th({
 export function Td({
   children,
   numerica = false,
+  encabezado = false,
   className,
   title,
 }: {
   children: ReactNode;
   numerica?: boolean;
+  /**
+   * La celda que nombra la fila, como `<th scope="row">`.
+   *
+   * No es decoración: en una tabla de cotizaciones, sin la cabecera de fila un
+   * lector de pantalla lee «17,42» sin decir de qué símbolo, y la columna del
+   * símbolo es justo la que da sentido a las otras tres.
+   */
+  encabezado?: boolean;
   className?: string;
   title?: string;
 }) {
+  const clases = cn(
+    "px-3 py-1.5 align-top",
+    numerica && "tabular text-right whitespace-nowrap",
+    encabezado && "text-left font-normal",
+    className,
+  );
+
+  if (encabezado) {
+    return (
+      <th scope="row" title={title} className={clases}>
+        {children}
+      </th>
+    );
+  }
+
   return (
-    <td
-      title={title}
-      className={cn(
-        "px-3 py-1.5 align-top",
-        numerica && "tabular text-right whitespace-nowrap",
-        className,
-      )}
-    >
+    <td title={title} className={clases}>
       {children}
     </td>
   );
@@ -103,9 +121,9 @@ export function Fila({ children }: { children: ReactNode }) {
  */
 export function Vacio({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed border-border bg-card px-4 py-6 text-[13px] text-text-muted">
+    <Tarjeta discontinua relleno="px-4 py-6" className="text-[13px] text-text-muted">
       {children}
-    </div>
+    </Tarjeta>
   );
 }
 
@@ -138,22 +156,15 @@ export function Paginacion({
         {desde}–{hasta} de {total}
       </span>
       <div className="flex gap-2">
-        <button
-          type="button"
+        <Boton
           disabled={desplazamiento === 0}
           onClick={() => onCambio(Math.max(0, desplazamiento - limite))}
-          className="min-h-8 rounded-md border border-border bg-card px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-sunken disabled:hover:bg-card"
         >
           Anteriores
-        </button>
-        <button
-          type="button"
-          disabled={hasta >= total}
-          onClick={() => onCambio(desplazamiento + limite)}
-          className="min-h-8 rounded-md border border-border bg-card px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-sunken disabled:hover:bg-card"
-        >
+        </Boton>
+        <Boton disabled={hasta >= total} onClick={() => onCambio(desplazamiento + limite)}>
           Siguientes
-        </button>
+        </Boton>
       </div>
     </div>
   );

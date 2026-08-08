@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 
+import { Cargando } from "@/components/piezas";
 import { Layout } from "@/layout/Layout";
 import { Ciclos } from "@/paginas/Ciclos";
 import { Decisiones } from "@/paginas/Decisiones";
@@ -54,9 +55,7 @@ export function App() {
             <Route
               path="analitica"
               element={
-                <Suspense
-                  fallback={<p className="text-[13px] text-text-muted">Cargando gráficas…</p>}
-                >
+                <Suspense fallback={<Cargando texto="Cargando gráficas…" />}>
                   <Analitica />
                 </Suspense>
               }

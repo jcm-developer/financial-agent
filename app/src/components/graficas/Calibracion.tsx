@@ -84,11 +84,11 @@ export function Calibracion({
             y={50}
             stroke={COLORES.neutro}
             strokeDasharray="4 4"
-            label={{ value: "azar", position: "insideTopRight", fontSize: 10, fill: "var(--color-text-muted)" }}
+            label={{ value: "azar", position: "insideTopRight", fontSize: 10, fill: COLORES.tenue }}
           />
           <Tooltip
             content={<Globo formato={(v) => porcentaje(v)} />}
-            cursor={{ fill: "var(--color-surface-sunken)" }}
+            cursor={{ fill: COLORES.cursor }}
           />
           <Bar dataKey="win_rate_pct" name="Aciertos" radius={[4, 4, 0, 0]}>
             {datos.map((d) => (
@@ -102,7 +102,7 @@ export function Calibracion({
               dataKey="trades"
               position="top"
               fontSize={10}
-              fill="var(--color-text-muted)"
+              fill={COLORES.tenue}
               formatter={(valor) => (valor === undefined ? "" : `n=${valor}`)}
             />
           </Bar>
@@ -154,7 +154,7 @@ export function HistogramaConviccion({ tramos }: { tramos: ConvictionBucket[] })
           <YAxis {...EJE} width={40} allowDecimals={false} />
           <Tooltip
             content={<Globo formato={(v) => entero(v)} />}
-            cursor={{ fill: "var(--color-surface-sunken)" }}
+            cursor={{ fill: COLORES.cursor }}
           />
           {/* Apiladas con 2 px de hueco entre segmentos: sin la separación, dos
               tramos contiguos del mismo alto se leen como uno solo. */}

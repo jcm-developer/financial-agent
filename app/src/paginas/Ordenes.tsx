@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useOrders } from "@/api/hooks";
 import type { OrderRow } from "@/api/types";
+import { Entrada, TituloPagina } from "@/components/piezas";
 import { Seccion } from "@/components/Seccion";
 import { Cabecera, Fila, Paginacion, Tabla, Td, Th, Vacio } from "@/components/Tabla";
 import { cantidad, dinero, fechaHora } from "@/lib/formato";
@@ -35,21 +36,20 @@ export function Ordenes() {
 
   return (
     <>
-      <h1 className="mb-5 text-[17px] font-semibold tracking-tight">Órdenes</h1>
+      <TituloPagina>Órdenes</TituloPagina>
 
-      <label className="mb-5 flex w-fit flex-col gap-1 text-[13px]">
-        <span className="text-text-muted">Símbolo</span>
-        <input
-          type="search"
-          value={simboloFiltro}
-          placeholder="SAN.MC"
-          onChange={(evento) => {
-            setSimboloFiltro(evento.target.value);
-            setDesplazamiento(0);
-          }}
-          className="min-h-8 w-32 rounded-md border border-border bg-card px-2 py-1"
-        />
-      </label>
+      <Entrada
+        etiqueta="Símbolo"
+        type="search"
+        value={simboloFiltro}
+        placeholder="SAN.MC"
+        onChange={(evento) => {
+          setSimboloFiltro(evento.target.value);
+          setDesplazamiento(0);
+        }}
+        claseCampo="mb-5 w-fit"
+        className="w-32"
+      />
 
       <Seccion consulta={consulta}>
         {(pagina) => (
