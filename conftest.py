@@ -1,7 +1,7 @@
-"""Hace importables `src` y `tools` desde los tests.
+"""Makes `src` and `tools` importable from the tests.
 
-Sin esto, `python -m pytest` solo funciona invocado desde la raiz del proyecto,
-que es justo lo que falla dentro del contenedor y en integracion continua.
+Without this, `python -m pytest` only works when invoked from the project root,
+which is exactly what fails inside the container and in continuous integration.
 """
 
 import sys

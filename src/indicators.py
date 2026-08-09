@@ -1,12 +1,12 @@
-"""Indicadores tecnicos como funciones puras sobre listas de floats.
+"""Technical indicators as pure functions over lists of floats.
 
-Deliberadamente sin numpy/pandas/TA-Lib: son unas pocas centenas de barras por
-simbolo, el coste es irrelevante y a cambio el modulo es trivial de testear y
-no arrastra dependencias binarias que rompen entre versiones de Python.
+Deliberately without numpy/pandas/TA-Lib: it is a few hundred bars per symbol,
+the cost is irrelevant, and in exchange the module is trivial to test and drags
+in no binary dependencies that break between Python versions.
 
-Convencion: todas las funciones devuelven `None` cuando no hay suficientes
-datos para un calculo honesto, en lugar de un valor degradado. El resto del
-sistema trata `None` como "indicador no disponible".
+Convention: every function returns `None` when there is not enough data for an
+honest calculation, instead of a degraded value. The rest of the system treats
+`None` as "indicator not available".
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from datetime import datetime
 
 @dataclass(frozen=True)
 class Bar:
-    """Una barra OHLCV diaria."""
+    """One daily OHLCV bar."""
 
     timestamp: datetime
     open: float
@@ -28,7 +28,7 @@ class Bar:
 
 
 def sma(values: list[float], period: int) -> float | None:
-    """Media movil simple de las ultimas `period` observaciones."""
+    """Simple moving average of the last `period` observations."""
     if period <= 0 or len(values) < period:
         return None
     window = values[-period:]
@@ -36,7 +36,7 @@ def sma(values: list[float], period: int) -> float | None:
 
 
 def ema(values: list[float], period: int) -> float | None:
-    """Media movil exponencial, sembrada con la SMA de las primeras `period`."""
+    """Exponential moving average, seeded with the SMA of the first `period`."""
     if period <= 0 or len(values) < period:
         return None
     alpha = 2.0 / (period + 1)
@@ -47,7 +47,7 @@ def ema(values: list[float], period: int) -> float | None:
 
 
 def _wilder_smooth(values: list[float], period: int) -> float | None:
-    """Suavizado de Wilder: seed = media simple, luego (prev*(n-1) + x)/n."""
+    """Wilder smoothing: seed = simple mean, then (prev*(n-1) + x)/n."""
     if period <= 0 or len(values) < period:
         return None
     result = sum(values[:period]) / period
@@ -57,7 +57,7 @@ def _wilder_smooth(values: list[float], period: int) -> float | None:
 
 
 def rsi(closes: list[float], period: int = 14) -> float | None:
-    """RSI de Wilder. >70 se lee como sobrecompra, <30 como sobreventa."""
+    """Wilder's RSI. >70 reads as overbought, <30 as oversold."""
     if len(closes) < period + 1:
         return None
     gains: list[float] = []
@@ -72,14 +72,14 @@ def rsi(closes: list[float], period: int = 14) -> float | None:
     if avg_gain is None or avg_loss is None:
         return None
     if avg_loss == 0:
-        # Sin perdidas en la ventana: RSI saturado.
+        # No losses in the window: the RSI is saturated.
         return 100.0 if avg_gain > 0 else 50.0
     rs = avg_gain / avg_loss
     return 100.0 - (100.0 / (1.0 + rs))
 
 
 def true_ranges(bars: list[Bar]) -> list[float]:
-    """True Range de cada barra a partir de la segunda."""
+    """True Range of each bar from the second one on."""
     ranges: list[float] = []
     for previous, current in zip(bars, bars[1:]):
         ranges.append(
@@ -93,8 +93,8 @@ def true_ranges(bars: list[Bar]) -> list[float]:
 
 
 def atr(bars: list[Bar], period: int = 14) -> float | None:
-    """Average True Range de Wilder. Es la medida de volatilidad que usamos
-    para situar el stop y dimensionar la posicion."""
+    """Wilder's Average True Range. It is the volatility measure used to place
+    the stop and to size the position."""
     if len(bars) < period + 1:
         return None
     return _wilder_smooth(true_ranges(bars), period)
@@ -102,10 +102,10 @@ def atr(bars: list[Bar], period: int = 14) -> float | None:
 
 def macd(closes: list[float], fast: int = 12, slow: int = 26,
          signal: int = 9) -> tuple[float, float, float] | None:
-    """Devuelve (macd, signal, histograma) o None si faltan datos."""
+    """Returns (macd, signal, histogram), or None when data is missing."""
     if len(closes) < slow + signal:
         return None
-    # Serie MACD completa: necesaria para poder aplicar la EMA de la senal.
+    # The full MACD series: needed before the signal EMA can be applied.
     macd_series: list[float] = []
     for end in range(slow, len(closes) + 1):
         window = closes[:end]
@@ -124,7 +124,7 @@ def macd(closes: list[float], fast: int = 12, slow: int = 26,
 
 def bollinger(closes: list[float], period: int = 20,
               num_std: float = 2.0) -> tuple[float, float, float] | None:
-    """Devuelve (banda_inferior, media, banda_superior)."""
+    """Returns (lower_band, mean, upper_band)."""
     if len(closes) < period:
         return None
     window = closes[-period:]
@@ -135,7 +135,7 @@ def bollinger(closes: list[float], period: int = 20,
 
 
 def pct_change(values: list[float], periods: int) -> float | None:
-    """Variacion porcentual sobre `periods` barras."""
+    """Percentage change over `periods` bars."""
     if len(values) < periods + 1:
         return None
     past = values[-(periods + 1)]
@@ -145,7 +145,7 @@ def pct_change(values: list[float], periods: int) -> float | None:
 
 
 def annualized_volatility(closes: list[float], period: int = 20) -> float | None:
-    """Volatilidad anualizada en % a partir de retornos diarios (252 sesiones)."""
+    """Annualised volatility in %, from daily returns (252 sessions)."""
     if len(closes) < period + 1:
         return None
     window = closes[-(period + 1):]
@@ -162,10 +162,10 @@ def annualized_volatility(closes: list[float], period: int = 20) -> float | None
 
 
 def compute_snapshot(bars: list[Bar]) -> dict[str, float | None]:
-    """Paquete de indicadores que se entrega al analista.
+    """The bundle of indicators handed to the analyst.
 
-    Las claves son estables porque acaban serializadas en
-    `market_snapshots.indicators` y consultadas despues desde SQL.
+    The keys are stable because they end up serialised in
+    `market_snapshots.indicators` and queried later from SQL.
     """
     if not bars:
         return {}
@@ -220,8 +220,8 @@ def compute_snapshot(bars: list[Bar]) -> dict[str, float | None]:
         "bars_available": len(bars),
     }
 
-    # Senales derivadas, precalculadas para no obligar al LLM a hacer aritmetica
-    # (es donde mas se equivoca).
+    # Derived signals, precomputed so the LLM is not forced to do arithmetic
+    # (which is where it gets things wrong most often).
     snapshot["above_sma_50"] = _bool_to_float(last > sma50 if sma50 else None)
     snapshot["above_sma_200"] = _bool_to_float(last > sma200 if sma200 else None)
     snapshot["golden_cross"] = _bool_to_float(
@@ -235,5 +235,5 @@ def _round(value: float | None, digits: int = 4) -> float | None:
 
 
 def _bool_to_float(value: bool | None) -> float | None:
-    """jsonb no distingue, pero mantenemos 1/0 para poder agregar en SQL."""
+    """jsonb does not tell them apart, but 1/0 is kept so SQL can aggregate."""
     return None if value is None else float(value)

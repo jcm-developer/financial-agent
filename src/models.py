@@ -1,7 +1,7 @@
-"""Tipos de dominio compartidos entre las capas del agente.
+"""Domain types shared across the agent's layers.
 
-Viven en su propio modulo para que `risk` no tenga que importar `broker` ni
-`analyst`: el Risk Manager debe ser testeable sin red ni credenciales.
+They live in their own module so `risk` does not have to import `broker` or
+`analyst`: the Risk Manager must be testable without network or credentials.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ Kind = Literal["entry", "exit"]
 
 @dataclass(frozen=True)
 class BrokerPosition:
-    """Posicion tal como la reporta el broker. Es la fuente de verdad."""
+    """A position as the broker reports it. This is the source of truth."""
 
     symbol: str
     qty: float
@@ -29,7 +29,7 @@ class BrokerPosition:
 
 @dataclass(frozen=True)
 class AccountState:
-    """Foto de la cuenta al inicio del ciclo."""
+    """Snapshot of the account at the start of the cycle."""
 
     equity: float
     cash: float
@@ -47,7 +47,7 @@ class AccountState:
 
     @property
     def day_pnl(self) -> float:
-        """P&L de la sesion. `last_equity` es el equity al cierre anterior."""
+        """The session's P&L. `last_equity` is the equity at the previous close."""
         return self.equity - self.last_equity
 
     @property
@@ -65,9 +65,9 @@ class AccountState:
 
 @dataclass(frozen=True)
 class Proposal:
-    """Propuesta del analista LLM. Todavia NO es una orden.
+    """The LLM analyst's proposal. It is NOT an order yet.
 
-    Ningun campo de aqui llega al broker sin pasar por el Risk Manager.
+    No field here reaches the broker without passing through the Risk Manager.
     """
 
     symbol: str
@@ -80,7 +80,7 @@ class Proposal:
     suggested_stop: float | None = None
     suggested_target: float | None = None
     reference_price: float = 0.0
-    # Metadatos de la llamada al modelo, para auditoria.
+    # Metadata of the model call, for auditing.
     model: str = ""
     latency_ms: int = 0
     prompt_tokens: int = 0
@@ -90,8 +90,8 @@ class Proposal:
 
 @dataclass(frozen=True)
 class RiskVerdict:
-    """Resultado del Risk Manager. `approved=False` significa que no se envia
-    nada al broker, y el motivo queda registrado en `risk_events`."""
+    """The Risk Manager's result. `approved=False` means nothing is sent to the
+    broker, and the reason is recorded in `risk_events`."""
 
     approved: bool
     reason: str
@@ -105,8 +105,8 @@ class RiskVerdict:
 
 @dataclass(frozen=True)
 class ExitSignal:
-    """Orden de cierre. `forced=True` cuando la dispara una regla determinista
-    (stop o target alcanzado) y por tanto el LLM no puede vetarla."""
+    """A close order. `forced=True` when a deterministic rule triggers it (stop
+    or target reached) and therefore the LLM cannot veto it."""
 
     symbol: str
     qty: float
@@ -118,18 +118,18 @@ class ExitSignal:
 
 @dataclass(frozen=True)
 class MarketSnapshot:
-    """Datos de mercado de un simbolo en el momento del analisis.
+    """A symbol's market data at the moment of the analysis.
 
-    Los tres precios son distintos a proposito, y la distincion es lo que evita
-    el sesgo de anticipacion:
+    The three prices are deliberately different, and the distinction is what
+    avoids look-ahead bias:
 
-      * `price`  -> cierre de la ultima sesion COMPLETA. Es lo unico que ven el
-                    analista y el Risk Manager, y sobre lo que se dimensiona.
-      * `fill_price` -> apertura de la sesion siguiente, donde se ejecuta. Un
-                    sistema real que decide con el cierre de ayer se ejecuta con
-                    la apertura de hoy; usar el mismo cierre para decidir y para
-                    ejecutar regalaria el hueco de la noche y falsearia todo.
-      * `mark_price` -> ultimo precio conocido, solo para valorar la cartera.
+      * `price`  -> close of the last COMPLETE session. It is the only thing the
+                    analyst and the Risk Manager see, and what sizing is based on.
+      * `fill_price` -> open of the following session, where execution happens. A
+                    real system that decides on yesterday's close executes on
+                    today's open; using the same close to decide and to execute
+                    would hand over the overnight gap and falsify everything.
+      * `mark_price` -> last known price, only for valuing the book.
     """
 
     symbol: str
@@ -145,10 +145,10 @@ class MarketSnapshot:
 
     @property
     def execution_price(self) -> float:
-        """Precio al que se ejecutaria una orden ahora mismo."""
+        """The price an order would execute at right now."""
         return self.fill_price if self.fill_price else self.price
 
     @property
     def valuation_price(self) -> float:
-        """Precio para valorar una posicion abierta."""
+        """The price used to value an open position."""
         return self.mark_price if self.mark_price else self.price

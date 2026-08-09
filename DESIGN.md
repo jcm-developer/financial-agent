@@ -17,7 +17,7 @@ Tres decisiones lo resumen, y ninguna es estética:
 2. **Los neutros son cálidos** (`#f9f9f7`, no `#ffffff`). Es lo que evita el
    aspecto de hoja de cálculo.
 3. **Ninguna receta de clases se escribe dos veces.** Todo lo compartido vive en
-   [app/src/components/piezas.tsx](app/src/components/piezas.tsx).
+   [app/src/components/pieces.tsx](app/src/components/pieces.tsx).
 
 **Stack:** Tailwind CSS v4.3, `system-ui`, iconos Lucide (v1.x), Recharts v3 solo
 en Analítica. Sin Framer Motion, sin fuentes externas.
@@ -44,16 +44,17 @@ mismo fallo, solo que sin verlo.
 Los nombres siguen la tabla de [CLAUDE.md](CLAUDE.md). Lo que afecta a `app/`:
 
 - **Un componente por fichero → `PascalCase.tsx` con su nombre exacto**
-  (`Tabla.tsx`, `IndicadorEnVivo.tsx`). Renombrar el componente obliga a renombrar
+  (`Table.tsx`, `LiveIndicator.tsx`). Renombrar el componente obliga a renombrar
   el fichero; si no, el nombre estaba mal.
-- **Una colección de exports → `camelCase.tsx`** (`piezas.tsx`, `graficas/base.tsx`).
+- **Una colección de exports → `camelCase.tsx`** (`pieces.tsx`, `charts/base.tsx`).
   La minúscula inicial es la señal: dentro no hay «el» componente que da nombre al
   fichero, sino un juego de piezas del que se importa lo que haga falta.
 - **Hooks → `useAlgo.ts`**, y las carpetas en minúscula y una sola palabra.
 
-⚠️ **Hoy `app/` está entero en español**, empezando por `paginas/` y `piezas.tsx`.
-La regla vale para lo que se escriba de ahora en adelante; renombrar lo que ya hay
-es **F8.8** y toca las rutas, así que va de una vez y con su propio commit.
+`app/` ya cumple la regla entera desde F8.8: carpetas, ficheros, componentes,
+props y comentarios en inglés, y el texto de pantalla en español. Las rutas
+cambiaron con ello (`/p/:profile/positions`), así que los enlaces guardados de
+antes de esa tarea ya no valen.
 
 ---
 
@@ -118,12 +119,12 @@ negativa, que no significa lo mismo ni se colorea igual.
 
 ### Convención de P&L
 
-Nunca a mano: la clase la da `claseSigno()` en
-[app/src/lib/formato.ts](app/src/lib/formato.ts).
+Nunca a mano: la clase la da `signClass()` en
+[app/src/lib/format.ts](app/src/lib/format.ts).
 
 ```ts
-claseSigno(valor)  // > 0 → text-delta-good · < 0 → text-delta-bad
-                   // === 0 → text-text-secondary · null → text-text-muted
+signClass(value)  // > 0 → text-delta-good · < 0 → text-delta-bad
+                  // === 0 → text-text-secondary · null → text-text-muted
 ```
 
 El caso nulo importa: «no hay dato» y «cero» se distinguen, porque un P&L de cero
@@ -133,8 +134,8 @@ por falta de precio no es un P&L de cero.
 
 **Ningún hexadecimal en `className`, nunca.** Se usa la utilidad del token
 (`text-negative-ink`, no `text-[#c62726]`). En SVG los colores se pasan como
-`var(--color-…)` a través de `COLORES` en
-[graficas/base.tsx](app/src/components/graficas/base.tsx): los atributos de
+`var(--color-…)` a través de `COLORS` en
+[charts/base.tsx](app/src/components/charts/base.tsx): los atributos de
 presentación de SVG aceptan variables CSS, así que el interruptor de tema repinta
 las gráficas solo. Sin eso habría que leer los colores con `getComputedStyle` y
 volver a dibujar a mano en cada cambio de tema.
@@ -153,7 +154,7 @@ nada que se note en una tabla de cifras.
 
 | Tamaño | Clase | Dónde |
 |---|---|---|
-| 10 px | `text-[10px]` | `<Etiqueta>`: `VIVO`, `CICLO`, `SIN PRECIO`, `SIN MODELO` |
+| 10 px | `text-[10px]` | `<Tag>`: `VIVO`, `CICLO`, `SIN PRECIO`, `SIN MODELO` |
 | 11 px | `text-[11px]` | Notas secundarias dentro de una celda: regla aplicada, nocional aprobado |
 | 12 px | `text-xs` | Explicaciones de gráfica, notas al pie, tabla alternativa, logs, insignia compacta |
 | 13 px | `text-[13px]` | **El tamaño de la aplicación**: tablas, botones, controles, párrafos, títulos de sección y de bloque |
@@ -236,7 +237,7 @@ color ni de elevación alta.
 ## Componentes
 
 Las piezas compartidas están en
-[app/src/components/piezas.tsx](app/src/components/piezas.tsx). **No lleva colores
+[app/src/components/pieces.tsx](app/src/components/pieces.tsx). **No lleva colores
 propios**: todo sale de los tokens, que es lo que hace que el interruptor de tema
 no tenga que tocar ningún componente.
 
@@ -265,7 +266,7 @@ Cuando quien tiene que llevar la apariencia de botón es un `<Link>` del enrutad
 apariencia y no el elemento:
 
 ```jsx
-<Link to="/perfiles" className={clasesBoton("neutro", "mt-4")}>Ver los experimentos</Link>
+<Link to="/profiles" className={buttonClasses("neutral", "mt-4")}>Ver los experimentos</Link>
 ```
 
 ### Enlaces
@@ -301,7 +302,7 @@ todavía no hay (estado vacío, pantalla pendiente).
 
 ### Tablas
 
-[app/src/components/Tabla.tsx](app/src/components/Tabla.tsx): `<Tabla>`,
+[app/src/components/Table.tsx](app/src/components/Table.tsx): `<Table>`,
 `<Cabecera>`, `<Th>`, `<Td>`, `<Fila>`, `<Vacio>`, `<Paginacion>`.
 
 - `<Tabla titulo>` — el título es el `<caption class="sr-only">`, obligatorio.
@@ -402,7 +403,7 @@ Solo en Analítica, con Recharts v3, cargado con `lazy()` porque pesa casi tanto
 como el resto de la aplicación junta.
 
 Lo compartido está en
-[graficas/base.tsx](app/src/components/graficas/base.tsx): `COLORES`, `EJE`,
+[charts/base.tsx](app/src/components/charts/base.tsx): `COLORS`, `AXIS`,
 `<Grafica>`, `<Globo>` y `<TablaSimple>`.
 
 - **Los colores se pasan como `var(--color-…)` y nunca como hexadecimal** (ver la

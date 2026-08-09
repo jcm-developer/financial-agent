@@ -439,7 +439,7 @@ React + Tailwind, servido por la propia API desde el mismo origen: un puerto y
 nada que configurar entre las dos mitades. Escucha **solo en 127.0.0.1** — son
 datos de una cuenta de inversión y no hay autenticación.
 
-**El experimento va en la URL**: `/p/europa-01/posiciones`. Con el nombre a la
+**El experimento va en la URL**: `/p/europa-01/positions`. Con el nombre a la
 vista, la pregunta «¿qué experimento estoy mirando?» la responde la barra de
 direcciones, y un enlace guardado sigue apuntando al mismo sitio después de
 recargar. Cambiar de experimento en el selector conserva la sección.
@@ -726,7 +726,7 @@ api/                    FastAPI: 22 rutas, incluido el SSE de precios
 app/                    React + Vite + Tailwind (se compila en la imagen)
   src/api/              Cliente, hooks de TanStack Query y el hook de SSE
   src/api/types.ts      Tipos generados del OpenAPI; no se editan a mano
-  src/paginas/          Resumen, Posiciones, Decisiones, Órdenes, Riesgo, Ciclos
+  src/pages/            Resumen, Posiciones, Decisiones, Órdenes, Riesgo, Ciclos
 tools/
   fetch_universe.py     Descarga la lista de componentes del S&P 500
   ingestor.py           Bucle de ingesta (proceso del contenedor)

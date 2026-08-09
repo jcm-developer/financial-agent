@@ -1,13 +1,13 @@
 /**
- * Cliente HTTP de la API. Una sola puerta para todas las peticiones.
+ * HTTP client for the API. One door for every request.
  *
- * Las rutas son **relativas** (`/api/...`) a proposito: en produccion la API
- * sirve el build desde su mismo origen (F3.7) y en desarrollo el proxy de Vite
- * reenvia `/api` a donde diga `VITE_API_TARGET`. Con una URL absoluta habria que
- * configurar el origen en dos sitios y mantenerlos de acuerdo.
+ * Paths are **relative** (`/api/...`) on purpose: in production the API serves
+ * the build from its own origin (F3.7), and in development Vite's proxy
+ * forwards `/api` to wherever `VITE_API_TARGET` says. With an absolute URL the
+ * origin would have to be configured in two places and kept in agreement.
  */
 
-/** Un error que la API ha explicado. `status` es el codigo HTTP. */
+/** An error the API explained. `status` is the HTTP code. */
 export class ApiError extends Error {
   readonly status: number;
   readonly detail: unknown;
@@ -27,7 +27,7 @@ export class ApiError extends Error {
   /**
    * Whether the request itself was at fault and retrying is pointless.
    *
-   * Los 4xx son culpa de la peticion: reintentarla da el mismo resultado.
+   * A 4xx is the request's fault: sending it again gives the same result.
    *
    * @return True for any 4xx status.
    */
@@ -38,41 +38,41 @@ export class ApiError extends Error {
 
 type Params = Record<string, string | number | boolean | undefined | null>;
 
-interface Opciones {
+interface Options {
   params?: Params;
   body?: unknown;
   signal?: AbortSignal;
 }
 
 /**
- * Saca una frase legible del cuerpo de error de FastAPI.
+ * Pulls a readable sentence out of a FastAPI error body.
  *
- * Tiene dos formas y hay que cubrir las dos: `{"detail": "texto"}` en los
- * errores que lanzamos nosotros, y `{"detail": [{loc, msg}, …]}` en los 422 de
- * validacion de Pydantic. Sin aplanar el segundo, el formulario de 41 campos de
- * F6.8 diria "[object Object]" justo cuando el usuario necesita saber que campo
- * ha puesto mal.
+ * It comes in two shapes and both have to be covered: `{"detail": "text"}` for
+ * the errors we raise ourselves, and `{"detail": [{loc, msg}, …]}` for
+ * Pydantic's validation 422s. Without flattening the second, the 41-field form
+ * of F6.8 would say "[object Object]" exactly when the user needs to know which
+ * field they got wrong.
  *
  * @param status - HTTP status code, used for the fallback message.
- * @param cuerpo - Parsed response body, or the raw text when it was not JSON.
+ * @param body - Parsed response body, or the raw text when it was not JSON.
  * @return A message ready to be shown on screen.
  */
-function mensajeDeError(status: number, cuerpo: unknown): string {
-  if (typeof cuerpo === "string" && cuerpo.trim()) return cuerpo;
+function errorMessage(status: number, body: unknown): string {
+  if (typeof body === "string" && body.trim()) return body;
 
-  if (cuerpo && typeof cuerpo === "object" && "detail" in cuerpo) {
-    const detail = (cuerpo as { detail: unknown }).detail;
+  if (body && typeof body === "object" && "detail" in body) {
+    const detail = (body as { detail: unknown }).detail;
     if (typeof detail === "string") return detail;
     if (Array.isArray(detail)) {
-      const partes = detail.map((entrada) => {
-        if (!entrada || typeof entrada !== "object") return String(entrada);
-        const { loc, msg } = entrada as { loc?: unknown[]; msg?: string };
-        // `loc` empieza por "body"/"query", que no le dice nada a nadie: se
-        // queda el resto, que es el nombre del campo.
-        const campo = Array.isArray(loc) ? loc.slice(1).join(".") : "";
-        return campo ? `${campo}: ${msg ?? ""}`.trim() : (msg ?? "");
+      const parts = detail.map((entry) => {
+        if (!entry || typeof entry !== "object") return String(entry);
+        const { loc, msg } = entry as { loc?: unknown[]; msg?: string };
+        // `loc` starts with "body"/"query", which tells nobody anything: keep
+        // the rest, which is the field name.
+        const field = Array.isArray(loc) ? loc.slice(1).join(".") : "";
+        return field ? `${field}: ${msg ?? ""}`.trim() : (msg ?? "");
       });
-      if (partes.length) return partes.join("; ");
+      if (parts.length) return parts.join("; ");
     }
   }
   return `La API respondio ${status}.`;
@@ -86,15 +86,15 @@ function mensajeDeError(status: number, cuerpo: unknown): string {
  *     so an absent filter never reaches the API as `?symbol=`.
  * @return The path with its query string, or unchanged when nothing was kept.
  */
-function construirUrl(path: string, params?: Params): string {
+function buildUrl(path: string, params?: Params): string {
   if (!params) return path;
   const query = new URLSearchParams();
-  for (const [clave, valor] of Object.entries(params)) {
-    if (valor === undefined || valor === null || valor === "") continue;
-    query.set(clave, String(valor));
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    query.set(key, String(value));
   }
-  const cadena = query.toString();
-  return cadena ? `${path}?${cadena}` : path;
+  const string = query.toString();
+  return string ? `${path}?${string}` : path;
 }
 
 /**
@@ -115,39 +115,40 @@ function construirUrl(path: string, params?: Params): string {
 async function request<T>(
   method: string,
   path: string,
-  { params, body, signal }: Opciones = {},
+  { params, body, signal }: Options = {},
 ): Promise<T> {
-  let respuesta: Response;
+  let response: Response;
   try {
-    respuesta = await fetch(construirUrl(path, params), {
+    response = await fetch(buildUrl(path, params), {
       method,
       signal,
       headers: body === undefined ? undefined : { "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-  } catch (causa) {
-    // Aqui no hay respuesta: el servidor no esta, o la red se ha caido. Se
-    // distingue del error con codigo porque la pantalla dice otra cosa.
-    if (causa instanceof DOMException && causa.name === "AbortError") throw causa;
-    throw new ApiError(0, "No se pudo contactar con la API.", causa);
+  } catch (cause) {
+    // There is no response here: the server is down, or the network dropped.
+    // It is distinguished from an error with a code because the screen says
+    // something else.
+    if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+    throw new ApiError(0, "No se pudo contactar con la API.", cause);
   }
 
-  if (respuesta.status === 204) return undefined as T;
+  if (response.status === 204) return undefined as T;
 
-  const texto = await respuesta.text();
-  let cuerpo: unknown = texto;
-  if (texto) {
+  const text = await response.text();
+  let parsed: unknown = text;
+  if (text) {
     try {
-      cuerpo = JSON.parse(texto);
+      parsed = JSON.parse(text);
     } catch {
-      // Se queda el texto crudo: mejor un mensaje raro que tragarse el error.
+      // Keep the raw text: a strange message beats swallowing the error.
     }
   }
 
-  if (!respuesta.ok) {
-    throw new ApiError(respuesta.status, mensajeDeError(respuesta.status, cuerpo), cuerpo);
+  if (!response.ok) {
+    throw new ApiError(response.status, errorMessage(response.status, parsed), parsed);
   }
-  return cuerpo as T;
+  return parsed as T;
 }
 
 /** The one door to the API. Every verb throws {@link ApiError} on failure. */

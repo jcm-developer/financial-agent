@@ -81,10 +81,10 @@ def test_an_empty_cache_reports_nothing(db):
     cache = BarCache(db, interval="1d")
 
     assert cache.get_bars("AAPL") == []
-    assert cache.stats() == {"simbolos": 0, "barras": 0, "caidos": 0}
+    assert cache.stats() == {"symbols": 0, "bars": 0, "stale": 0}
 
 
-# -- Refresco ----------------------------------------------------------------
+# -- Refresh -----------------------------------------------------------------
 
 def test_a_first_refresh_stores_the_bars(db, patch_yf):
     cache = BarCache(db, interval="1d")
@@ -92,10 +92,10 @@ def test_a_first_refresh_stores_the_bars(db, patch_yf):
 
     summary = cache.refresh(["AAPL", "MSFT"], lookback_days=30)
 
-    assert summary["barras"] == 10          # 5 barras x 2 simbolos
-    assert summary["fallos"] == 0
+    assert summary["bars"] == 10          # 5 bars x 2 symbols
+    assert summary["failures"] == 0
     assert len(cache.get_bars("AAPL")) == 5
-    assert cache.stats()["simbolos"] == 2
+    assert cache.stats()["symbols"] == 2
 
 
 def test_bars_come_back_in_chronological_order(db, patch_yf):
@@ -174,7 +174,7 @@ def test_a_failing_download_is_counted_not_swallowed(db, patch_yf):
 
     summary = cache.refresh(["MUERTO"], lookback_days=30)
 
-    assert summary["fallos"] == 1
+    assert summary["failures"] == 1
     row = db.query("select failures, last_error from bar_cache_state")[0]
     assert row["failures"] == 1
     assert "429" in row["last_error"]
@@ -192,9 +192,9 @@ def test_a_symbol_yahoo_does_not_know_stops_being_requested(db, patch_yf):
 
     summary = cache.refresh(["MUERTO"], lookback_days=30)
 
-    assert summary["omitidos"] == 1
+    assert summary["skipped"] == 1
     assert len(fake.calls) == calls_before      # no se pidio de nuevo
-    assert cache.stats()["caidos"] == 1
+    assert cache.stats()["stale"] == 1
 
 
 def test_force_full_retries_even_a_dropped_symbol(db, patch_yf):

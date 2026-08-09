@@ -20,21 +20,21 @@ import type {
 } from "@/api/types";
 
 /**
- * Un hook por endpoint, con el tipo generado puesto.
+ * One hook per endpoint, with the generated type applied.
  *
- * Los tipos salen de `@/api/types`, que genera `tools/gen_api_types.py` del
- * OpenAPI. Eso hace que un cambio en `api/models.py` rompa la compilacion del
- * frontend en lugar de romper la pantalla en tiempo de ejecucion, que era la
- * razon de generar los tipos antes de escribir la interfaz (F3.6).
+ * The types come from `@/api/types`, which `tools/gen_api_types.py` generates
+ * from the OpenAPI document. That makes a change in `api/models.py` break the
+ * frontend's compilation instead of breaking the screen at runtime, which was
+ * the reason for generating the types before writing the interface (F3.6).
  *
- * Los envoltorios paginados se usan tal como los genera el script
- * (`Page_PositionRow` y compañia) en lugar de declarar aqui un `Pagina<T>`
- * propio: un generico escrito a mano dejaria de cuadrar en silencio el dia que
- * `Page` cambie en `models.py`, que es justo lo que los tipos generados evitan.
+ * The paginated wrappers are used exactly as the script generates them
+ * (`Page_PositionRow` and friends) instead of declaring a `Page<T>` of our own:
+ * a hand-written generic would silently stop matching the day `Page` changes in
+ * `models.py`, which is precisely what the generated types prevent.
  */
 
-/** Los filtros de una tabla, tal cual viajan en la query. */
-type Filtros = Record<string, string | number | undefined>;
+/** A table's filters, exactly as they travel in the query string. */
+type Filters = Record<string, string | number | undefined>;
 
 /**
  * Reads the markets the project knows about, with their calendar and currency.
@@ -45,8 +45,8 @@ export function useMarkets() {
   return useQuery({
     queryKey: keys.markets(),
     queryFn: ({ signal }) => api.get<MarketInfo[]>("/api/markets", undefined, signal),
-    // El horario y el universo de una bolsa no cambian durante una sesion; lo
-    // unico vivo es `is_operating`, y para eso ya hay un refetch al enfocar.
+    // An exchange's hours and universe do not change during a session; the only
+    // live field is `is_operating`, and the refetch on focus covers that.
     staleTime: 5 * 60_000,
   });
 }
@@ -85,13 +85,13 @@ export function useProfile(ref: string | undefined) {
  * @return The query for `GET /api/quotes`.
  */
 export function useQuotes(symbols?: string[]) {
-  const lista = symbols?.length ? symbols.join(",") : undefined;
+  const list = symbols?.length ? symbols.join(",") : undefined;
   return useQuery({
-    queryKey: keys.quotes(lista),
+    queryKey: keys.quotes(list),
     queryFn: ({ signal }) =>
-      api.get<QuoteRow[]>("/api/quotes", { symbols: lista }, signal),
-    // Sin refetch por intervalo: de mantenerlos frescos se encarga el SSE, y un
-    // sondeo en paralelo pediria lo mismo dos veces (D6).
+      api.get<QuoteRow[]>("/api/quotes", { symbols: list }, signal),
+    // No interval refetch: keeping these fresh is the SSE's job, and polling in
+    // parallel would ask for the same thing twice (D6).
     staleTime: Infinity,
   });
 }
@@ -128,112 +128,112 @@ export function useCycleControl() {
  * Reads the computed analytics of one experiment: equity curve, calibration,
  * per-symbol breakdown.
  *
- * @param perfil - Profile name. Undefined leaves the query disabled.
+ * @param profile - Profile name. Undefined leaves the query disabled.
  * @return The query for `GET /api/analytics`.
  */
-export function useAnalytics(perfil: string | undefined) {
+export function useAnalytics(profile: string | undefined) {
   return useQuery({
-    queryKey: keys.analytics(perfil ?? ""),
+    queryKey: keys.analytics(profile ?? ""),
     queryFn: ({ signal }) =>
-      api.get<Analytics>("/api/analytics", { profile: perfil }, signal),
-    enabled: Boolean(perfil),
+      api.get<Analytics>("/api/analytics", { profile }, signal),
+    enabled: Boolean(profile),
   });
 }
 
 // ----------------------------------------------------------------------
-// Tablas del historico
+// History tables
 // ----------------------------------------------------------------------
 
 /**
- * Los filtros entran en la clave de cache a proposito.
+ * The filters go into the cache key on purpose.
  *
- * Asi volver de «solo rechazadas» a «todas» pinta al instante desde la cache en
- * lugar de esperar otra peticion, y dos pantallas con filtros distintos no se
- * sobrescriben la una a la otra.
+ * That way going back from "rejected only" to "all" paints instantly from the
+ * cache instead of waiting for another request, and two screens with different
+ * filters do not overwrite each other.
  *
  * @template T - The generated `Page_*` wrapper the endpoint returns.
- * @param clave - Base cache key, which the filters extend.
- * @param ruta - Relative API path of the table.
- * @param perfil - Profile name. Undefined leaves the query disabled.
- * @param filtros - Query filters, part of the cache key.
+ * @param key - Base cache key, which the filters extend.
+ * @param path - Relative API path of the table.
+ * @param profile - Profile name. Undefined leaves the query disabled.
+ * @param filters - Query filters, part of the cache key.
  * @return The query for that page of the table.
  */
-function usePagina<T>(
-  clave: readonly unknown[],
-  ruta: string,
-  perfil: string | undefined,
-  filtros: Filtros,
+function usePage<T>(
+  key: readonly unknown[],
+  path: string,
+  profile: string | undefined,
+  filters: Filters,
 ) {
   return useQuery({
-    queryKey: [...clave, filtros],
+    queryKey: [...key, filters],
     queryFn: ({ signal }) =>
-      api.get<T>(ruta, { profile: perfil, ...filtros }, signal),
-    enabled: Boolean(perfil),
+      api.get<T>(path, { profile, ...filters }, signal),
+    enabled: Boolean(profile),
   });
 }
 
 /**
  * Reads the positions of an experiment, open and closed.
  *
- * @param perfil - Profile name. Undefined leaves the query disabled.
- * @param filtros - Query filters, part of the cache key.
+ * @param profile - Profile name. Undefined leaves the query disabled.
+ * @param filters - Query filters, part of the cache key.
  * @return The query for `GET /api/positions`.
  */
-export function usePositions(perfil: string | undefined, filtros: Filtros = {}) {
-  return usePagina<Page_PositionRow>(
-    keys.positions(perfil ?? ""), "/api/positions", perfil, filtros,
+export function usePositions(profile: string | undefined, filters: Filters = {}) {
+  return usePage<Page_PositionRow>(
+    keys.positions(profile ?? ""), "/api/positions", profile, filters,
   );
 }
 
 /**
  * Reads what the model proposed on each cycle, verdict included.
  *
- * @param perfil - Profile name. Undefined leaves the query disabled.
- * @param filtros - Query filters, part of the cache key.
+ * @param profile - Profile name. Undefined leaves the query disabled.
+ * @param filters - Query filters, part of the cache key.
  * @return The query for `GET /api/decisions`.
  */
-export function useDecisions(perfil: string | undefined, filtros: Filtros = {}) {
-  return usePagina<Page_DecisionRow>(
-    keys.decisions(perfil ?? ""), "/api/decisions", perfil, filtros,
+export function useDecisions(profile: string | undefined, filters: Filters = {}) {
+  return usePage<Page_DecisionRow>(
+    keys.decisions(profile ?? ""), "/api/decisions", profile, filters,
   );
 }
 
 /**
  * Reads the orders the simulated broker executed.
  *
- * @param perfil - Profile name. Undefined leaves the query disabled.
- * @param filtros - Query filters, part of the cache key.
+ * @param profile - Profile name. Undefined leaves the query disabled.
+ * @param filters - Query filters, part of the cache key.
  * @return The query for `GET /api/orders`.
  */
-export function useOrders(perfil: string | undefined, filtros: Filtros = {}) {
-  return usePagina<Page_OrderRow>(
-    keys.orders(perfil ?? ""), "/api/orders", perfil, filtros,
+export function useOrders(profile: string | undefined, filters: Filters = {}) {
+  return usePage<Page_OrderRow>(
+    keys.orders(profile ?? ""), "/api/orders", profile, filters,
   );
 }
 
 /**
  * Reads what the risk manager rejected or resized, and under which rule.
  *
- * @param perfil - Profile name. Undefined leaves the query disabled.
- * @param filtros - Query filters, part of the cache key.
+ * @param profile - Profile name. Undefined leaves the query disabled.
+ * @param filters - Query filters, part of the cache key.
  * @return The query for `GET /api/risk-events`.
  */
-export function useRiskEvents(perfil: string | undefined, filtros: Filtros = {}) {
-  return usePagina<Page_RiskEventRow>(
-    keys.riskEvents(perfil ?? ""), "/api/risk-events", perfil, filtros,
+export function useRiskEvents(profile: string | undefined, filters: Filters = {}) {
+  return usePage<Page_RiskEventRow>(
+    keys.riskEvents(profile ?? ""), "/api/risk-events", profile, filters,
   );
 }
 
 /**
  * Reads the cycles an experiment has run.
  *
- * @param perfil - Profile name. Undefined leaves the query disabled.
- * @param filtros - Query filters, part of the cache key.
+ * @param profile - Profile name. Undefined leaves the query disabled.
+ * @param filters - Query filters, part of the cache key.
  * @return The query for `GET /api/cycles`.
  */
-export function useCycles(perfil: string | undefined, filtros: Filtros = {}) {
-  return usePagina<Page_CycleRow>(
-    keys.cycles(perfil ?? ""), "/api/cycles", perfil, filtros,
+export function useCycles(profile: string | undefined, filters: Filters = {}) {
+  return usePage<Page_CycleRow>(
+    keys.cycles(profile ?? ""), "/api/cycles", profile, filters,
   );
 }
 
@@ -253,30 +253,30 @@ export function useCycle(id: string | undefined) {
 }
 
 // ----------------------------------------------------------------------
-// Control del ciclo (F3.4)
+// Cycle control (F3.4)
 // ----------------------------------------------------------------------
 
 /**
- * Lanzar y parar un ciclo.
+ * Launches a cycle.
  *
- * No se invalidan las tablas al terminar la mutacion, porque **en ese momento el
- * ciclo acaba de arrancar y todavia no ha escrito nada**: son ~20 minutos de
- * trabajo. Lo que refresca las tablas es el evento `cycle` del stream cuando el
- * ciclo pasa a no estar corriendo.
+ * The tables are not invalidated when the mutation finishes, because **at that
+ * moment the cycle has only just started and has written nothing yet**: it is
+ * ~20 minutes of work. What refreshes the tables is the stream's `cycle` event
+ * once the cycle stops running.
  *
- * @param perfil - Profile the cycle runs against.
+ * @param profile - Profile the cycle runs against.
  * @return The mutation for `POST /api/cycles/run`, which takes `{dry_run}` and
  *     writes the returned state straight into the control cache.
  */
-export function useLanzarCiclo(perfil: string | undefined) {
-  const cliente = useQueryClient();
+export function useRunCycle(profile: string | undefined) {
+  const client = useQueryClient();
   return useMutation({
-    mutationFn: (opciones: { dry_run?: boolean } = {}) =>
+    mutationFn: (options: { dry_run?: boolean } = {}) =>
       api.post<CycleControl>("/api/cycles/run", {
-        profile: perfil,
-        dry_run: opciones.dry_run ?? false,
+        profile,
+        dry_run: options.dry_run ?? false,
       }),
-    onSuccess: (estado) => cliente.setQueryData(keys.cycleControl(), estado),
+    onSuccess: (state) => client.setQueryData(keys.cycleControl(), state),
   });
 }
 
@@ -285,10 +285,10 @@ export function useLanzarCiclo(perfil: string | undefined) {
  *
  * @return The mutation for `POST /api/cycles/stop`.
  */
-export function usePararCiclo() {
-  const cliente = useQueryClient();
+export function useStopCycle() {
+  const client = useQueryClient();
   return useMutation({
     mutationFn: () => api.post<ActionResult>("/api/cycles/stop"),
-    onSuccess: () => cliente.invalidateQueries({ queryKey: keys.cycleControl() }),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.cycleControl() }),
   });
 }

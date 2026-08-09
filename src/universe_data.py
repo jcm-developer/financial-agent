@@ -1,27 +1,27 @@
-"""El embudo: universo grande -> cache -> screener -> candidatos para el LLM.
+"""The funnel: large universe -> cache -> screener -> candidates for the LLM.
 
-Vive en su propio modulo para que `market_data` no dependa de la base de datos ni
-del screener: `YahooMarketData` sigue siendo un objeto sin estado que solo habla
-con la red.
+It lives in its own module so `market_data` depends on neither the database nor
+the screener: `YahooMarketData` stays a stateless object that only talks to the
+network.
 
-**Los dos intervalos van por separado, y es la clave de que esto sea viable.** El
-screener criba siempre con barras DIARIAS; el analisis usa el intervalo
-configurado. Con `BAR_INTERVAL=1h`, bajar barras horarias de 503 activos serian
-unos 2,5 millones de filas y varios cientos de MB, cuando solo hacen falta las de
-los veinte que van a llegar al modelo.
+**The two intervals are kept apart, and that is the key to this being viable.**
+The screener always sifts with DAILY bars; the analysis uses the configured
+interval. With `BAR_INTERVAL=1h`, downloading hourly bars for 503 assets would be
+some 2.5 million rows and several hundred MB, when all that is needed are those
+of the twenty that will reach the model.
 
-Coste medido con 503 activos y barras diarias:
+Cost measured with 503 assets and daily bars:
 
-  * Primer arranque: 9 peticiones a Yahoo (lotes de 60), ~4,5 minutos, 103.000
-    barras en cache, 18 MB.
-  * Ciclos siguientes: las mismas 9 peticiones pero solo con las barras nuevas,
-    ~90 segundos. Insignificante al lado de los 15 minutos que tarda el modelo en
-    analizar veinte candidatos.
-  * Screener: aritmetica sobre la cache, sin red.
-  * Barras horarias, si se piden: solo de los candidatos, ~1 peticion mas.
+  * First run: 9 requests to Yahoo (batches of 60), ~4.5 minutes, 103,000 bars
+    cached, 18 MB.
+  * Later cycles: the same 9 requests but only for the new bars, ~90 seconds.
+    Negligible next to the 15 minutes the model takes to analyse twenty
+    candidates.
+  * Screener: arithmetic over the cache, no network.
+  * Hourly bars, if asked for: only for the candidates, ~1 extra request.
 
-Las posiciones abiertas se incluyen siempre, aunque el screener no las seleccione:
-una posicion viva necesita revision precisamente cuando deja de estar atractiva.
+Open positions are always included, even when the screener does not select them:
+a live position needs reviewing precisely when it stops being attractive.
 """
 
 from __future__ import annotations
@@ -51,8 +51,8 @@ class UniverseMarketData:
         self.settings = screener
         self.interval = interval
         self.lookback_days = lookback_days
-        # El cribado siempre va con barras diarias: es lo unico que se descarga
-        # para todo el universo. Ver la nota del encabezado.
+        # Sifting always runs on daily bars: they are the only thing downloaded
+        # for the whole universe. See the note in the header.
         self.screen_cache = BarCache(database, interval="1d")
         self.analysis_cache = (
             self.screen_cache if interval == "1d" else BarCache(database, interval=interval)
@@ -63,7 +63,7 @@ class UniverseMarketData:
             min_price=screener.min_price,
             max_volatility_pct=screener.max_volatility_pct,
         )
-        # El ultimo informe queda disponible para que el ciclo lo registre.
+        # The last report stays available so the cycle can record it.
         self.last_report: ScreenerReport | None = None
 
     def fetch_snapshots(
@@ -78,16 +78,16 @@ class UniverseMarketData:
             len(all_symbols), len(universe), len(required),
         )
 
-        # 1. Refresco incremental de la cache diaria, para todo el universo.
+        # 1. Incremental refresh of the daily cache, for the whole universe.
         before = self.screen_cache.stats()
         self.screen_cache.refresh(all_symbols, lookback_days=self.lookback_days)
         after = self.screen_cache.stats()
         log.info(
             "Cache diaria: %d simbolos, %d barras (%+d en este ciclo).",
-            after["simbolos"], after["barras"], after["barras"] - before["barras"],
+            after["symbols"], after["bars"], after["bars"] - before["bars"],
         )
 
-        # 2. Lectura desde la cache. Ya no se toca la red.
+        # 2. Read from the cache. The network is no longer touched.
         bars_needed = max(self.lookback_days, 260)
         screen_bars = {
             symbol: bars
@@ -102,8 +102,8 @@ class UniverseMarketData:
                 "que Yahoo reconozca."
             )
 
-        # 3. Screener. Las posiciones abiertas no se puntuan: entran de todos
-        #    modos, y mezclarlas falsearia el informe.
+        # 3. Screener. Open positions are not scored: they get in regardless, and
+        #    mixing them would falsify the report.
         universe_bars = {
             symbol: bars for symbol, bars in screen_bars.items()
             if symbol not in set(required)
@@ -114,8 +114,9 @@ class UniverseMarketData:
         selected = [c.symbol for c in report.candidates]
         to_analyze = sorted(set(selected) | set(required))
 
-        # 4. Si el analisis va en otro intervalo, ahora si se baja —solo de los
-        #    seleccionados. Es la diferencia entre 20 simbolos y 503.
+        # 4. If the analysis runs on another interval, only now is it downloaded
+        #    —and only for the selected ones. That is the difference between 20
+        #    symbols and 503.
         analysis_bars = screen_bars
         if self.analysis_cache is not self.screen_cache:
             log.info(
@@ -129,7 +130,7 @@ class UniverseMarketData:
                 if (bars := self.analysis_cache.get_bars(symbol, limit=bars_needed))
             }
 
-        # 5. Snapshots solo de lo seleccionado.
+        # 5. Snapshots only for what was selected.
         snapshots: dict[str, MarketSnapshot] = {}
         for symbol in to_analyze:
             bars = analysis_bars.get(symbol)
@@ -152,7 +153,7 @@ class UniverseMarketData:
         return snapshots
 
     def describe_selection(self) -> str:
-        """Resumen del ultimo cribado, para el log del ciclo."""
+        """Summary of the last sift, for the cycle's log."""
         if self.last_report is None:
             return "sin cribar todavia"
         top = ", ".join(

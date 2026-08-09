@@ -1,14 +1,14 @@
-"""El contrato que `cycle.py` espera de un broker.
+"""The contract `cycle.py` expects from a broker.
 
-Aqui no hay implementacion: solo el error, la forma de una orden enviada y el
-protocolo que describe la superficie. La unica implementacion es
-[sim_broker.py](sim_broker.py), que lleva la contabilidad en SQLite.
+There is no implementation here: only the error, the shape of a submitted order
+and the protocol describing the surface. The only implementation is
+[sim_broker.py](sim_broker.py), which keeps its books in SQLite.
 
-El protocolo se conserva aunque haya un solo broker por dos razones concretas:
-`cycle.py` puede anotar su dependencia sin importar el simulador (y sin el ciclo
-de imports que eso crearia), y el dia que se anada un broker real hay un sitio
-donde esta escrito que metodos hacen falta, en lugar de descubrirlos a base de
-`AttributeError`.
+The protocol is kept even with a single broker for two concrete reasons:
+`cycle.py` can declare its dependency without importing the simulator (and
+without the import cycle that would create), and the day a real broker is added
+there is one place where it is written down which methods are needed, instead of
+discovering them through `AttributeError`.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from .models import AccountState
 
 
 class BrokerError(RuntimeError):
-    """El broker rechazo la operacion o no se pudo contactar."""
+    """The broker rejected the operation, or could not be reached."""
 
 
 @dataclass(frozen=True)
@@ -36,7 +36,7 @@ class SubmittedOrder:
 
 @runtime_checkable
 class Broker(Protocol):
-    """Lo que el ciclo necesita poder pedirle a un broker."""
+    """What the cycle needs to be able to ask a broker for."""
 
     def is_market_open(self) -> bool:
         ...

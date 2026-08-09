@@ -1,44 +1,45 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 
-import { Cargando } from "@/components/piezas";
+import { Loading } from "@/components/pieces";
 import { Layout } from "@/layout/Layout";
-import { Ciclos } from "@/paginas/Ciclos";
-import { Decisiones } from "@/paginas/Decisiones";
-import { Diagnostico } from "@/paginas/Diagnostico";
-import { Inicio } from "@/paginas/Inicio";
-import { NoEncontrado } from "@/paginas/NoEncontrado";
-import { Ordenes } from "@/paginas/Ordenes";
-import { Pendiente } from "@/paginas/Pendiente";
-import { Perfiles } from "@/paginas/Perfiles";
-import { Posiciones } from "@/paginas/Posiciones";
-import { Resumen } from "@/paginas/Resumen";
+import { Cycles } from "@/pages/Cycles";
+import { Decisions } from "@/pages/Decisions";
+import { Diagnostics } from "@/pages/Diagnostics";
+import { Home } from "@/pages/Home";
+import { NotFound } from "@/pages/NotFound";
+import { Orders } from "@/pages/Orders";
+import { Pending } from "@/pages/Pending";
+import { Profiles } from "@/pages/Profiles";
+import { Positions } from "@/pages/Positions";
+import { Summary } from "@/pages/Summary";
 
 /**
- * La analitica se carga aparte y solo al abrirla.
+ * The analytics screen is bundled apart and loaded only when opened.
  *
- * Recharts pesa casi tanto como el resto de la aplicacion junta (el paquete pasaba
- * de 350 a 733 KB al incluirlo), y es la unica pantalla que lo usa. Cargarlo en el
- * arranque haria esperar por seis graficas a quien solo viene a mirar si el ciclo
- * de las 11:20 abrio algo.
+ * Recharts weighs almost as much as the rest of the application together (the
+ * bundle went from 350 to 733 KB once it was included), and it is the only
+ * screen that uses it. Loading it at startup would make whoever came only to
+ * check whether the 11:20 cycle opened anything wait for six charts.
  */
-const Analitica = lazy(() =>
-  import("@/paginas/Analitica").then((m) => ({ default: m.Analitica })),
+const Analytics = lazy(() =>
+  import("@/pages/Analytics").then((m) => ({ default: m.Analytics })),
 );
-import { Riesgo } from "@/paginas/Riesgo";
+import { Risk } from "@/pages/Risk";
 
 /**
- * Enrutado (F4.3).
+ * Routing (F4.3).
  *
- * **El perfil va en la URL con su nombre**, no con su id: `/p/europa-01/posiciones`.
- * Con un UUID ahí nadie sabría qué experimento está mirando, que era justo el
- * motivo de sacarlo de la memoria de React. La API acepta nombre o id
- * (`find_profile`), así que no hace falta traducir.
+ * **The profile travels in the URL by its name**, not by its id:
+ * `/p/europa-01/positions`. With a UUID there nobody would know which
+ * experiment they were looking at, which was precisely the reason for taking it
+ * out of React's memory. The API accepts a name or an id (`find_profile`), so
+ * no translation is needed.
  *
- * Las rutas del perfil van todas dentro de `/p/:perfil/` para que el nombre no se
- * pueda perder al navegar: con el perfil como parámetro de consulta opcional,
- * cualquier enlace que se olvidara de arrastrarlo dejaría al usuario mirando otro
- * experimento sin avisar.
+ * The profile's routes all live inside `/p/:profile/` so the name cannot be lost
+ * while navigating: with the profile as an optional query parameter, any link
+ * that forgot to drag it along would leave the user looking at another
+ * experiment with no warning.
  *
  * @return The router with every route of the application.
  */
@@ -47,39 +48,39 @@ export function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
-          <Route index element={<Inicio />} />
-          <Route path="perfiles" element={<Perfiles />} />
-          <Route path="diagnostico" element={<Diagnostico />} />
+          <Route index element={<Home />} />
+          <Route path="profiles" element={<Profiles />} />
+          <Route path="diagnostics" element={<Diagnostics />} />
 
-          <Route path="p/:perfil">
-            <Route index element={<Navigate to="resumen" replace />} />
-            <Route path="resumen" element={<Resumen />} />
+          <Route path="p/:profile">
+            <Route index element={<Navigate to="summary" replace />} />
+            <Route path="summary" element={<Summary />} />
             <Route
-              path="analitica"
+              path="analytics"
               element={
-                <Suspense fallback={<Cargando texto="Cargando gráficas…" />}>
-                  <Analitica />
+                <Suspense fallback={<Loading text="Cargando gráficas…" />}>
+                  <Analytics />
                 </Suspense>
               }
             />
-            <Route path="posiciones" element={<Posiciones />} />
-            <Route path="decisiones" element={<Decisiones />} />
-            <Route path="ordenes" element={<Ordenes />} />
-            <Route path="riesgo" element={<Riesgo />} />
-            <Route path="ciclos" element={<Ciclos />} />
+            <Route path="positions" element={<Positions />} />
+            <Route path="decisions" element={<Decisions />} />
+            <Route path="orders" element={<Orders />} />
+            <Route path="risk" element={<Risk />} />
+            <Route path="cycles" element={<Cycles />} />
             <Route
-              path="ajustes"
+              path="settings"
               element={
-                <Pendiente
-                  titulo="Ajustes"
-                  tarea="F6.8"
-                  descripcion="Los 41 parámetros del experimento, con los deslizadores de riesgo y diversificación y los límites derivados visibles en vivo."
+                <Pending
+                  title="Ajustes"
+                  task="F6.8"
+                  description="Los 41 parámetros del experimento, con los deslizadores de riesgo y diversificación y los límites derivados visibles en vivo."
                 />
               }
             />
           </Route>
 
-          <Route path="*" element={<NoEncontrado />} />
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </BrowserRouter>

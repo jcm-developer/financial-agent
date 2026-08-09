@@ -1,11 +1,11 @@
 /**
- * Claves de TanStack Query, todas en un sitio.
+ * TanStack Query keys, all in one place.
  *
- * Estan centralizadas porque el hook de SSE escribe en la cache por clave
- * (`setQueryData`): con las claves escritas a mano en cada componente, un
- * `["quotes"]` frente a un `["quotes", undefined]` serian dos entradas
- * distintas, el stream actualizaria una y la pantalla leeria la otra, y el
- * sintoma seria "los precios no se mueven" sin ningun error por ningun lado.
+ * They are centralised because the SSE hook writes into the cache by key
+ * (`setQueryData`): with keys written by hand in every component, a
+ * `["quotes"]` against a `["quotes", undefined]` would be two different
+ * entries, the stream would update one and the screen would read the other,
+ * and the symptom would be "the prices are not moving" with no error anywhere.
  */
 
 export const keys = {
@@ -21,12 +21,12 @@ export const keys = {
 
   quotes: (symbols?: string) => ["quotes", symbols ?? ""] as const,
   /**
-   * Cuándo llegó el último lote de cotizaciones.
+   * When the last batch of quotes arrived.
    *
-   * Está en la caché y no en el estado del hook de SSE porque **el stream se abre
-   * una sola vez, en el Layout**, y quien necesita el dato son las pantallas. Un
-   * `useStream()` por pantalla para leerlo abriría una conexión SSE por pantalla,
-   * que es exactamente lo que F3.5 quería evitar.
+   * It lives in the cache and not in the SSE hook's state because **the stream
+   * is opened once, in the Layout**, and the screens are what need the value. A
+   * `useStream()` per screen just to read it would open one SSE connection per
+   * screen, which is exactly what F3.5 set out to avoid.
    */
   quotesMeta: () => ["quotes", "meta"] as const,
   ingestStatus: () => ["ingest-status"] as const,
@@ -43,14 +43,15 @@ export const keys = {
 } as const;
 
 /**
- * Prefijos de todo lo que un ciclo puede haber cambiado al terminar.
+ * Prefixes of everything a cycle may have changed by the time it ends.
  *
- * Se invalidan cuando el stream ve que el ciclo pasa de corriendo a parado: en ese
- * momento acaba de escribir posiciones, decisiones, ordenes y veredictos, y sin
- * esto la pantalla seguiria enseñando lo de antes hasta que alguien recargara. Se
- * invalida por prefijo para no tener que enumerar cada combinacion de filtros.
+ * They are invalidated when the stream sees the cycle go from running to
+ * stopped: at that moment it has just written positions, decisions, orders and
+ * verdicts, and without this the screen would keep showing the previous state
+ * until someone reloaded. Invalidating by prefix avoids enumerating every
+ * combination of filters.
  */
-export const PREFIJOS_HISTORICO = [
+export const HISTORY_PREFIXES = [
   ["profiles"],
   ["positions"],
   ["decisions"],

@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F8.9 limpia el directorio; queda escrita la convención de idioma y nomenclatura, y F8.8 abre la deuda de migrar el código existente)
+Última actualización: 2026-08-09 (F8.8 migra el frontend entero al inglés y cambia las rutas; quedan los comentarios y docstrings de Python)
 
 ---
 
@@ -1262,6 +1262,30 @@ diez sesiones en silencio.
       estado que el navegador recuerda en marcadores e historial. Es la razón de peso para
       hacerlo **de una vez y en un commit propio**: a medias deja el código en dos idiomas,
       que es exactamente lo que la convención evita.
+
+      **Hecho (2026-08-09): el frontend entero.** Las tres carpetas (`paginas/`→`pages/`,
+      `perfil/`→`profile/`, `graficas/`→`charts/`), los 27 ficheros con nombre español, los
+      74 exports, las props, los locales y los comentarios. Las rutas cambiaron con ello, y
+      también el parámetro de consulta `?ciclo=` → `?cycle=`. Dos nombres no salieron del
+      diccionario: `Globo` es `ChartTooltip` y no `Tooltip`, porque cada gráfica importa el
+      `Tooltip` de Recharts en la misma línea para montar el nuestro dentro; y las filas de
+      tabla son `DecisionTableRow`, `OrderTableRow`… y no `DecisionRow`, que ya es el nombre
+      del tipo generado que reciben. Verificado con typecheck, los 14 tests de front y el
+      build. Se renombraron también las claves internas de `BarCache.stats()`
+      (`simbolos`/`barras`/`caidos` → `symbols`/`bars`/`stale`), que son claves de JSON y
+      por tanto código.
+
+      **Falta la otra mitad: los comentarios y docstrings de Python**, unos 1.100 bloques
+      repartidos por `src/`, `api/`, `tools/`, `run.py` y los tests, más los ~243 nombres de
+      test en español. Van traducidos `broker.py`, `models.py`, `universe_data.py`,
+      `bar_cache.py`, `indicators.py`, `risk.py` y `conftest.py`.
+
+      **Decisión sobre los literales:** los mensajes de log y de excepción **no se traducen**
+      pese a lo que dice la tabla de CLAUDE.md, y no es un descuido. El log del ciclo se
+      muestra tal cual en la pantalla de Ciclos, así que es texto de pantalla; y además
+      `api/runner.py::_stage` deduce la etapa buscando cadenas dentro de él («Resumen del
+      ciclo», «RECHAZADA»), de modo que traducirlos rompería el indicador de progreso sin
+      que ningún test lo note. Si algún día se traducen, se cambian los dos sitios a la vez.
 - [x] **F8.9** Limpieza de lo que sobraba en el directorio (2026-08-09).
 
       **Basura en disco, ninguna en el repositorio:** `SERSJAUMEAPPDATAocaltemp/f64smoke/`

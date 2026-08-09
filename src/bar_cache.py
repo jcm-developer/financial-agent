@@ -1,22 +1,22 @@
-"""Cache de barras en SQLite con refresco incremental.
+"""Bar cache in SQLite, with incremental refresh.
 
-Es lo que hace viable analizar 500 activos: el primer arranque baja el historico
-completo (unos minutos), y a partir de ahi cada ciclo solo pide a Yahoo las barras
-nuevas. Sin esto, 500 simbolos x 275 barras en cada ciclo acabarian en un HTTP 429
-y en un bloqueo temporal de IP.
+This is what makes analysing 500 assets viable: the first run downloads the whole
+history (a few minutes), and from then on each cycle only asks Yahoo for the new
+bars. Without it, 500 symbols x 275 bars on every cycle would end in an HTTP 429
+and a temporary IP ban.
 
-Tres decisiones que conviene conocer:
+Three decisions worth knowing about:
 
-  * **El refresco es idempotente.** `insert or replace` sobre la clave
-    (simbolo, intervalo, ts) actualiza la barra en lugar de duplicarla. Importa
-    porque la ultima barra cambia mientras el mercado esta abierto: cada ciclo la
-    reescribe con el precio mas reciente.
-  * **Se descarga por lotes.** Yahoo acepta varios tickers por peticion; se
-    trocea en grupos y se descansa entre ellos. Con `threads=False`, que evita el
-    bloqueo de la cache interna de yfinance en Windows.
-  * **Los fallos se cuentan, no se ocultan.** Un simbolo que Yahoo deja de
-    reconocer (fusion, exclusion del indice) acumula fallos en `bar_cache_state`,
-    y a partir de un umbral se deja de pedir para no gastar peticiones en el vacio.
+  * **The refresh is idempotent.** `insert or replace` on the key
+    (symbol, interval, ts) updates the bar instead of duplicating it. It matters
+    because the last bar changes while the market is open: every cycle rewrites
+    it with the most recent price.
+  * **Downloads are batched.** Yahoo accepts several tickers per request; they
+    are chunked into groups with a rest in between. With `threads=False`, which
+    avoids yfinance's internal cache locking up on Windows.
+  * **Failures are counted, not hidden.** A symbol Yahoo stops recognising
+    (merger, index removal) accumulates failures in `bar_cache_state`, and past a
+    threshold it stops being requested so as not to spend requests on nothing.
 """
 
 from __future__ import annotations
@@ -30,15 +30,15 @@ from .indicators import Bar
 
 log = logging.getLogger(__name__)
 
-# Tickers por peticion a Yahoo. Mas alto va mas rapido pero sube el riesgo de 429
-# y hace que un fallo tumbe mas simbolos a la vez.
+# Tickers per request to Yahoo. Higher is faster but raises the risk of a 429 and
+# makes a single failure take down more symbols at once.
 BATCH_SIZE = 60
-# Pausa entre lotes, en segundos.
+# Pause between batches, in seconds.
 BATCH_PAUSE = 1.0
-# Fallos consecutivos tras los que se deja de pedir un simbolo.
+# Consecutive failures after which a symbol stops being requested.
 MAX_FAILURES = 5
 
-# Yahoo limita el historico intradia. Son limites suyos, no nuestros.
+# Yahoo caps intraday history. These are its limits, not ours.
 MAX_DAYS_BY_INTERVAL = {"1d": 3650, "1h": 700}
 
 
@@ -59,10 +59,10 @@ class BarCache:
         self.db = db
         self.interval = interval
 
-    # -- Lectura -----------------------------------------------------------
+    # -- Reading -----------------------------------------------------------
 
     def get_bars(self, symbol: str, *, limit: int = 400) -> list[Bar]:
-        """Ultimas `limit` barras de un simbolo, de la mas antigua a la mas nueva."""
+        """A symbol's last `limit` bars, oldest to newest."""
         rows = self.db.query(
             "select ts, open, high, low, close, volume from bar_cache "
             "where symbol = ? and interval = ? order by ts desc limit ?",
@@ -82,7 +82,7 @@ class BarCache:
         return bars
 
     def coverage(self) -> dict[str, int]:
-        """Cuantas barras hay por simbolo. Para diagnostico."""
+        """How many bars there are per symbol. For diagnostics."""
         return {
             row["symbol"]: int(row["bars"])
             for row in self.db.query(
@@ -93,18 +93,18 @@ class BarCache:
 
     def stats(self) -> dict[str, int]:
         row = self.db.query(
-            "select count(1) as simbolos, coalesce(sum(bars), 0) as barras, "
-            "       coalesce(sum(case when failures >= ? then 1 else 0 end), 0) as caidos "
+            "select count(1) as symbols, coalesce(sum(bars), 0) as bars, "
+            "       coalesce(sum(case when failures >= ? then 1 else 0 end), 0) as stale "
             "from bar_cache_state where interval = ?",
             (MAX_FAILURES, self.interval),
         )[0]
         return {
-            "simbolos": int(row["simbolos"]),
-            "barras": int(row["barras"]),
-            "caidos": int(row["caidos"]),
+            "symbols": int(row["symbols"]),
+            "bars": int(row["bars"]),
+            "stale": int(row["stale"]),
         }
 
-    # -- Refresco ----------------------------------------------------------
+    # -- Refresh -----------------------------------------------------------
 
     def refresh(
         self,
@@ -113,11 +113,11 @@ class BarCache:
         lookback_days: int = 400,
         force_full: bool = False,
     ) -> dict[str, int]:
-        """Descarga las barras que faltan. Devuelve un resumen del trabajo hecho.
+        """Downloads the missing bars. Returns a summary of the work done.
 
-        Para cada simbolo se pide desde su ultima barra conocida; los que no
-        tienen nada se piden completos. Los que comparten fecha de inicio se
-        agrupan en la misma peticion.
+        Each symbol is requested from its last known bar; the ones holding
+        nothing are requested in full. Those sharing a start date are grouped
+        into the same request.
         """
         import yfinance as yf
 
@@ -134,7 +134,7 @@ class BarCache:
             datetime.now(timezone.utc) - timedelta(days=min(lookback_days, max_days))
         ).date()
 
-        # Agrupa por fecha de inicio para poder pedir lotes.
+        # Grouped by start date so batches can be requested.
         groups: dict[object, list[str]] = {}
         skipped = 0
         for symbol in symbols:
@@ -147,8 +147,8 @@ class BarCache:
                 start = full_start
             else:
                 last = datetime.fromisoformat(row["last_ts"])
-                # Se resta un margen para que la ultima barra (posiblemente
-                # incompleta) se vuelva a pedir y se reescriba con datos frescos.
+                # A margin is subtracted so the last bar (possibly incomplete) is
+                # requested again and rewritten with fresh data.
                 margin = timedelta(days=4) if self.interval == "1d" else timedelta(days=2)
                 start = (last - margin).date()
                 if start < full_start:
@@ -156,24 +156,24 @@ class BarCache:
 
             groups.setdefault(start, []).append(symbol)
 
-        summary = {"peticiones": 0, "simbolos": 0, "barras": 0, "fallos": 0,
-                   "omitidos": skipped}
+        summary = {"requests": 0, "symbols": 0, "bars": 0, "failures": 0,
+                   "skipped": skipped}
 
         for start, group in sorted(groups.items()):
             for batch in _chunks(group, BATCH_SIZE):
-                summary["peticiones"] += 1
+                summary["requests"] += 1
                 inserted, failed = self._fetch_batch(yf, batch, start)
-                summary["barras"] += inserted
-                summary["fallos"] += failed
-                summary["simbolos"] += len(batch) - failed
+                summary["bars"] += inserted
+                summary["failures"] += failed
+                summary["symbols"] += len(batch) - failed
                 if BATCH_PAUSE:
                     _time.sleep(BATCH_PAUSE)
 
         log.info(
             "Cache %s: %d peticiones, %d barras nuevas, %d simbolos con fallo, "
             "%d omitidos por fallos repetidos.",
-            self.interval, summary["peticiones"], summary["barras"],
-            summary["fallos"], summary["omitidos"],
+            self.interval, summary["requests"], summary["bars"],
+            summary["failures"], summary["skipped"],
         )
         return summary
 
@@ -189,7 +189,7 @@ class BarCache:
                 threads=False,
                 actions=False,
             )
-        except Exception as exc:  # noqa: BLE001 - yfinance lanza tipos variados
+        except Exception as exc:  # noqa: BLE001 - yfinance raises assorted types
             log.warning("Lote de %d simbolos fallo: %s", len(symbols), exc)
             for symbol in symbols:
                 self._record_failure(symbol, str(exc))
@@ -212,20 +212,19 @@ class BarCache:
 
     @staticmethod
     def _extract(frame, symbol: str, *, single: bool = False) -> list[tuple]:
-        """Saca las barras de un simbolo, sea plano o multi-indice el DataFrame.
+        """Pulls a symbol's bars out, whether the DataFrame is flat or multi-index.
 
-        No se decide por el numero de tickers pedidos: yfinance devuelve un
-        DataFrame plano o con multi-indice segun version y numero de simbolos, y
-        acertar por adivinacion hacia que la extraccion devolviera silenciosamente
-        cero barras. Se prueban las dos formas y se acepta la que tenga las
-        columnas OHLCV.
+        It is not decided by the number of tickers requested: yfinance returns a
+        flat or a multi-index DataFrame depending on version and symbol count, and
+        guessing right made the extraction silently return zero bars. Both shapes
+        are tried and the one carrying the OHLCV columns is accepted.
         """
         required = ("Open", "High", "Low", "Close", "Volume")
 
         options = []
         try:
             options.append(frame[symbol])
-        except Exception:  # noqa: BLE001 - KeyError, TypeError o lo que traiga pandas
+        except Exception:  # noqa: BLE001 - KeyError, TypeError or whatever pandas brings
             pass
         options.append(frame)
 
@@ -272,8 +271,8 @@ class BarCache:
 
     def _store(self, symbol: str, rows: list[tuple]) -> int:
         for ts, open_price, high, low, close, volume in rows:
-            # `insert or replace`: la ultima barra se reescribe en cada ciclo
-            # mientras el mercado esta abierto.
+            # `insert or replace`: the last bar is rewritten on every cycle while
+            # the market is open.
             self.db.execute(
                 "insert or replace into bar_cache "
                 "(symbol, interval, ts, open, high, low, close, volume) "

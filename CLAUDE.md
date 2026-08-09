@@ -74,10 +74,10 @@ un código en español acaba siendo código en dos idiomas con la frontera puest
 de una sentada, y traducirlo no le añadiría nada a nadie. Es una decisión distinta de la de
 arriba, no una excepción a ella.
 
-⚠️ **Hoy el proyecto no cumple la primera fila.** El frontend entero está en español
-(`paginas/`, `Tabla`, `Boton`, `piezas.tsx`) y todos los comentarios de Python también. La
-regla es **para el código nuevo**; la migración de lo que ya hay es **F8.8**, y se hace de una
-vez o no se hace: a medias deja exactamente el código en dos idiomas que la regla evita.
+⚠️ **El frontend ya cumple la primera fila** desde F8.8: `pages/`, `Table`, `Button`,
+`pieces.tsx`, props, hooks y comentarios en inglés, con el texto de pantalla en español.
+**Lo que queda son los comentarios y docstrings de Python**, que siguen en español; los
+identificadores de Python ya estaban en inglés. Esa mitad sigue abierta en **F8.8**.
 
 ---
 
@@ -91,9 +91,9 @@ export no hace falta renombrar el fichero, el nombre está mal puesto.
 | Carpetas | minúsculas, una sola palabra, sin guiones ni `camelCase` | `src`, `api`, `tools`, `tests`, `universe`, `api/routes`, `app/src/components` |
 | Módulos Python | `snake_case.py` | `market_calendar.py`, `sim_broker.py`, `bar_cache.py` |
 | Tests Python | `test_<módulo>.py`, con el nombre exacto del módulo que prueban | `test_risk.py` ← `src/risk.py` |
-| Fichero que exporta **un** componente React | `PascalCase.tsx`, idéntico al componente | `Tabla.tsx` → `<Tabla>`, `SelectorPerfil.tsx` → `<SelectorPerfil>` |
-| Fichero que agrupa **varios** exports | `camelCase.tsx` / `.ts`, con nombre de colección | `piezas.tsx`, `graficas/base.tsx`, `formato.ts`, `keys.ts` |
-| Hooks | `useAlgo.ts`, idéntico al hook | `useTitulo.ts`, `usePerfilActivo.ts` |
+| Fichero que exporta **un** componente React | `PascalCase.tsx`, idéntico al componente | `Table.tsx` → `<Table>`, `ProfileSelector.tsx` → `<ProfileSelector>` |
+| Fichero que agrupa **varios** exports | `camelCase.tsx` / `.ts`, con nombre de colección | `pieces.tsx`, `charts/base.tsx`, `format.ts`, `keys.ts` |
+| Hooks | `useAlgo.ts`, idéntico al hook | `useTitle.ts`, `useActiveProfile.ts` |
 | Tests de TypeScript | `<fichero>.test.ts`, al lado del que prueban | `stream.test.ts` ← `stream.ts` |
 | Documentos de raíz | `MAYUSCULAS.md` | `README.md`, `TASKS.md`, `DESIGN.md` |
 
@@ -101,7 +101,7 @@ export no hace falta renombrar el fichero, el nombre está mal puesto.
 `risk_module.py`. La carpeta ya dice qué es y la extensión ya dice con qué está escrito.
 
 **Una carpeta por concepto, no por variante.** Se añade una carpeta cuando hay algo que
-agrupar de verdad (`components/graficas/`, `api/routes/`), no para separar dos ficheros que
+agrupar de verdad (`components/charts/`, `api/routes/`), no para separar dos ficheros que
 se parecen.
 
 ---
@@ -235,8 +235,8 @@ los 15 minutos a propósito — `EventSource` reconecta solo y así se relee la 
 
 ### Frontend
 
-React 19 + Vite 8 + TypeScript 7 + Tailwind v4, todo en español (`paginas/`, `Tabla`,
-`Boton`). Recharts solo en Analítica, cargada con `lazy()` porque pesa casi tanto como el
+React 19 + Vite 8 + TypeScript 7 + Tailwind v4, todo en inglés (`pages/`, `Table`,
+`Button`), con el texto de pantalla en español. Recharts solo en Analítica, cargada con `lazy()` porque pesa casi tanto como el
 resto junto.
 
 - **TanStack Query es la única caché.** El SSE escribe en ella con `setQueryData`, nunca en un
@@ -244,7 +244,7 @@ resto junto.
   números distintos y no hay un sitio donde arreglarlo. Las claves viven solo en
   [app/src/api/keys.ts](app/src/api/keys.ts).
 - **El evento `ingest` se funde, no reemplaza**: manda 5 campos y el endpoint devuelve 13.
-- **El perfil activo vive en la URL** (`/p/europa-01/posiciones`), por su nombre y no por id.
+- **El perfil activo vive en la URL** (`/p/europa-01/positions`), por su nombre y no por id.
 - **Las pantallas se arman con los endpoints tipados.** Todos los endpoints tienen modelo
   Pydantic desde F4.11: el único que no lo tenía, `/api/dashboard`, se retiró con el dashboard
   viejo. Un cambio del backend rompe el build del frontend, no la pantalla en caliente.
@@ -262,7 +262,7 @@ resto junto.
 - **Ningún hexadecimal en `className`.** Se usa la utilidad del token; en SVG,
   `var(--color-…)`.
 - **Ninguna receta de clases se escribe a mano.** Botón, tarjeta, aviso, insignia, control,
-  título y bloque salen de [app/src/components/piezas.tsx](app/src/components/piezas.tsx).
+  título y bloque salen de [app/src/components/pieces.tsx](app/src/components/pieces.tsx).
 - **El símbolo de divisa se pasa siempre, nunca se asume** (FE.8): un presupuesto europeo
   escrito con `$` invita a compararlo con otro como si fuera la misma unidad.
 - **El color nunca es el único portador del significado**: siempre con texto o `title`.

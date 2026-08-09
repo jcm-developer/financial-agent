@@ -3,33 +3,31 @@ import { QueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/api/client";
 
 /**
- * Builds the application's TanStack Query client.
- *
- * El `QueryClient` de la aplicacion, con dos decisiones que no son el default.
+ * Builds the application's TanStack Query client, with two non-default choices.
  *
  * @return A client that keeps queries fresh for 30 s, retries a query twice
  *     unless the API returned a 4xx, and never retries a mutation.
  */
-export function crearQueryClient() {
+export function createQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        // Los datos de este proyecto no cambian por si solos salvo los precios,
-        // y esos llegan por SSE (F4.5). Un `staleTime` alto evita que cambiar de
-        // pestaña dispare una tanda de refetches que no van a traer nada nuevo.
+        // This project's data does not change on its own except for prices, and
+        // those arrive over SSE (F4.5). A high `staleTime` stops a tab switch
+        // from firing a round of refetches that would bring nothing new.
         staleTime: 30_000,
-        // Reintentar un 404 o un 422 es pedir el mismo error otra vez, y encima
-        // retrasa el mensaje que el usuario necesita ver.
-        retry: (intento, error) => {
+        // Retrying a 404 or a 422 asks for the same error again, and delays the
+        // message the user needs to see.
+        retry: (attempt, error) => {
           if (error instanceof ApiError && error.isClientError) return false;
-          return intento < 2;
+          return attempt < 2;
         },
         refetchOnWindowFocus: true,
       },
       mutations: {
-        // Una escritura que falla no se repite sola: en esta API las escrituras
-        // crean perfiles y lanzan ciclos, y repetirlas a ciegas puede duplicar
-        // lo que ya se hizo.
+        // A failed write does not repeat itself: in this API writes create
+        // profiles and launch cycles, and repeating them blindly can duplicate
+        // what was already done.
         retry: false,
       },
     },

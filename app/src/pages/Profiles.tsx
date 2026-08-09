@@ -2,62 +2,63 @@ import { Link } from "react-router";
 
 import { useProfiles } from "@/api/hooks";
 import type { ProfileSummary } from "@/api/types";
-import { Bloque, clasesTarjeta, Tarjeta, TituloPagina } from "@/components/piezas";
-import { Seccion } from "@/components/Seccion";
-import { useTitulo } from "@/layout/useTitulo";
+import { Block, cardClasses, Card, PageTitle } from "@/components/pieces";
+import { Section } from "@/components/Section";
+import { useTitle } from "@/layout/useTitle";
 
 /**
- * Lista de experimentos.
+ * The experiment list.
  *
- * Es la versión mínima que hace navegable la aplicación: sin ella no hay forma de
- * llegar a un perfil. Las tarjetas con métricas, el alta y el duplicado son F5.2,
- * F5.3 y F5.4, y llegan en el tramo D con `shadcn`.
+ * It is the minimal version that makes the application navigable: without it
+ * there is no way to reach a profile. The cards with metrics, the creation form
+ * and the duplicate action are F5.2, F5.3 and F5.4, and arrive in stretch D with
+ * `shadcn`.
  *
  * @return The rendered screen.
  */
-export function Perfiles() {
-  useTitulo("Experimentos");
-  const perfiles = useProfiles();
+export function Profiles() {
+  useTitle("Experimentos");
+  const profiles = useProfiles();
 
   return (
     <>
-      <TituloPagina>Experimentos</TituloPagina>
+      <PageTitle>Experimentos</PageTitle>
 
-      <Seccion consulta={perfiles}>
-        {(datos: ProfileSummary[]) =>
-          datos.length === 0 ? (
-            <Tarjeta relleno="p-6">
+      <Section query={profiles}>
+        {(data: ProfileSummary[]) =>
+          data.length === 0 ? (
+            <Card padding="p-6">
               <p className="text-[13px] text-text-secondary">
                 No hay ningún experimento todavía. Se crean desde la consola mientras el alta
                 de F5.3 no exista:
               </p>
-              <Bloque className="mt-3">
+              <Block className="mt-3">
                 python run.py new-profile --name europa-01 --market eu --watch 89
-              </Bloque>
-            </Tarjeta>
+              </Block>
+            </Card>
           ) : (
             <ul className="flex flex-col gap-2">
-              {datos.map((fila) => (
-                <li key={fila.id}>
+              {data.map((row) => (
+                <li key={row.id}>
                   <Link
-                    to={`/p/${encodeURIComponent(fila.name)}/resumen`}
-                    className={clasesTarjeta(
+                    to={`/p/${encodeURIComponent(row.name)}/summary`}
+                    className={cardClasses(
                       "px-4 py-3",
                       "flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 transition-colors hover:bg-surface-sunken",
                     )}
                   >
-                    <span className="font-medium">{fila.name}</span>
+                    <span className="font-medium">{row.name}</span>
                     <span className="text-[13px] text-text-secondary">
-                      {fila.market.toUpperCase()} · {fila.llm_model}
+                      {row.market.toUpperCase()} · {row.llm_model}
                     </span>
                     <span
                       className={
-                        fila.status === "active"
+                        row.status === "active"
                           ? "text-xs font-semibold text-delta-good"
                           : "text-xs text-text-muted"
                       }
                     >
-                      {fila.status}
+                      {row.status}
                     </span>
                   </Link>
                 </li>
@@ -65,7 +66,7 @@ export function Perfiles() {
             </ul>
           )
         }
-      </Seccion>
+      </Section>
     </>
   );
 }

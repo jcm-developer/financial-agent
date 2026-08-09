@@ -1,29 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
-import { keys, PREFIJOS_HISTORICO } from "@/api/keys";
+import { keys, HISTORY_PREFIXES } from "@/api/keys";
 import type { CycleControl, IngestStatus, QuoteRow } from "@/api/types";
 
 /**
- * El hook de tiempo real (F4.5), sobre el SSE de F3.5.
+ * The real-time hook (F4.5), on top of the SSE endpoint of F3.5.
  *
- * **Escribe en la cache de TanStack Query, no en un estado propio.** Es la
- * decision de diseño del tramo B: con dos fuentes para el mismo precio —la
- * respuesta de `/api/quotes` y lo que llega por el stream— la pantalla acabaria
- * enseñando dos numeros distintos segun el componente, y no habria un sitio
- * donde arreglarlo. Asi `useQuotes()` es la unica lectura y el stream solo la
- * mantiene fresca.
+ * **It writes into the TanStack Query cache, not into state of its own.** That
+ * is the design decision of stretch B: with two sources for the same price —the
+ * response of `/api/quotes` and whatever arrives over the stream— the screen
+ * would end up showing two different numbers depending on the component, and
+ * there would be no single place to fix it. This way `useQuotes()` is the only
+ * read and the stream merely keeps it fresh.
  *
- * Y conviene recordar lo que dice F3.5 sin adornos: **por dentro esto sondea**.
- * El ingestor corre en otro proceso, asi que el servidor mira el fichero cada
- * dos segundos y manda solo lo que cambia. La ganancia es mover el sondeo del
- * navegador al servidor, no que haya empuje de verdad.
+ * And it is worth restating what F3.5 says without dressing it up: **underneath,
+ * this polls**. The ingestor runs in another process, so the server looks at the
+ * file every two seconds and sends only what changed. The gain is moving the
+ * polling from the browser to the server, not that there is real push.
  */
 
-export type EstadoStream = "conectando" | "vivo" | "desconectado";
+export type StreamState = "connecting" | "live" | "disconnected";
 
-/** Lo que manda el evento `ingest`: cinco de los trece campos de IngestStatus. */
-type IngestEvento = Pick<
+/** What the `ingest` event carries: five of IngestStatus's thirteen fields. */
+type IngestEvent = Pick<
   IngestStatus,
   | "healthy"
   | "message"
@@ -32,138 +32,139 @@ type IngestEvento = Pick<
   | "consecutive_failures"
 >;
 
-/** Lo que manda el evento `cycle`: el estado, y `from` solo en los incrementales. */
-type CicloEvento = CycleControl & { from?: number };
+/** What the `cycle` event carries: the state, and `from` only on increments. */
+type CycleEvent = CycleControl & { from?: number };
 
-interface QuotesEvento {
+interface QuotesEvent {
   quotes: QuoteRow[];
   mark: string;
 }
 
 /**
- * Funde el evento `ingest` con lo que ya hay en la cache.
+ * Merges the `ingest` event into whatever is already in the cache.
  *
- * **No se puede reemplazar**: el evento trae cinco campos y `/api/ingest-status`
- * devuelve trece —comprobado contra el servidor, no supuesto—, asi que un
- * `setQueryData(evento)` borraria `avg_latency_ms`, `symbols_tracked`,
- * `bars_stored` y la lista de ticks recientes. El panel de salud se quedaria a
- * medias en cuanto el ingestor cambiara de veredicto, que es justo el momento en
- * que se mira. TypeScript no avisa porque el evento es un subconjunto valido.
+ * **It cannot replace**: the event brings five fields and `/api/ingest-status`
+ * returns thirteen —checked against the server, not assumed— so a
+ * `setQueryData(event)` would wipe `avg_latency_ms`, `symbols_tracked`,
+ * `bars_stored` and the list of recent ticks. The health panel would go
+ * half-blank the moment the ingestor changed its verdict, which is exactly when
+ * it gets looked at. TypeScript does not warn because the event is a valid
+ * subset.
  *
- * Si no hay nada en cache todavia se devuelve `undefined`: inventar los otros
- * ocho campos con ceros seria afirmar cosas que no sabemos. La consulta normal
- * los traera.
+ * If there is nothing in the cache yet it returns `undefined`: inventing the
+ * other eight fields with zeros would assert things we do not know. The normal
+ * query will bring them.
  *
- * @param previo - What the cache already holds, if the normal query has landed.
- * @param evento - The five fields the `ingest` event carries.
+ * @param previous - What the cache already holds, if the normal query has landed.
+ * @param event - The five fields the `ingest` event carries.
  * @return The merged status, or undefined when there was nothing to merge into.
  */
-export function fundirIngest(
-  previo: IngestStatus | undefined,
-  evento: IngestEvento,
+export function mergeIngest(
+  previous: IngestStatus | undefined,
+  event: IngestEvent,
 ): IngestStatus | undefined {
-  if (!previo) return undefined;
-  return { ...previo, ...evento };
+  if (!previous) return undefined;
+  return { ...previous, ...event };
 }
 
-/** Lo que hay que hacer con un evento `cycle` tras intentar fundirlo. */
-export interface ResultadoCiclo {
-  estado: CycleControl;
-  /** True si se perdieron lineas y hay que releer del servidor. */
-  hayHueco: boolean;
+/** What to do with a `cycle` event once the merge has been attempted. */
+export interface CycleMergeResult {
+  state: CycleControl;
+  /** True if lines were lost and the server has to be re-read. */
+  hasGap: boolean;
 }
 
 /**
- * Funde el evento `cycle`, que llega de dos formas distintas.
+ * Merges the `cycle` event, which arrives in two different shapes.
  *
- * El servidor manda el estado completo al abrir la conexion (con todas las
- * lineas del buffer y sin `from`) y luego solo las nuevas, con `from` diciendo
- * desde que indice van. Reenviar las 400 lineas cada dos segundos convertiria el
- * "en vivo" en un goteo de megabytes, asi que el cliente tiene que empalmar.
+ * The server sends the full state when the connection opens (with every line in
+ * the buffer and no `from`) and afterwards only the new ones, with `from` saying
+ * which index they start at. Resending the 400 lines every two seconds would
+ * turn "live" into a trickle of megabytes, so the client has to splice.
  *
- * El caso interesante es el hueco: si `from` es mayor que las lineas que
- * tenemos, nos hemos perdido algo por el camino. **No se rellena a ojo** —
- * empalmar dejando el hueco produciria un log que se lee como continuo sin
- * serlo, y eso es peor que no tenerlo — se pide releer al servidor, que tiene la
- * verdad.
+ * The interesting case is the gap: if `from` is greater than the lines we hold,
+ * something was lost on the way. **It is not filled in by eye** — splicing over
+ * the gap would produce a log that reads as continuous without being so, which
+ * is worse than not having it — the server, which holds the truth, is asked for
+ * a re-read.
  *
- * @param previo - Cycle state already in the cache, with the lines seen so far.
- * @param evento - The event, carrying `from` only when it is incremental.
+ * @param previous - Cycle state already in the cache, with the lines seen so far.
+ * @param event - The event, carrying `from` only when it is incremental.
  * @return The merged state, and whether lines were lost and the caller must
  *     re-read from the server.
  */
-export function fundirCiclo(
-  previo: CycleControl | undefined,
-  evento: CicloEvento,
-): ResultadoCiclo {
-  const { from, ...estado } = evento;
-  const nuevas = evento.lines ?? [];
+export function mergeCycle(
+  previous: CycleControl | undefined,
+  event: CycleEvent,
+): CycleMergeResult {
+  const { from, ...state } = event;
+  const incoming = event.lines ?? [];
 
   if (from === undefined) {
-    // Estado inicial (o reconexion): el evento ya trae el buffer entero.
-    return { estado, hayHueco: false };
+    // Initial state (or reconnection): the event already carries the whole buffer.
+    return { state, hasGap: false };
   }
 
-  const anteriores = previo?.lines ?? [];
-  if (from > anteriores.length) {
-    return { estado: { ...estado, lines: [...anteriores, ...nuevas] }, hayHueco: true };
+  const previousLines = previous?.lines ?? [];
+  if (from > previousLines.length) {
+    return { state: { ...state, lines: [...previousLines, ...incoming] }, hasGap: true };
   }
   return {
-    estado: { ...estado, lines: [...anteriores.slice(0, from), ...nuevas] },
-    hayHueco: false,
+    state: { ...state, lines: [...previousLines.slice(0, from), ...incoming] },
+    hasGap: false,
   };
 }
 
 /**
  * Applies one stream event to the query cache.
  *
- * Aplica un evento del stream a la cache. Fuera del hook para poder probarla.
+ * It lives outside the hook so it can be tested.
  *
- * @param cliente - Query client that owns the cache.
- * @param nombre - Event name. Anything other than `quotes`, `ingest` or `cycle`
+ * @param client - Query client that owns the cache.
+ * @param name - Event name. Anything other than `quotes`, `ingest` or `cycle`
  *     is ignored.
- * @param datos - Parsed event payload.
- * @param claveQuotes - Cache key of the quotes query this stream feeds, which
+ * @param data - Parsed event payload.
+ * @param quotesKey - Cache key of the quotes query this stream feeds, which
  *     depends on the symbol list the connection asked for.
- * @param ahora - Arrival timestamp. Injectable so the tests do not need a clock.
+ * @param now - Arrival timestamp. Injectable so the tests do not need a clock.
  */
-export function aplicarEvento(
-  cliente: QueryClient,
-  nombre: string,
-  datos: unknown,
-  claveQuotes: readonly unknown[],
-  ahora: number = Date.now(),
+export function applyEvent(
+  client: QueryClient,
+  name: string,
+  data: unknown,
+  quotesKey: readonly unknown[],
+  now: number = Date.now(),
 ): void {
-  switch (nombre) {
+  switch (name) {
     case "quotes": {
-      const evento = datos as QuotesEvento;
-      cliente.setQueryData(claveQuotes, evento.quotes);
-      // La marca de llegada va tambien a la cache, no al estado del hook: el
-      // stream se abre una sola vez en el Layout y quien la necesita son las
-      // pantallas. Ver `keys.quotesMeta`.
-      cliente.setQueryData(keys.quotesMeta(), { recibidasEn: ahora });
+      const event = data as QuotesEvent;
+      client.setQueryData(quotesKey, event.quotes);
+      // The arrival mark goes into the cache too, not into the hook's state:
+      // the stream is opened once in the Layout and the screens are what need
+      // it. See `keys.quotesMeta`.
+      client.setQueryData(keys.quotesMeta(), { receivedAt: now });
       break;
     }
     case "ingest": {
-      cliente.setQueryData<IngestStatus | undefined>(keys.ingestStatus(), (previo) =>
-        fundirIngest(previo, datos as IngestEvento),
+      client.setQueryData<IngestStatus | undefined>(keys.ingestStatus(), (previous) =>
+        mergeIngest(previous, data as IngestEvent),
       );
       break;
     }
     case "cycle": {
-      const previo = cliente.getQueryData<CycleControl>(keys.cycleControl());
-      const { estado, hayHueco } = fundirCiclo(previo, datos as CicloEvento);
-      cliente.setQueryData(keys.cycleControl(), estado);
-      if (hayHueco) {
-        void cliente.invalidateQueries({ queryKey: keys.cycleControl() });
+      const previous = client.getQueryData<CycleControl>(keys.cycleControl());
+      const { state, hasGap } = mergeCycle(previous, data as CycleEvent);
+      client.setQueryData(keys.cycleControl(), state);
+      if (hasGap) {
+        void client.invalidateQueries({ queryKey: keys.cycleControl() });
       }
-      // El ciclo acaba de terminar: es el unico momento en que el historico
-      // cambia de golpe. Sin esto, la pantalla seguiria enseñando las posiciones
-      // de antes del ciclo hasta que alguien recargara a mano, y en un
-      // experimento que se vigila eso se confunde con "no ha hecho nada".
-      if (previo?.running && !estado.running) {
-        for (const prefijo of PREFIJOS_HISTORICO) {
-          void cliente.invalidateQueries({ queryKey: prefijo });
+      // The cycle has just finished: it is the only moment when the history
+      // changes all at once. Without this the screen would keep showing the
+      // positions from before the cycle until someone reloaded by hand, and in
+      // an experiment under watch that reads as "it did nothing".
+      if (previous?.running && !state.running) {
+        for (const prefix of HISTORY_PREFIXES) {
+          void client.invalidateQueries({ queryKey: prefix });
         }
       }
       break;
@@ -171,24 +172,24 @@ export function aplicarEvento(
   }
 }
 
-interface OpcionesStream {
+interface StreamOptions {
   symbols?: string[];
   enabled?: boolean;
 }
 
 export interface Stream {
-  estado: EstadoStream;
-  /** Cuantas veces se ha reconectado. Util para ver si la conexion baila. */
-  reconexiones: number;
-  /** Motivo del ultimo corte, si el servidor lo dijo. */
-  ultimoAviso: string | null;
+  state: StreamState;
+  /** How many times it has reconnected. Useful to see a connection that dances. */
+  reconnections: number;
+  /** Reason for the last cut, if the server gave one. */
+  lastNotice: string | null;
 }
 
 /**
  * Opens the SSE connection and keeps the cache fresh for as long as it lives.
  *
- * Se abre una sola vez, en el Layout: un `useStream()` por pantalla abriria una
- * conexion por pantalla, que es lo que F3.5 queria evitar.
+ * It is opened once, in the Layout: a `useStream()` per screen would open one
+ * connection per screen, which is what F3.5 set out to avoid.
  *
  * @param options - Stream options.
  * @param options.symbols - Symbols to subscribe to. Empty or undefined asks for
@@ -198,119 +199,119 @@ export interface Stream {
  * @return The connection state, the reconnection count and the last notice the
  *     server sent before cutting.
  */
-export function useStream({ symbols, enabled = true }: OpcionesStream = {}): Stream {
-  const cliente = useQueryClient();
-  const lista = symbols?.length ? symbols.join(",") : undefined;
+export function useStream({ symbols, enabled = true }: StreamOptions = {}): Stream {
+  const client = useQueryClient();
+  const list = symbols?.length ? symbols.join(",") : undefined;
 
-  const [estado, setEstado] = useState<EstadoStream>("conectando");
-  const [reconexiones, setReconexiones] = useState(0);
-  const [ultimoAviso, setUltimoAviso] = useState<string | null>(null);
-  // Para no contar como reconexion la primera conexion de todas.
-  const abiertoAlgunaVez = useRef(false);
+  const [state, setState] = useState<StreamState>("connecting");
+  const [reconnections, setReconnections] = useState(0);
+  const [lastNotice, setLastNotice] = useState<string | null>(null);
+  // So the very first connection is not counted as a reconnection.
+  const hasOpened = useRef(false);
 
   useEffect(() => {
     if (!enabled) {
-      setEstado("desconectado");
+      setState("disconnected");
       return;
     }
 
-    const url = lista
-      ? `/api/stream?symbols=${encodeURIComponent(lista)}`
+    const url = list
+      ? `/api/stream?symbols=${encodeURIComponent(list)}`
       : "/api/stream";
-    const fuente = new EventSource(url);
-    const claveQuotes = keys.quotes(lista);
+    const source = new EventSource(url);
+    const quotesKey = keys.quotes(list);
 
-    const alRecibir = (nombre: string) => (evento: MessageEvent<string>) => {
-      let datos: unknown;
+    const onMessage = (name: string) => (event: MessageEvent<string>) => {
+      let data: unknown;
       try {
-        datos = JSON.parse(evento.data);
+        data = JSON.parse(event.data);
       } catch {
-        return; // Un evento ilegible se ignora; el siguiente traera el estado.
+        return; // An unreadable event is ignored; the next one brings the state.
       }
-      if (nombre === "bye" || nombre === "error") {
-        const motivo = (datos as { reason?: string; message?: string });
-        setUltimoAviso(motivo.message ?? motivo.reason ?? null);
+      if (name === "bye" || name === "error") {
+        const notice = (data as { reason?: string; message?: string });
+        setLastNotice(notice.message ?? notice.reason ?? null);
         return;
       }
-      aplicarEvento(cliente, nombre, datos, claveQuotes);
+      applyEvent(client, name, data, quotesKey);
     };
 
-    const suscripciones = ["quotes", "ingest", "cycle", "bye", "error"] as const;
-    const oyentes = suscripciones.map((nombre) => {
-      const oyente = alRecibir(nombre);
-      fuente.addEventListener(nombre, oyente as EventListener);
-      return [nombre, oyente] as const;
+    const subscriptions = ["quotes", "ingest", "cycle", "bye", "error"] as const;
+    const listeners = subscriptions.map((name) => {
+      const listener = onMessage(name);
+      source.addEventListener(name, listener as EventListener);
+      return [name, listener] as const;
     });
 
-    fuente.onopen = () => {
-      setEstado("vivo");
-      if (abiertoAlgunaVez.current) setReconexiones((n) => n + 1);
-      abiertoAlgunaVez.current = true;
-      // Al reconectar, lo que haya en cache puede ser viejo: el servidor manda
-      // el estado completo, pero las tablas paginadas no van por el stream.
-      void cliente.invalidateQueries({ queryKey: keys.ingestStatus() });
+    source.onopen = () => {
+      setState("live");
+      if (hasOpened.current) setReconnections((n) => n + 1);
+      hasOpened.current = true;
+      // On reconnect, whatever is in the cache may be stale: the server sends
+      // the full state, but the paginated tables do not travel over the stream.
+      void client.invalidateQueries({ queryKey: keys.ingestStatus() });
     };
 
-    fuente.onerror = () => {
-      // `EventSource` reconecta solo —es la razon de elegir SSE en D6— asi que
-      // esto no siempre es un fallo: tambien salta cuando el servidor retira la
-      // conexion por edad (F3.5, 15 min). El estado sale de `readyState`, que es
-      // lo unico que distingue "reintentando" de "cerrada para siempre".
-      setEstado(fuente.readyState === EventSource.CLOSED ? "desconectado" : "conectando");
+    source.onerror = () => {
+      // `EventSource` reconnects on its own —the reason for choosing SSE in D6—
+      // so this is not always a failure: it also fires when the server retires
+      // the connection by age (F3.5, 15 min). The state comes from `readyState`,
+      // which is the only thing that tells "retrying" from "closed for good".
+      setState(source.readyState === EventSource.CLOSED ? "disconnected" : "connecting");
     };
 
     return () => {
-      for (const [nombre, oyente] of oyentes) {
-        fuente.removeEventListener(nombre, oyente as EventListener);
+      for (const [name, listener] of listeners) {
+        source.removeEventListener(name, listener as EventListener);
       }
-      fuente.close();
+      source.close();
     };
-    // `cliente` es estable (viene del provider) pero se declara por honestidad.
-  }, [cliente, lista, enabled]);
+    // `client` is stable (it comes from the provider) but is declared for honesty.
+  }, [client, list, enabled]);
 
-  return { estado, reconexiones, ultimoAviso };
+  return { state, reconnections, lastNotice };
 }
 
 /**
- * Cuando llego el ultimo lote de cotizaciones, en `Date.now()`.
+ * When the last batch of quotes arrived, in `Date.now()` terms.
  *
- * Se lee de la cache y no del hook de SSE para que cualquier pantalla pueda
- * pedirlo sin abrir una conexion propia. `initialData` mas `staleTime: Infinity`
- * dejan la entrada siempre fresca, asi que `queryFn` no se llega a ejecutar: el
- * unico que escribe aqui es `aplicarEvento`.
+ * It is read from the cache and not from the SSE hook so any screen can ask for
+ * it without opening a connection of its own. `initialData` plus
+ * `staleTime: Infinity` keep the entry always fresh, so `queryFn` never runs:
+ * the only writer here is `applyEvent`.
  *
  * @return The arrival timestamp, or null while no batch has arrived yet.
  */
-export function useQuotesRecibidasEn(): number | null {
+export function useQuotesReceivedAt(): number | null {
   const { data } = useQuery({
     queryKey: keys.quotesMeta(),
-    queryFn: () => ({ recibidasEn: null as number | null }),
-    initialData: { recibidasEn: null as number | null },
+    queryFn: () => ({ receivedAt: null as number | null }),
+    initialData: { receivedAt: null as number | null },
     staleTime: Infinity,
     gcTime: Infinity,
   });
-  return data.recibidasEn;
+  return data.receivedAt;
 }
 
 /**
- * Antiguedad real de un precio, en segundos.
+ * The real age of a price, in seconds.
  *
- * `age_seconds` del servidor mas lo que ha pasado desde que llego el evento. Ver
- * la nota de `quotesRecibidasEn` sobre por que no se recalcula desde
- * `updated_at` con el reloj del navegador.
+ * The server's `age_seconds` plus whatever has passed since the event arrived.
+ * See the note on `quotesMeta` for why it is not recomputed from `updated_at`
+ * with the browser's clock.
  *
- * @param fila - Quote row, of which only `age_seconds` is read.
- * @param recibidasEn - When the batch arrived, from {@link useQuotesRecibidasEn}.
+ * @param row - Quote row, of which only `age_seconds` is read.
+ * @param receivedAt - When the batch arrived, from {@link useQuotesReceivedAt}.
  *     Null falls back to the server's age alone.
- * @param ahora - Current timestamp. Injectable so the tests do not need a clock.
+ * @param now - Current timestamp. Injectable so the tests do not need a clock.
  * @return The age in seconds, or null when the server did not report one.
  */
-export function antiguedadReal(
-  fila: Pick<QuoteRow, "age_seconds">,
-  recibidasEn: number | null,
-  ahora: number = Date.now(),
+export function realAge(
+  row: Pick<QuoteRow, "age_seconds">,
+  receivedAt: number | null,
+  now: number = Date.now(),
 ): number | null {
-  if (fila.age_seconds === null || fila.age_seconds === undefined) return null;
-  if (recibidasEn === null) return fila.age_seconds;
-  return fila.age_seconds + Math.max(0, (ahora - recibidasEn) / 1000);
+  if (row.age_seconds === null || row.age_seconds === undefined) return null;
+  if (receivedAt === null) return row.age_seconds;
+  return row.age_seconds + Math.max(0, (now - receivedAt) / 1000);
 }

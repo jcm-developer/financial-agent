@@ -1,16 +1,16 @@
-"""Risk Manager: la barrera determinista entre el LLM y el broker.
+"""Risk Manager: the deterministic barrier between the LLM and the broker.
 
-Este modulo es la pieza mas importante del sistema y la unica que decide
-cuanto dinero se pone en riesgo. Reglas de diseno:
+This module is the most important piece of the system and the only one that
+decides how much money is put at risk. Design rules:
 
-  1. Cero llamadas de red y cero IA. Solo aritmetica y comparaciones.
-  2. Cierra por defecto: cualquier dato que falte o no cuadre es un rechazo,
-     nunca una aproximacion.
-  3. Todo rechazo nombra la regla que lo provoco, para poder agregarlo despues
-     en SQL y ver contra que limite choca el modelo.
+  1. Zero network calls and zero AI. Only arithmetic and comparisons.
+  2. Closed by default: any datum that is missing or does not add up is a
+     rejection, never an approximation.
+  3. Every rejection names the rule that caused it, so it can be aggregated
+     later in SQL to see which limit the model keeps hitting.
 
-El LLM solo aporta direccion y conviccion. El tamano de la posicion, el stop y
-el veredicto final salen de aqui.
+The LLM only contributes direction and conviction. The position size, the stop
+and the final verdict come from here.
 """
 
 from __future__ import annotations
@@ -36,10 +36,11 @@ class RiskManager:
     # -- Nivel cartera -----------------------------------------------------
 
     def check_kill_switch(self, account: AccountState) -> KillSwitch:
-        """Detiene el ciclo completo si la perdida del dia excede el limite.
+        """Halts the whole cycle if the day's loss exceeds the limit.
 
-        Se evalua antes de analizar nada: si la cartera ya sangra, el agente no
-        abre posiciones nuevas por muy convincente que sea la tesis.
+        It is evaluated before anything is analysed: if the book is already
+        bleeding, the agent opens no new positions however convincing the
+        thesis may be.
         """
         pnl_pct = account.day_pnl_pct
         if pnl_pct <= -self.limits.max_daily_loss_pct:
@@ -60,11 +61,11 @@ class RiskManager:
         positions: dict[str, BrokerPosition],
         tracked: dict[str, dict[str, float | None]],
     ) -> list[ExitSignal]:
-        """Cierres que se ejecutan sin consultar al LLM.
+        """Closes that execute without consulting the LLM.
 
-        `tracked` mapea simbolo -> {'stop_price': x, 'target_price': y} segun lo
-        registrado en la base de datos al abrir la posicion. Un stop alcanzado no se
-        negocia: es la unica proteccion real del presupuesto.
+        `tracked` maps symbol -> {'stop_price': x, 'target_price': y} as recorded
+        in the database when the position was opened. A stop that has been hit is
+        not negotiable: it is the budget's only real protection.
         """
         signals: list[ExitSignal] = []
         for symbol, position in positions.items():
@@ -107,8 +108,8 @@ class RiskManager:
         account: AccountState,
         atr: float | None,
     ) -> RiskVerdict:
-        """Convierte una propuesta de compra en una cantidad concreta, o la
-        rechaza. Las comprobaciones van de la mas barata a la mas costosa."""
+        """Turns a buy proposal into a concrete quantity, or rejects it. The
+        checks run from the cheapest to the most expensive."""
         limits = self.limits
         symbol = proposal.symbol
         price = proposal.reference_price
@@ -141,7 +142,7 @@ class RiskManager:
         if account.equity <= 0:
             return _reject("no_equity", "El equity de la cuenta es cero o negativo.")
 
-        # --- Stop: lo fija el ATR, no el modelo ---------------------------
+        # --- Stop: set by the ATR, not by the model ------------------------
         if atr is None or atr <= 0:
             return _reject(
                 "atr_unavailable",
@@ -159,8 +160,8 @@ class RiskManager:
         stop_source = "atr"
         llm_stop = proposal.suggested_stop
         if llm_stop is not None and 0 < llm_stop < price and llm_stop < atr_stop:
-            # El modelo pide mas holgura que el ATR: se la damos, porque implica
-            # una posicion mas pequena. Nunca al contrario.
+            # The model asks for more room than the ATR: it is granted, because
+            # it implies a smaller position. Never the other way round.
             stop = llm_stop
             stop_source = "llm_wider"
 
@@ -184,21 +185,21 @@ class RiskManager:
                 details={"target": round(target, 4), "stop": round(stop, 4)},
             )
 
-        # --- Dimensionado por riesgo -------------------------------------
-        # Se arriesga un % fijo del equity hasta el stop. El resultado es que
-        # los activos volatiles reciben posiciones mas pequenas, automaticamente.
+        # --- Risk-based sizing --------------------------------------------
+        # A fixed % of equity is risked down to the stop. The result is that
+        # volatile assets get smaller positions, automatically.
         risk_budget = account.equity * limits.risk_per_trade_pct / 100.0
         qty = math.floor(risk_budget / risk_per_share)
         binding_rule = "risk_per_trade"
 
-        # Tope por tamano de posicion.
+        # Cap by position size.
         max_position_qty = math.floor(
             (account.equity * limits.max_position_pct / 100.0) / price
         )
         if max_position_qty < qty:
             qty, binding_rule = max_position_qty, "max_position_pct"
 
-        # Tope por exposicion total de la cartera.
+        # Cap by the book's total exposure.
         exposure_cap = account.equity * limits.max_total_exposure_pct / 100.0
         remaining_exposure = exposure_cap - account.positions_value
         if remaining_exposure <= 0:
@@ -211,7 +212,7 @@ class RiskManager:
         if exposure_qty < qty:
             qty, binding_rule = exposure_qty, "max_total_exposure_pct"
 
-        # Tope por cash disponible. Usamos cash, no buying_power: sin apalancamiento.
+        # Cap by available cash. Cash and not buying_power: no leverage.
         cash_qty = math.floor(account.cash / price)
         if cash_qty < qty:
             qty, binding_rule = cash_qty, "insufficient_cash"
