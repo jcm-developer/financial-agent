@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F5.6 cerrada: el comparador, en % y con multiplos pequeños a partir de tres experimentos)
+Última actualización: 2026-08-09 (F5.7 cerrada: el grupo de control, y el modo random elegia candidatos distintos en cada ciclo)
 
 ---
 
@@ -1113,8 +1113,44 @@ diez sesiones en silencio.
       `cycle_times` está en el esquema y no lo lee nadie. La pantalla lo dice.
 
       **616 tests en verde, typecheck limpio, 24 de front, build correcto.**
-- [ ] **F5.7** Perfil de control: screener en modo `random`, para tener contra qué medir el
-      criterio del LLM.
+- [x] **F5.7** Perfil de control: screener en modo `random`, para tener contra qué medir el
+      criterio del LLM (2026-08-09).
+
+      ⚠️ **El modo `random` existía desde antes y estaba roto de una forma que ningún test
+      veía.** Puntuaba con `hash(symbol)` y el docstring prometía «un orden estable pero
+      arbitrario». Python **aleatoriza el hash de `str` por proceso** (`PYTHONHASHSEED`), y
+      **cada ciclo corre como su propio subproceso** —lo lanzan el planificador y
+      [api/runner.py](api/runner.py)—. Medido el 2026-08-09 con ocho símbolos: tres procesos
+      seguidos dieron tres «top 4» distintos.
+
+      Rompía dos cosas, y ninguna habría fallado en voz alta. El grupo de control analizaría
+      un conjunto arbitrario **distinto en cada ciclo**, así que la comparación contra el
+      perfil puntuado llevaría encima el ruido de un universo móvil además del efecto que
+      quiere aislar (R7). Y el histórico dejaba de ser reproducible: `cycles.settings_json`
+      guarda los parámetros con los que corrió cada ciclo justamente para poder reinterpretarlo
+      después, y con una semilla por proceso los mismos parámetros sobre los mismos datos no
+      dan los mismos candidatos. El test que había —`test_random_mode_is_stable_across_calls`—
+      pasaba porque comparaba dos llamadas **del mismo proceso**.
+
+      Arreglado con `arbitrary_score()` sobre `zlib.crc32`, que no es un buen hash y no
+      necesita serlo: hace falta que sea el mismo en todos los procesos, que reparta y que esté
+      en la biblioteca estándar. **El test nuevo lanza dos subprocesos con `PYTHONHASHSEED`
+      distinto y compara**, que es lo que faltaba.
+
+      **El gesto de crear un control es duplicar y cambiar un parámetro**, así que va como
+      casilla dentro del diálogo de duplicar de F5.4 y no como un botón aparte: un control
+      *es* un duplicado con el parámetro ya decidido. Si el duplicado sale bien y el cambio de
+      modo falla, el aviso lo dice nombrando la copia — la diferencia entre arreglar un campo
+      y empezar de nuevo, y sobre todo entre saber y no saber que el «control» que hay en
+      pantalla no lo es.
+
+      **`screener_mode` sube a `ProfileSummary`** para que la tarjeta lleve la etiqueta
+      `CONTROL` y el comparador tenga su fila. No es cosmético: **un control que no se
+      identifica es lo mismo que no tenerlo**, y sus números están pensados para ser peores,
+      así que sin etiqueta se leen como un experimento fallido en vez de como la referencia.
+
+      **617 tests en verde** (1 nuevo), typecheck limpio, 24 de front, build correcto, y el
+      flujo comprobado contra la API.
 
 ### F6 — Parámetros del agente
 

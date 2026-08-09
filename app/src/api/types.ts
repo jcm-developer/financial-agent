@@ -415,6 +415,7 @@ export interface ProfileDetail {
   llm_model: string;
   llm_api_key_masked: string;
   universe_file?: string | null;
+  screener_mode?: string;
   watched_symbols?: number;
   risk_summary: string;
   metrics: ProfileMetrics;
@@ -468,6 +469,7 @@ export interface ProfileSummary {
   llm_model: string;
   llm_api_key_masked: string;
   universe_file?: string | null;
+  screener_mode?: string;
   watched_symbols?: number;
   risk_summary: string;
   metrics: ProfileMetrics;

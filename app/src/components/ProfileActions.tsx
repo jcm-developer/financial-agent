@@ -5,6 +5,7 @@ import {
   useDeleteProfile,
   useDuplicateProfile,
   useUpdateProfile,
+  useUpdateSettings,
 } from "@/api/hooks";
 import type { ProfileSummary } from "@/api/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -43,10 +44,12 @@ export function ProfileActions({ profile }: Props) {
   const navigate = useNavigate();
   const patch = useUpdateProfile();
   const duplicate = useDuplicateProfile();
+  const patchSettings = useUpdateSettings();
   const remove = useDeleteProfile();
 
   const [pending, setPending] = useState<Pending>(null);
   const [copyName, setCopyName] = useState("");
+  const [asControl, setAsControl] = useState(false);
   const [typedName, setTypedName] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +65,7 @@ export function ProfileActions({ profile }: Props) {
   function close() {
     setPending(null);
     setCopyName("");
+    setAsControl(false);
     setTypedName("");
     setError(null);
   }
@@ -155,22 +159,39 @@ export function ProfileActions({ profile }: Props) {
         open={pending === "duplicate"}
         title={`Duplicar ${profile.name}`}
         confirmLabel="Duplicar"
-        busy={duplicate.isPending}
+        busy={duplicate.isPending || patchSettings.isPending}
         confirmDisabled={copyName.trim().length === 0}
         error={error}
         onConfirm={async () => {
           setError(null);
+          const created = copyName.trim();
           try {
-            await duplicate.mutateAsync({
-              ref: profile.name,
-              body: { name: copyName.trim() },
-            });
-            const created = copyName.trim();
-            close();
-            navigate(`/p/${encodeURIComponent(created)}/settings`);
+            await duplicate.mutateAsync({ ref: profile.name, body: { name: created } });
           } catch (cause) {
             setError(cause instanceof Error ? cause.message : "No se pudo duplicar.");
+            return;
           }
+          if (asControl) {
+            try {
+              await patchSettings.mutateAsync({
+                ref: created,
+                changes: { screener_mode: "random" },
+              });
+            } catch (cause) {
+              // The copy exists; only the one change that makes it a control
+              // failed. Saying so is the difference between fixing one field and
+              // starting over — and worse, between knowing and not knowing that
+              // the "control" on screen is not one.
+              setError(
+                `La copia «${created}» se creó, pero no se pudo ponerla en modo control: ${
+                  cause instanceof Error ? cause.message : "error desconocido"
+                }. Cámbialo en sus Ajustes antes de usarla para comparar.`,
+              );
+              return;
+            }
+          }
+          close();
+          navigate(`/p/${encodeURIComponent(created)}/settings`);
         }}
         onCancel={close}
       >
@@ -189,6 +210,33 @@ export function ProfileActions({ profile }: Props) {
           maxLength={80}
           onChange={(e) => setCopyName(e.target.value)}
         />
+
+        {/* F5.7. It goes here and not in a button of its own because a control
+            profile IS a duplicate with one parameter changed — the same gesture,
+            with the parameter already decided. */}
+        <label className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            checked={asControl}
+            onChange={(e) => {
+              setAsControl(e.target.checked);
+              if (e.target.checked && copyName === `${profile.name}-copia`) {
+                setCopyName(`${profile.name}-control`);
+              }
+            }}
+            className="mt-0.5 size-4 accent-primary"
+          />
+          <span>
+            Hacerlo <strong className="font-semibold">grupo de control</strong>: el screener
+            elige al azar en vez de puntuar.
+            <span className="mt-1 block text-xs text-text-muted">
+              Es contra lo que se mide si el criterio del modelo aporta algo (R7). Mismo
+              universo, mismo riesgo, mismos descartes duros: lo único que cambia es que los
+              candidatos no están elegidos. Si el agente rinde igual, el filtro no estaba
+              aportando nada.
+            </span>
+          </span>
+        </label>
       </ConfirmDialog>
 
       <ConfirmDialog

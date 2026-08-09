@@ -213,6 +213,19 @@ function SideBySide({ profiles }: { profiles: ProfileSummary[] }) {
       cell: (p) => ({ text: `${p.market.toUpperCase()} · ${p.currency}` }),
     },
     { label: "Estado", cell: (p) => ({ text: p.status }) },
+    {
+      label: "Selección de candidatos",
+      // The row that decides how the comparison is read: the control is meant
+      // to do worse, and without this line its numbers look like a failed
+      // experiment instead of the baseline (R7).
+      cell: (p) => ({
+        text: p.screener_mode === "random" ? "aleatoria (control)" : "por puntuación",
+        title:
+          p.screener_mode === "random"
+            ? "Grupo de control: los candidatos no están elegidos. Es contra lo que se mide si el criterio del modelo aporta algo."
+            : undefined,
+      }),
+    },
     { label: "Modelo", cell: (p) => ({ text: `${p.llm_provider}/${p.llm_model}` }) },
     { label: "Criterio de riesgo", cell: (p) => ({ text: p.risk_summary, title: p.risk_summary }) },
     {

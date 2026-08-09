@@ -21,6 +21,7 @@ the opening price without moving the market.
 from __future__ import annotations
 
 import logging
+import zlib
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -95,6 +96,34 @@ def _setup_factor(rsi: float | None) -> tuple[float, str]:
     if rsi > 70:
         return 0.35, f"RSI {rsi:.0f} sobrecomprado: perseguir el precio"
     return 0.50, f"RSI {rsi:.0f} sobrevendido: puede ser caida estructural"
+
+
+def arbitrary_score(symbol: str) -> float:
+    """An arbitrary but **reproducible** score for the control group (F5.7).
+
+    ⚠️ **It used to be `hash(symbol)`, and that was a real defect, not a
+    nitpick.** Python randomises `str` hashing per process (`PYTHONHASHSEED`),
+    and every cycle runs as its own subprocess (`run.py cycle`, launched by the
+    scheduler or by `api/runner.py`). So the "stable but arbitrary order" the
+    docstring promised was stable only within a single run: measured on 2026-08-09
+    with eight symbols, three consecutive processes gave three different top
+    fours.
+
+    Two things broke because of it, and neither would have failed loudly. The
+    control group would analyse a different arbitrary set every cycle, so the
+    comparison against the scored profile would carry the noise of a moving
+    universe on top of the effect it is meant to isolate (R7). And the history
+    stopped being reproducible: `cycles.settings_json` records the parameters a
+    cycle ran with precisely so it can be reinterpreted later, and with a
+    per-process seed the same parameters over the same data do not give the same
+    candidates.
+
+    `zlib.crc32` is not a good hash and does not need to be: what is needed is
+    that it is the same in every process, that it spreads the symbols and that it
+    is in the standard library. The result is in [0, 1), the same value on every
+    process and every machine.
+    """
+    return (zlib.crc32(symbol.encode("utf-8")) & 0xFFFF) / 0x10000
 
 
 def score_symbol(indicators: dict[str, Any]) -> tuple[float, dict[str, float], list[str]]:
@@ -179,9 +208,9 @@ def screen(
 ) -> ScreenerReport:
     """Applies the hard filters and sorts by score.
 
-    `mode="random"` replaces the score with a stable but arbitrary order (the
-    symbol's hash). It serves as a control group: if the agent performs the same
-    with arbitrary candidates, the filter adds nothing.
+    `mode="random"` replaces the score with a stable but arbitrary order
+    (`arbitrary_score`). It serves as a control group: if the agent performs the
+    same with arbitrary candidates, the filter adds nothing.
     """
     report = ScreenerReport(candidates=[])
     accepted: list[Candidate] = []
@@ -218,7 +247,7 @@ def screen(
             continue
 
         if mode == "random":
-            score = (hash(symbol) & 0xFFFF) / 0xFFFF
+            score = arbitrary_score(symbol)
             components, reasons = {}, ["seleccion arbitraria (grupo de control)"]
         else:
             score, components, reasons = score_symbol(indicators)

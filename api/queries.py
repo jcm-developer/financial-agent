@@ -134,6 +134,11 @@ def _profile_summary(db: Database, profile: dict[str, Any]) -> dict[str, Any]:
         "llm_model": settings["llm_model"],
         "llm_api_key_masked": mask_secret(settings["llm_api_key"], empty=vacia),
         "universe_file": settings["universe_file"],
+        # It travels in the summary and not only in the settings because the list
+        # and the comparator have to be able to say which experiment is the
+        # control (F5.7): comparing against a control you cannot identify is the
+        # same as not having one.
+        "screener_mode": settings["screener_mode"],
         "watched_symbols": len(db.get_profile_universe(profile["id"])),
         "risk_summary": risk_presets.describe(settings),
         "metrics": profile_metrics(db, profile.get("portfolio_id"), settings),

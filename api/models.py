@@ -121,6 +121,11 @@ class ProfileSummary(BaseModel):
     llm_api_key_masked: str
 
     universe_file: str | None = None
+    #: `score` or `random`. `random` is the control group of F5.7, and it is here
+    #: —and not only in the settings— so the list and the comparator can say
+    #: which experiment is the control: comparing against a control you cannot
+    #: identify is the same as not having one.
+    screener_mode: str = "score"
     #: Symbols the ingestor follows minute by minute. This differs from the
     #: screener's universe, and confusing the two is the trap of FE.7.
     watched_symbols: int = 0

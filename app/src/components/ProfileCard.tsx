@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 
 import type { ProfileSummary } from "@/api/types";
-import { Card, LINK_CLASSES, Stat } from "@/components/pieces";
+import { Card, LINK_CLASSES, Stat, Tag } from "@/components/pieces";
 import { ProfileStatus } from "@/components/ProfileStatus";
 import { dateTime, money, percent, signClass } from "@/lib/format";
 
@@ -53,6 +53,18 @@ export function ProfileCard({ profile, actions }: Props) {
           >
             {profile.name}
           </Link>
+          {/* F5.7: which experiment is the control has to be readable from the
+              list. A control you cannot identify is the same as not having one,
+              and its numbers are meant to be worse — without the label they read
+              as a failed experiment. */}
+          {profile.screener_mode === "random" && (
+            <Tag
+              tone="neutral"
+              title="Grupo de control: el screener elige los candidatos al azar en vez de puntuarlos. Es contra lo que se mide si el criterio del modelo aporta algo."
+            >
+              control
+            </Tag>
+          )}
         </h3>
         <ProfileStatus status={profile.status} />
       </div>

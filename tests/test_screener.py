@@ -8,13 +8,18 @@ experiment.
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
 from src.indicators import Bar
 from src.screener import (
     ScreenerLimits,
+    arbitrary_score,
     load_universe,
     score_symbol,
     screen,
@@ -263,6 +268,40 @@ def test_random_mode_is_stable_across_calls():
     second = [c.symbol for c in screen(universe, LIMITS, mode="random").candidates]
 
     assert first == second
+
+
+def test_random_mode_is_stable_across_processes():
+    """The test above passes within one process, and that was the hole (F5.7).
+
+    `hash(str)` is randomised per process by PYTHONHASHSEED, and **every cycle
+    runs as its own subprocess**: the scheduler and `api/runner.py` both launch
+    `run.py cycle`. So the order the previous test pins down was reproducible
+    only inside a single run, and the control group would have analysed a
+    different arbitrary set every cycle — carrying the noise of a moving
+    universe on top of the effect it exists to isolate.
+
+    Two seeds are launched on purpose: with the old implementation the two lists
+    came out different, and no test in the suite noticed.
+    """
+    code = (
+        "from src.screener import arbitrary_score;"
+        "print([round(arbitrary_score(s), 6) "
+        "for s in ('SAN.MC', 'ITX.MC', 'IBE.MC', 'AAPL')])"
+    )
+    outputs = []
+    for seed in ("1", "12345"):
+        env = {**os.environ, "PYTHONHASHSEED": seed}
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True, text=True, env=env,
+            cwd=str(Path(__file__).resolve().parent.parent),
+        )
+        assert result.returncode == 0, result.stderr
+        outputs.append(result.stdout.strip())
+
+    assert outputs[0] == outputs[1], (
+        f"la puntuacion arbitraria cambia entre procesos: {outputs}"
+    )
 
 
 # -- Universo ----------------------------------------------------------------
