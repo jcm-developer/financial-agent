@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F6.10 cerrada: el experimento activo y su horario se gestionan desde la app; queda F2.1c)
+Última actualización: 2026-08-10 (cinco perfiles de riesgo 1 a 10 en marcha, uno por nivel; queda F2.1c)
 
 ---
 
@@ -1363,9 +1363,11 @@ diez sesiones en silencio.
       mandaba era `CYCLE_TIMES=16:30,18:30,20:30` del `.env` —la sesión **americana**— y
       `europa-01` tiene en su columna el default del esquema, `22:15`, que es el cierre de
       **Nueva York**. Ninguno de los dos es un horario europeo, así que no se ha «preservado
-      el comportamiento» porque no había ninguno que preservar: **hay que elegirlo en Ajustes**.
-      Con `bar_interval=1d` lo coherente es un solo ciclo tras el cierre de Madrid (17:40); si
-      F2.1c manda pasar a `1h`, los de la decisión nº 2.
+      el comportamiento» porque no había ninguno que preservar: **había que elegirlo en
+      Ajustes**. **Resuelto al día siguiente** (2026-08-10): `europa-01` se borró y los cinco
+      perfiles de la decisión nº 5 nacen con `18:00 Europe/Madrid`, tras el cierre de Madrid y
+      con margen para el desfase del feed. Si F2.1c manda pasar a `1h`, hay que rehacer el
+      horario **y** contar cinco ciclos de veinte minutos, que ya no caben seguidos.
 
       **626 tests en verde** (9 nuevos).
       Existen en `agent_settings` (con defecto `22:15` / `Europe/Madrid`) y en
@@ -1814,10 +1816,9 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
 
 1. **F2.1c** — lo único bloqueante, y solo se puede medir en sesión: mañana lunes 2026-08-10
    en cuanto abra Madrid.
-2. ⚠️ **Elegir el horario de `europa-01` en Ajustes.** No es una tarea del plan, es una
-   consecuencia de F6.10: la columna traía el `22:15` por defecto —el cierre de Nueva York— y
-   el `CYCLE_TIMES` del `.env` que mandaba antes eran las 16:30/18:30/20:30, la sesión
-   americana. Ninguno de los dos vale para un experimento europeo.
+2. ~~**Elegir el horario de `europa-01`.**~~ **Hecho el 2026-08-10**: `europa-01` se borró y
+   los cinco perfiles nuevos nacen con `18:00 Europe/Madrid`, tras el cierre de Madrid y con
+   margen para el desfase del feed europeo (ver decisión nº 5).
 3. **FE.12 / el tope por sector de F6.5** — se calcula y no se aplica, por falta de dato de
    sector por símbolo. La pantalla de Ajustes ya lo dice en voz alta.
 4. **F8.5** — confirmar que el `.env` con claves reales nunca llegó a subirse.
@@ -1831,7 +1832,8 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
    como `failed` con el recuento de llamadas, no como una sesión tranquila.
 2. **Lunes 2026-08-10, 09:00 Madrid: F2.1c.** La medición del feed europeo, que decide entre
    `1d` con un ciclo y `1h` con ocho.
-3. **Lunes: arranca el experimento**, un solo perfil europeo. ⚠️ **Ya no con el dashboard
+3. **Lunes: arranca el experimento.** ⚠️ **Ya no es un solo perfil europeo sino cinco**, de
+   muy conservador a muy agresivo (decisión nº 5, revisada el 2026-08-10). ⚠️ **Ya no con el dashboard
    viejo:** F4 se cerró antes de tiempo, así que el experimento se vigila con la interfaz
    nueva desde el primer día. Es lo que había que conseguir —y de paso la única que enseña la
    salud del ingestor y la antigüedad de los precios, que son los dos números de estas dos
@@ -1963,8 +1965,10 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
 
    ⚠️ ~~**Hoy ese horario no se pone en el perfil: ver F6.10.**~~ **Ya sí** (F6.10,
    2026-08-09): se pone en la pantalla de Ajustes de cada experimento y el planificador lo
-   recoge sin reiniciar nada. ⚠️ **`europa-01` sigue con el `22:15` por defecto del esquema,
-   que es el cierre de Nueva York**: hay que elegirle uno europeo antes del lunes.
+   recoge sin reiniciar nada. Los cinco perfiles en marcha (decisión nº 5) van a las **18:00
+   de Madrid** con barras diarias. ⚠️ **Pasar a `1h` ya no es solo cambiar el intervalo**:
+   cinco ciclos de ~20 minutos seguidos son ~100, así que u ocho rondas no caben en la
+   ventana, o hay que bajar el número de perfiles.
 
    **Lo que sigue dependiendo de F2.1c** es solo si se queda en `1d` (un ciclo a las 18:00
    de Madrid) o pasa a `1h` con esos ciclos intradía. Bajar de la hora exigiría añadir
@@ -1977,11 +1981,46 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
 6. ~~**¿Dónde se elige el mercado?**~~ **Resuelto: en el alta del perfil**, junto al resto
    de las decisiones del experimento (riesgo, diversificación, modelo). No es editable
    después: ver F5.3 para el motivo y para cómo se reparte entre las dos llamadas de la API.
-5. ~~**¿Se mantiene un perfil americano activo?**~~ **Resuelto (2026-08-08): un solo
-   experimento a la vez**, por decisión de método —los experimentos se hacen de uno en uno
-   para poder mirarlos— y el primero es el europeo. Eso quita de golpe las dos presiones que
-   vigilaban R2 y R4: no hay franja de solape (89 símbolos por minuto, no 139) y el fichero
-   crece a ~115 MB/mes en vez de ~165. También rebaja **F6.10** de bloqueo a trampa
-   latente: con un perfil, `CYCLE_TIMES` del entorno basta.
+5. ~~**¿Se mantiene un perfil americano activo?**~~ ~~**Resuelto (2026-08-08): un solo
+   experimento a la vez**, por decisión de método…~~
+
+   ⚠️ **Revisado el 2026-08-10, a petición explícita: cinco experimentos a la vez.** Se
+   borra `europa-01` —estaba vacío: 0 ciclos, 0 decisiones, 0 posiciones— y se crean cinco
+   perfiles europeos que **se diferencian solo en el perfil de riesgo**, de 1 a 10:
+
+   | Perfil | Riesgo | Riesgo/op. | Máx. posición | Exposición | Convicción mín. | Stop | R/R | Kill switch |
+   |---|---|---|---|---|---|---|---|---|
+   | `eu-01-muy-conservador` | 1/10 | 0,25 % | 5 % | 30 % | 85 | 3,0× ATR | 2,5 | −2 % |
+   | `eu-02-conservador` | 3/10 | 0,63 % | 12,5 % | 50 % | 75 | 2,5× ATR | 2,0 | −3,5 % |
+   | `eu-03-equilibrado` | 5/10 | 1,00 % | 20 % | 70 % | 65 | 2,0× ATR | 1,5 | −5 % |
+   | `eu-04-agresivo` | 8/10 | 2,20 % | 32 % | 88 % | 53 | 1,52× ATR | 1,2 | −8 % |
+   | `eu-05-muy-agresivo` | 10/10 | 3,00 % | 40 % | 100 % | 45 | 1,2× ATR | 1,0 | −10 % |
+
+   **Todo lo demás es idéntico** —bolsa `eu`, universo de 89, 10.000 € de capital, 89
+   símbolos en vivo, `nvidia/meta/llama-3.3-70b-instruct`, screener `score`, barras `1d`,
+   **diversificación 5/10** y ciclo a las **18:00 Europe/Madrid**—. Que la diversificación
+   también sea fija es lo que hace atribuible una diferencia: moviendo las dos, una brecha
+   entre dos curvas no sería ni del riesgo ni del reparto.
+
+   **Los niveles son las tres anclas de la tabla de F6.5 (1, 5, 10) más dos intermedios.**
+   La interpolación es por tramos y con distinta pendiente a cada lado del 5, así que 3 y 8
+   son los que reparten el recorrido sin inventar puntos.
+
+   **Lo que esto cambia de R2, R4 y R8, y lo que no:**
+   - **R2 y R4 no empeoran.** El ingestor sigue la **unión** de los universos, y los cinco
+     comparten el mismo: son **89 símbolos por minuto**, no 445. Verificado:
+     `symbols_tracked: 89`.
+   - **R8 aguanta.** Hasta 33 llamadas por ciclo × 5 = ~165 por ronda, pero secuenciales:
+     1–2 por minuto contra las 40 rpm de NIM, y sin tope acumulado.
+   - ⚠️ **Lo que sí cambia es el reloj.** Cinco ciclos de ~20 minutos **uno detrás de otro**
+     son ~100 minutos: empiezan a las 18:00 y el último acaba sobre las 19:40. Con barras
+     **diarias** da igual —los cinco leen la misma barra ya cerrada, así que deciden sobre
+     lo mismo—, pero **con barras horarias esto no cabría**: habría que reducir perfiles o
+     paralelizar, que es trabajo y no un parámetro.
+
+   ⚠️ **Riesgo de método que hay que vigilar:** `eu-01` exige **convicción 85**, que es un
+   listón alto. Es posible que no abra ni una posición en diez sesiones. Sería un resultado
+   válido —«el modelo casi nunca declara 85»— pero no informativo sobre el riesgo, así que
+   conviene mirarlo pronto y no al final.
 4. ~~¿Se conserva el broker simulado, o se pasa a Alpaca paper?~~ **Resuelto: solo
    simulador.** Alpaca fuera del proyecto.
