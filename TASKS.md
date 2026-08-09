@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F8.8 cerrada: el código está entero en inglés; queda F8.10, redirigir las diez rutas viejas a las nuevas)
+Última actualización: 2026-08-09 (F8.10 cerrada: las diez rutas viejas redirigen a las nuevas, con la query traducida)
 
 ---
 
@@ -1320,8 +1320,8 @@ diez sesiones en silencio.
       siete dependencias de `requirements.txt` están todas en uso. `src/dashboard.py`
       parecía huérfano tras F4.11 y no lo es: lo usa `run.py report`, que es la analítica de
       consola.
-- [ ] **F8.10** Redirigir las rutas viejas en español a las nuevas, para que un enlace
-      guardado antes de F8.8 siga llevando a su sitio.
+- [x] **F8.10** Redirigir las rutas viejas en español a las nuevas, para que un enlace
+      guardado antes de F8.8 siga llevando a su sitio. **Hecho (2026-08-09).**
 
       **Qué pasa hoy, comprobado contra la aplicación en marcha y no supuesto:** el servidor
       devuelve 200 con el `index.html` —la vuelta al SPA de F3.7 no distingue rutas del
@@ -1369,6 +1369,37 @@ diez sesiones en silencio.
       escrita aquí y no solo en el código, porque una capa de compatibilidad no la retira
       nadie por su cuenta. Si algún día se quita, se quita entera y de una vez, igual que se
       hizo la migración.
+
+      **Cómo quedó, y en qué se apartó del plan.** Las tres cosas que fallaban en silencio
+      se han resuelto de una vez sacando el cálculo del destino a una función pura,
+      `legacyTarget(pathname, search)` en [app/src/legacyRoutes.tsx](app/src/legacyRoutes.tsx),
+      en lugar de escribir un `<Navigate to="..">` por ruta:
+
+      - **El destino se construye absoluto**, así que la trampa del `..` no existe en vez de
+        estar evitada. Era la más fea de las tres: `/p/europa-01/ciclos` con `relative="path"`
+        acaba en `/p/cycles`, que **es una ruta válida** —`:profile` casa con `cycles`— así que
+        el síntoma no habría sido un error sino un experimento inexistente llamado «cycles».
+      - **La query viaja entera** y `?ciclo=` se traduce a `?cycle=` por el camino, que era la
+        opción de las dos que TASKS proponía. Se ha hecho en la redirección y no aceptando
+        `ciclo` como respaldo en [Cycles.tsx](app/src/pages/Cycles.tsx) para que la
+        compatibilidad viva en un solo fichero: repartida entre la ruta y la pantalla, quitarla
+        algún día obligaría a acordarse de los dos sitios.
+      - **El nombre del perfil se pasa tal cual llegó.** Re-codificarlo convertiría un `%20` en
+        `%2520` y el perfil dejaría de encontrarse con la URL pareciendo casi correcta.
+
+      Las diez rutas **no se escriben en `App.tsx`**: se recorren desde las tablas del propio
+      módulo con un `.map`, para que un nombre añadido a la tabla no pueda quedarse sin registrar
+      — que es justo el fallo que una capa de compatibilidad no sabe denunciar.
+
+      **Diez tests** en [app/src/legacyRoutes.test.ts](app/src/legacyRoutes.test.ts), y son de
+      función pura y no de router montado: el proyecto no tiene `jsdom` ni
+      `@testing-library/react`, y añadir dos dependencias para comprobar un mapa de cadenas
+      habría sido más aparato que garantía. Lo que pedía la tarea —abrir una ruta vieja y
+      comprobar dónde termina— se responde igual, porque el destino es exactamente lo que la
+      función devuelve. Incluido el caso inverso: una ruta que nunca existió sigue cayendo en
+      `NotFound`, porque redirigirla a algo plausible taparía la errata.
+
+      **607 tests en verde, typecheck limpio, 24 tests de front** (14 → 24).
 
       **No se tocan** las menciones a las rutas viejas dentro de los registros de F4.3 y
       F5.5: eran ciertas cuando se escribieron y este fichero es un registro, no un espejo

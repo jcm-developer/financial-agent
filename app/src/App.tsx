@@ -3,6 +3,11 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 
 import { Loading } from "@/components/pieces";
 import { Layout } from "@/layout/Layout";
+import {
+  LEGACY_PROFILE_PATHS,
+  LEGACY_TOP_PATHS,
+  LegacyRedirect,
+} from "@/legacyRoutes";
 import { Cycles } from "@/pages/Cycles";
 import { Decisions } from "@/pages/Decisions";
 import { Diagnostics } from "@/pages/Diagnostics";
@@ -52,6 +57,16 @@ export function App() {
           <Route path="profiles" element={<Profiles />} />
           <Route path="diagnostics" element={<Diagnostics />} />
 
+          {/*
+            The routes F8.8 renamed (F8.10). They are mapped from the tables in
+            `legacyRoutes` rather than written out, so a name added there cannot
+            be forgotten here — which is the failure a compatibility layer has
+            no way of reporting.
+          */}
+          {LEGACY_TOP_PATHS.map((path) => (
+            <Route key={path} path={path} element={<LegacyRedirect />} />
+          ))}
+
           <Route path="p/:profile">
             <Route index element={<Navigate to="summary" replace />} />
             <Route path="summary" element={<Summary />} />
@@ -78,6 +93,9 @@ export function App() {
                 />
               }
             />
+            {LEGACY_PROFILE_PATHS.map((path) => (
+              <Route key={path} path={path} element={<LegacyRedirect />} />
+            ))}
           </Route>
 
           <Route path="*" element={<NotFound />} />
