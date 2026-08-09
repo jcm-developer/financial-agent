@@ -60,12 +60,21 @@ export function useMarkets() {
 /**
  * Reads every experiment profile.
  *
+ * @param includeArchived - Whether archived profiles come along. It is part of
+ *     the cache key, so the two answers do not overwrite each other: without
+ *     that, switching the toggle off would leave the archived ones in the cache
+ *     under the same key and they would keep showing.
  * @return The query for `GET /api/profiles`.
  */
-export function useProfiles() {
+export function useProfiles(includeArchived = false) {
   return useQuery({
-    queryKey: keys.profiles(),
-    queryFn: ({ signal }) => api.get<ProfileSummary[]>("/api/profiles", undefined, signal),
+    queryKey: keys.profiles(includeArchived),
+    queryFn: ({ signal }) =>
+      api.get<ProfileSummary[]>(
+        "/api/profiles",
+        includeArchived ? { include_archived: true } : undefined,
+        signal,
+      ),
   });
 }
 
@@ -338,7 +347,10 @@ export function useProfileLimits(ref: string | undefined) {
  * @param ref - Profile whose own entries are refreshed too.
  */
 function invalidateProfile(client: ReturnType<typeof useQueryClient>, ref?: string) {
-  client.invalidateQueries({ queryKey: keys.profiles() });
+  // By prefix, not by the exact key: the list is cached once per
+  // `include_archived`, and archiving writes into one of the two while the other
+  // is what is on screen.
+  client.invalidateQueries({ queryKey: ["profiles"] });
   if (ref) {
     client.invalidateQueries({ queryKey: keys.profile(ref) });
     client.invalidateQueries({ queryKey: keys.profileLimits(ref) });

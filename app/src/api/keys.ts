@@ -12,7 +12,15 @@ export const keys = {
   markets: () => ["markets"] as const,
   market: (code: string) => ["markets", code] as const,
 
-  profiles: () => ["profiles"] as const,
+  /**
+   * The profile list.
+   *
+   * `includeArchived` is part of the key because the two answers are different
+   * lists: sharing a key would leave the archived ones in the cache after the
+   * toggle went off, and they would keep showing until something else evicted
+   * them. Invalidating by the `["profiles"]` prefix still reaches both.
+   */
+  profiles: (includeArchived = false) => ["profiles", { includeArchived }] as const,
   profile: (ref: string) => ["profiles", ref] as const,
   profileSettings: (ref: string) => ["profiles", ref, "settings"] as const,
   profileLimits: (ref: string) => ["profiles", ref, "limits"] as const,

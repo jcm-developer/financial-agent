@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F5.3 cerrada: el alta de experimento cabe en un formulario, con las tres llamadas encadenadas)
+Última actualización: 2026-08-09 (F5.4 cerrada: las cinco acciones del experimento, con el dialogo nativo y sin traer shadcn)
 
 ---
 
@@ -1013,8 +1013,46 @@ diez sesiones en silencio.
       por sí solos hacia dónde hay más riesgo.
 
       **610 tests en verde, typecheck limpio, 24 de front, build correcto.**
-- [ ] **F5.4** Acciones: activar, pausar, archivar, **duplicar** (clonar y cambiar un solo
-      parámetro es el gesto central del experimento) y borrar con confirmación por nombre.
+- [x] **F5.4** Acciones: activar, pausar, archivar, **duplicar** (clonar y cambiar un solo
+      parámetro es el gesto central del experimento) y borrar con confirmación por nombre
+      (2026-08-09). Las cinco comprobadas contra la API de verdad, incluidos los dos rechazos
+      del borrado —sin `confirm` y con el nombre equivocado, 400 los dos—.
+
+      ⚠️ **shadcn/ui sigue sin entrar, y eso contradice lo que F4.7 anticipó.** Aquella tarea
+      lo dejó fuera diciendo que se traería «cuando haga falta algo que sí necesita Radix: el
+      diálogo de confirmación de F5.4». Con el diálogo delante, lo que Radix aporta aquí
+      —trampa de foco, Esc, el resto de la página inerte, apilado por encima de todo— es
+      exactamente lo que hace `dialog.showModal()` de forma nativa, en la capa superior, con
+      `::backdrop` incluido. Traerlo habría sido añadir un árbol de dependencias para
+      reimplementar lo que el navegador ya trae. Lo único que Radix daba de más son las
+      entradas animadas, y **el proyecto no las tiene a propósito** (DESIGN.md, «Lo que no
+      hay»). La regla de F4.7 sigue en pie tal como se escribió; simplemente esto no era.
+
+      Cuatro decisiones:
+      - ⚠️ **El aviso de pausar dice que no cierra las posiciones**, con el número de las que
+        hay abiertas. Es lo que nadie espera: un experimento pausado con cuatro posiciones
+        sigue expuesto al mercado y **sus stops y objetivos dejan de comprobarse**, porque eso
+        solo pasa dentro de un ciclo (`mandatory_exits`). Pausar sin saberlo es dejar el
+        dinero fuera con el vigilante apagado.
+      - **Archivar y «ver archivados» van juntos.** Archivar saca el experimento del listado,
+        y sin la casilla al lado el botón parecería que ha borrado algo. Además
+        **`useActiveProfile` pasa a pedir la lista con archivados**: archivar lo saca de la
+        *lista*, no de la existencia, y sin eso todos los enlaces guardados a ese experimento
+        dirían «no existe», que es una afirmación distinta y falsa. El selector ya lo etiqueta
+        `(archived)`.
+      - **Cada estado ofrece solo las transiciones que significan algo.** Un botón que está
+        siempre y a veces falla enseña a ignorar la fila entera: activar lo que ya corre no
+        hace nada, pausar un borrador que nunca corrió tampoco, y archivar algo en marcha son
+        dos decisiones a la vez. **Duplicar está siempre**, archivados incluidos: lo más
+        interesante de clonar suele ser el que ya terminó.
+      - **Duplicar abre la copia en sus Ajustes.** El gesto no es clonar: es clonar *y cambiar
+        un parámetro*, y dejar la copia en el listado obliga a acordarse de cuál era el
+        siguiente paso.
+
+      La clave de caché del listado lleva ahora `include_archived`: compartir clave dejaría
+      los archivados dentro después de apagar la casilla, y seguirían enseñándose.
+
+      **610 tests en verde, typecheck limpio, 24 de front, build correcto.**
 - [x] **F5.5** Selector de perfil global en la cabecera, **con el perfil en la URL por su
       nombre**: `/p/europa-01/posiciones`. Con un UUID ahí nadie sabría qué experimento está
       mirando, que era justo el motivo de sacarlo de la memoria de React; la API acepta nombre

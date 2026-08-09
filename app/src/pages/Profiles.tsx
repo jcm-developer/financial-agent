@@ -4,6 +4,7 @@ import { useProfiles } from "@/api/hooks";
 import type { ProfileSummary } from "@/api/types";
 import { NewProfileForm } from "@/components/NewProfileForm";
 import { Block, Button, Card, PageTitle } from "@/components/pieces";
+import { ProfileActions } from "@/components/ProfileActions";
 import { ProfileCard } from "@/components/ProfileCard";
 import { Section } from "@/components/Section";
 import { useTitle } from "@/layout/useTitle";
@@ -22,8 +23,9 @@ import { useTitle } from "@/layout/useTitle";
  */
 export function Profiles() {
   useTitle("Experimentos");
-  const profiles = useProfiles();
+  const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState(false);
+  const profiles = useProfiles(showArchived);
 
   return (
     <>
@@ -43,13 +45,29 @@ export function Profiles() {
         </div>
       )}
 
+      {/* The toggle goes with the archive action, not after it: archiving takes
+          an experiment out of this list, and without a way back the button would
+          look like it deleted something. */}
+      <label className="mb-4 flex items-center gap-2 text-[13px] text-text-secondary">
+        <input
+          type="checkbox"
+          checked={showArchived}
+          onChange={(e) => setShowArchived(e.target.checked)}
+          className="size-4 accent-primary"
+        />
+        Ver también los archivados
+      </label>
+
       <Section query={profiles}>
         {(data: ProfileSummary[]) =>
           data.length === 0 ? <NoProfiles onCreate={() => setCreating(true)} /> : (
             <ul className="flex flex-col gap-3">
               {sorted(data).map((profile) => (
                 <li key={profile.id}>
-                  <ProfileCard profile={profile} />
+                  <ProfileCard
+                    profile={profile}
+                    actions={<ProfileActions profile={profile} />}
+                  />
                 </li>
               ))}
             </ul>
