@@ -1,9 +1,9 @@
-"""Tests del ensamblado de datos del dashboard.
+"""Tests of the dashboard's data assembly.
 
-Importan porque el frontend y el comando `report` consumen este mismo payload:
-un error aqui se ve en las dos vistas a la vez. Las metricas derivadas
-(profit factor, caida maxima, acierto) se comprueban con numeros calculados a
-mano, no con lo que devuelva el codigo.
+They matter because the frontend and the `report` command consume this same
+payload: a mistake here shows in both views at once. The derived metrics (profit
+factor, maximum drawdown, hit rate) are checked against numbers worked out by
+hand, not against whatever the code returns.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def a_cycle(db, portfolio_id, *, equity=10_000.0):
 
 
 def a_closed_trade(db, portfolio_id, *, symbol, pnl, entry=100.0, qty=10.0, days=3):
-    """Crea una posicion cerrada con el P&L exacto que se le pide."""
+    """Creates a closed position with exactly the P&L it is asked for."""
     position_id = db.open_position(
         portfolio_id=portfolio_id, symbol=symbol, qty=qty, entry_price=entry,
         stop_price=entry * 0.96, target_price=entry * 1.1, thesis="t",
@@ -87,8 +87,8 @@ def test_list_portfolios_counts_cycles(db, portfolio):
 # -- Estructura del payload --------------------------------------------------
 
 def test_payload_exposes_every_section_the_frontend_reads(db, portfolio):
-    """El frontend indexa estas claves directamente; si falta una, la pagina
-    revienta al renderizar en lugar de mostrar un hueco."""
+    """The frontend indexes these keys directly; if one is missing, the page
+    blows up while rendering instead of showing a gap."""
     cycle = a_cycle(db, portfolio)
     an_equity_point(db, portfolio, cycle, equity=10_000.0)
 
@@ -139,8 +139,8 @@ def test_profit_factor_is_gross_win_over_gross_loss(db, portfolio):
 
 
 def test_profit_factor_below_one_signals_a_losing_system(db, portfolio):
-    """Dos aciertos de tres y aun asi se pierde dinero: es exactamente el caso
-    que el profit factor detecta y el acierto esconde."""
+    """Two wins out of three and money still lost: it is exactly the case the
+    profit factor catches and the hit rate hides."""
     a_closed_trade(db, portfolio, symbol="AAPL", pnl=10.0)
     a_closed_trade(db, portfolio, symbol="MSFT", pnl=10.0)
     a_closed_trade(db, portfolio, symbol="NVDA", pnl=-100.0)
@@ -156,8 +156,8 @@ def test_profit_factor_is_none_without_trades(db, portfolio):
 
 
 def test_max_drawdown_measures_the_worst_fall_from_a_peak(db, portfolio):
-    """10000 -> 12000 -> 9000: la caida desde el pico es del 25%, no del 10%
-    que sugeriria comparar solo con el inicio."""
+    """10000 -> 12000 -> 9000: the drop from the peak is 25%, not the 10%
+    comparing only against the start would suggest."""
     now = datetime.now(timezone.utc)
     for index, equity in enumerate([10_000.0, 12_000.0, 9_000.0, 11_000.0]):
         cycle = a_cycle(db, portfolio)
@@ -201,12 +201,12 @@ def test_open_position_is_valued_with_the_last_recorded_price(db, portfolio):
     assert position["market_value"] == pytest.approx(1100.0)
     assert position["unrealized_pnl"] == pytest.approx(100.0)
     assert position["unrealized_pnl_pct"] == pytest.approx(10.0)
-    # 110 esta un 14.58% por encima del stop en 96.
+    # 110 is 14.58% above the stop at 96.
     assert position["stop_distance_pct"] == pytest.approx(14.58, abs=0.01)
 
 
 def test_open_position_without_a_price_reports_nulls_not_zeros(db, portfolio):
-    """Un cero se leeria como "no vale nada"; None se muestra como un guion."""
+    """A zero would read as "it is worth nothing"; None is shown as a dash."""
     db.open_position(
         portfolio_id=portfolio, symbol="ZZZZ", qty=10, entry_price=100.0,
         stop_price=96.0, target_price=120.0, thesis="t",
@@ -265,7 +265,7 @@ def test_conviction_histogram_separates_buys_from_holds(db, portfolio):
 
 
 def test_cycles_expose_the_scanned_symbol_list_as_a_list(db, portfolio):
-    """Se guarda como JSON en una columna TEXT; el frontend cuenta su longitud."""
+    """It is stored as JSON in a TEXT column; the frontend counts its length."""
     a_cycle(db, portfolio)
 
     cycle = build_dashboard(db, portfolio_name="test")["cycles"][0]

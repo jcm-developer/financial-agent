@@ -1,20 +1,21 @@
-"""Primera etapa del embudo: 500 activos -> 20 candidatos, sin IA.
+"""First stage of the funnel: 500 assets -> 20 candidates, with no AI.
 
-Por que existe: a 45 segundos por llamada al modelo, analizar 500 activos costaria
-seis horas por ciclo. El filtro reduce el universo con aritmetica —segundos, cero
-cuota— y el LLM solo ve lo que ya parece interesante.
+Why it exists: at 45 seconds per model call, analysing 500 assets would cost six
+hours per cycle. The filter shrinks the universe with arithmetic —seconds, zero
+quota— and the LLM only sees what already looks interesting.
 
-**Advertencia honesta sobre la puntuacion.** Los pesos de abajo son una heuristica
-razonable, no una ventaja demostrada. No estan validados contra nada: son una
-forma de ordenar el universo mejor que al azar, y de que el modelo reciba
-candidatos con algo que mirar en lugar de diez megacaps elegidas a dedo. Si el
-experimento acaba mostrando algo, sera imposible saber cuanto viene del filtro y
-cuanto del modelo. Para separarlo habria que comparar contra un filtro aleatorio,
-y `SCREENER_MODE=random` existe justo para eso.
+**An honest warning about the scoring.** The weights below are a reasonable
+heuristic, not a demonstrated edge. They are validated against nothing: they are
+a way of ordering the universe better than at random, and of getting the model
+candidates with something to look at instead of ten megacaps picked by hand. If
+the experiment ends up showing something, it will be impossible to know how much
+comes from the filter and how much from the model. Separating the two would mean
+comparing against a random filter, and `SCREENER_MODE=random` exists for exactly
+that.
 
-Los descartes duros (liquidez, precio minimo, datos insuficientes) si son
-defendibles: en un valor ilíquido el simulador mentiria, porque supone que puedes
-comprar al precio de apertura sin mover el mercado.
+The hard discards (liquidity, minimum price, insufficient data) are defensible:
+in an illiquid name the simulator would lie, because it assumes you can buy at
+the opening price without moving the market.
 """
 
 from __future__ import annotations
@@ -33,12 +34,12 @@ class ScreenerLimits:
     """Filtros duros y tamano de la salida."""
 
     top_n: int = 20
-    # Volumen medio en dolares de las ultimas 20 sesiones. Por debajo de esto la
-    # simulacion de ejecucion no es creible.
+    # Average dollar volume over the last 20 sessions. Below this the execution
+    # simulation is not credible.
     min_dollar_volume: float = 20_000_000.0
     min_price: float = 5.0
-    # Volatilidad anualizada maxima en %. Por encima, el stop por ATR seria tan
-    # ancho que la posicion resultante seria irrelevante.
+    # Maximum annualised volatility in %. Above it, the ATR stop would be so wide
+    # that the resulting position would be irrelevant.
     max_volatility_pct: float = 120.0
     min_bars: int = 60
 
@@ -55,7 +56,7 @@ class Candidate:
 
 @dataclass
 class ScreenerReport:
-    """Resultado completo, para poder auditar por que entro cada candidato."""
+    """The full result, so it can be audited why each candidate got in."""
 
     candidates: list[Candidate]
     evaluated: int = 0
@@ -74,13 +75,13 @@ def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
 
 
 def _setup_factor(rsi: float | None) -> tuple[float, str]:
-    """Multiplicador segun donde este el RSI. Es lo que evita perseguir el precio.
+    """Multiplier based on where the RSI sits. It is what stops price chasing.
 
-    Se aplica como factor y no como sumando por una razon concreta: sumando, un
-    activo con tendencia perfecta y momento maximo compensaba de sobra el castigo
-    por estar sobrecomprado y acababa ganando el ranking, que es exactamente lo
-    contrario de lo que se pretende. Como factor, un RSI extremo hunde la nota por
-    buenos que sean los demas componentes.
+    It is applied as a factor and not as an addend for a concrete reason: as an
+    addend, an asset with perfect trend and maximum momentum more than made up
+    for the overbought penalty and ended up winning the ranking, which is exactly
+    the opposite of the intention. As a factor, an extreme RSI sinks the score
+    however good the other components are.
     """
     if rsi is None:
         return 0.70, "RSI no disponible"
@@ -96,16 +97,16 @@ def _setup_factor(rsi: float | None) -> tuple[float, str]:
 
 
 def score_symbol(indicators: dict[str, Any]) -> tuple[float, dict[str, float], list[str]]:
-    """Puntua un activo entre 0 y 1.
+    """Scores an asset between 0 and 1.
 
-    Cuatro componentes que suman como maximo 1.0, multiplicados por un factor de
-    situacion derivado del RSI. La intencion es premiar tendencia establecida con
-    un retroceso reciente —donde un analista tiene algo que decir— y castigar al
-    activo que ya se ha disparado.
+    Four components adding to at most 1.0, multiplied by a situation factor
+    derived from the RSI. The intention is to reward an established trend with a
+    recent pullback —where an analyst has something to say— and to penalise the
+    asset that has already shot up.
 
-    `components` sale ya multiplicado por el factor, de modo que sus valores suman
-    exactamente la puntuacion y el informe del screener no miente sobre por que
-    entro un candidato.
+    `components` comes out already multiplied by the factor, so its values add up
+    to exactly the score and the screener's report does not lie about why a
+    candidate got in.
     """
     components: dict[str, float] = {}
     reasons: list[str] = []
@@ -132,9 +133,9 @@ def score_symbol(indicators: dict[str, Any]) -> tuple[float, dict[str, float], l
     if trend >= 0.8:
         reasons.append("tendencia alcista establecida")
 
-    # --- Momento a medio plazo (0.25) ------------------------------------
-    # Se normaliza a 20% de subida en 60 sesiones; por encima no puntua mas, para
-    # que un activo disparado no acumule ventaja indefinidamente.
+    # --- Medium-term momentum (0.25) -------------------------------------
+    # Normalised to a 20% rise over 60 sessions; above that it scores no more, so
+    # an asset that has shot up does not accumulate an unbounded advantage.
     momentum = _clamp((return_60 or 0.0) / 20.0) if return_60 is not None else 0.0
     components["momento"] = momentum * 0.25
     if momentum > 0.5 and return_60 is not None:
@@ -146,9 +147,9 @@ def score_symbol(indicators: dict[str, Any]) -> tuple[float, dict[str, float], l
     if (volume_ratio or 0) > 1.5:
         reasons.append(f"volumen {volume_ratio:.1f}x la media")
 
-    # --- Volatilidad utilizable (0.15) -----------------------------------
-    # Se premia el rango medio: sin movimiento no hay operacion posible, y con
-    # demasiado el stop por ATR obliga a una posicion diminuta.
+    # --- Usable volatility (0.15) ----------------------------------------
+    # The middle range is rewarded: with no movement there is no trade to make,
+    # and with too much the ATR stop forces a tiny position.
     usable = 0.0
     if atr_pct is not None:
         if 1.0 <= atr_pct <= 4.0:
@@ -175,11 +176,11 @@ def screen(
     *,
     mode: str = "score",
 ) -> ScreenerReport:
-    """Aplica filtros duros y ordena por puntuacion.
+    """Applies the hard filters and sorts by score.
 
-    `mode="random"` sustituye la puntuacion por un orden estable pero arbitrario
-    (hash del simbolo). Sirve como grupo de control: si el agente rinde igual con
-    candidatos arbitrarios, el filtro no aporta nada.
+    `mode="random"` replaces the score with a stable but arbitrary order (the
+    symbol's hash). It serves as a control group: if the agent performs the same
+    with arbitrary candidates, the filter adds nothing.
     """
     report = ScreenerReport(candidates=[])
     accepted: list[Candidate] = []
@@ -191,7 +192,7 @@ def screen(
             report.rejected["datos_insuficientes"] = report.rejected.get("datos_insuficientes", 0) + 1
             continue
 
-        # La ultima barra se reserva para ejecutar, igual que en `market_data`.
+        # The last bar is reserved for execution, same as in `market_data`.
         indicators = compute_snapshot(bars[:-1])
         price = indicators.get("price") or 0.0
 
@@ -211,7 +212,7 @@ def screen(
             continue
 
         if indicators.get("atr_14") is None:
-            # Sin ATR el Risk Manager rechazaria la entrada de todos modos.
+            # Without an ATR the Risk Manager would reject the entry anyway.
             report.rejected["sin_atr"] = report.rejected.get("sin_atr", 0) + 1
             continue
 
@@ -226,7 +227,7 @@ def screen(
             indicators=indicators, reasons=reasons, components=components,
         ))
 
-    # Desempate por simbolo para que el resultado sea reproducible.
+    # Tie-broken by symbol so the result is reproducible.
     accepted.sort(key=lambda c: (-c.score, c.symbol))
     report.candidates = accepted[:limits.top_n]
 
@@ -238,7 +239,7 @@ def screen(
 
 
 def load_universe(path: str) -> list[str]:
-    """Lee un fichero de simbolos, uno por linea. `#` es comentario."""
+    """Reads a file of symbols, one per line. `#` is a comment."""
     from pathlib import Path
 
     file = Path(path).expanduser()

@@ -1,14 +1,14 @@
-"""Consultas de lectura de la API.
+"""The API's read queries.
 
-Viven aparte de `src/dashboard.py` porque responden a otra pregunta. El
-dashboard arma **un** payload completo de una cartera en un solo viaje, que es lo
-que necesita una pantalla que se pinta entera de golpe. Estos endpoints son
-listas que se filtran, se ordenan y se paginan, que es lo que necesita una tabla
-con 480 decisiones y un buscador encima.
+They live apart from `src/dashboard.py` because they answer a different question.
+The dashboard assembles **one** complete payload for a book in a single trip,
+which is what a screen painted whole at once needs. These endpoints are lists
+that get filtered, sorted and paginated, which is what a table with 480 decisions
+and a search box above it needs.
 
-Se sirven de la conexion en **solo lectura** (ver `deps.py`): mirar el historico
-no puede alterarlo, y aqui eso lo garantiza el modo `ro` de SQLite, no la buena
-educacion de estas funciones.
+They are served from the **read-only** connection (see `deps.py`): looking at the
+history cannot alter it, and here that is guaranteed by SQLite's `ro` mode, not
+by these functions' good manners.
 """
 
 from __future__ import annotations
@@ -22,9 +22,9 @@ from src import market_calendar, risk_presets
 from src.db import Database
 from src.profile_settings import mask_secret
 
-#: Tope de filas por pagina. No es paranoia: `decisions` guarda la respuesta
-#: cruda del modelo, asi que unos pocos miles de filas son megabytes de JSON
-#: viajando a un navegador que solo va a pintar veinte.
+#: Cap on rows per page. It is not paranoia: `decisions` stores the model's raw
+#: response, so a few thousand rows are megabytes of JSON travelling to a browser
+#: that is only going to paint twenty.
 MAX_LIMIT = 500
 
 
@@ -50,40 +50,41 @@ def clamp_limit(limit: int) -> int:
 # ----------------------------------------------------------------------
 
 def market_info(code: str) -> dict[str, Any]:
-    """Todo lo que la interfaz necesita saber de una bolsa, ya resuelto.
+    """Everything the interface needs to know about an exchange, already resolved.
 
-    Incluye si esta abierta **ahora**, y por eso no se cachea: el frontend lo
-    consulta para decidir si tiene sentido ofrecer el boton de lanzar un ciclo.
+    It includes whether it is open **now**, and that is why it is not cached: the
+    frontend consults it to decide whether offering the button to launch a cycle
+    makes any sense.
     """
     from src.screener import load_universe
 
-    mercado = market_calendar.get_market(code)
-    hoy = market_calendar.now_local(mercado).date()
+    market = market_calendar.get_market(code)
+    hoy = market_calendar.now_local(market).date()
     try:
-        universe_size = len(load_universe(mercado.universe_file))
-    except Exception:  # noqa: BLE001 - un universo ilegible no debe tumbar la lista
+        universe_size = len(load_universe(market.universe_file))
+    except Exception:  # noqa: BLE001 - an unreadable universe must not take the list down
         universe_size = 0
 
     return {
-        "code": mercado.code,
-        "label": mercado.label,
-        "timezone": str(mercado.tz),
-        "currency": mercado.currency,
-        "currency_symbol": mercado.currency_symbol,
-        "benchmark": mercado.benchmark,
-        "universe_file": mercado.universe_file,
+        "code": market.code,
+        "label": market.label,
+        "timezone": str(market.tz),
+        "currency": market.currency,
+        "currency_symbol": market.currency_symbol,
+        "benchmark": market.benchmark,
+        "universe_file": market.universe_file,
         "universe_size": universe_size,
-        "min_turnover": mercado.min_turnover,
-        "session_open": mercado.open_time.strftime("%H:%M"),
-        "session_close": mercado.close_time.strftime("%H:%M"),
-        "operating_open": mercado.operating_open.strftime("%H:%M"),
-        "operating_close": mercado.operating_close.strftime("%H:%M"),
-        "session_minutes": mercado.session_minutes,
-        "operating_minutes": mercado.operating_minutes,
-        "is_trading_day": market_calendar.is_trading_day(hoy, market=mercado),
-        "is_session_open": market_calendar.is_session_open(market=mercado),
-        "is_operating": market_calendar.is_operating(market=mercado),
-        "status_text": market_calendar.describe(market=mercado),
+        "min_turnover": market.min_turnover,
+        "session_open": market.open_time.strftime("%H:%M"),
+        "session_close": market.close_time.strftime("%H:%M"),
+        "operating_open": market.operating_open.strftime("%H:%M"),
+        "operating_close": market.operating_close.strftime("%H:%M"),
+        "session_minutes": market.session_minutes,
+        "operating_minutes": market.operating_minutes,
+        "is_trading_day": market_calendar.is_trading_day(hoy, market=market),
+        "is_session_open": market_calendar.is_session_open(market=market),
+        "is_operating": market_calendar.is_operating(market=market),
+        "status_text": market_calendar.describe(market=market),
     }
 
 
@@ -96,11 +97,11 @@ def all_markets() -> list[dict[str, Any]]:
 # ----------------------------------------------------------------------
 
 def profile_summaries(db: Database, *, include_archived: bool = False) -> list[dict[str, Any]]:
-    """Las tarjetas de la pantalla de perfiles (F5.2).
+    """The cards on the profiles screen (F5.2).
 
-    Se hace una consulta por perfil en lugar de un SQL con doce subconsultas
-    correlacionadas: los perfiles son un puñado —dos o tres— y el codigo que
-    resulta se puede leer. Si algun dia hubiera cincuenta, este es el sitio.
+    One query per profile instead of a SQL statement with twelve correlated
+    subqueries: the profiles are a handful —two or three— and the resulting code
+    can be read. If there were ever fifty, this is the place.
     """
     return [
         _profile_summary(db, profile)
@@ -110,9 +111,10 @@ def profile_summaries(db: Database, *, include_archived: bool = False) -> list[d
 
 def _profile_summary(db: Database, profile: dict[str, Any]) -> dict[str, Any]:
     settings = db.get_settings(profile["id"])
-    mercado = market_calendar.get_market(settings["market"])
-    # Con NVIDIA, una columna vacia no es "sin clave": es "usa NVIDIA_API_KEY del
-    # entorno". Decir "(sin clave)" mandaria a buscar un problema inexistente.
+    market = market_calendar.get_market(settings["market"])
+    # With NVIDIA, an empty column does not mean "no key": it means "use
+    # NVIDIA_API_KEY from the environment". Saying "(sin clave)" would send
+    # someone hunting for a problem that does not exist.
     vacia = (
         "(NVIDIA_API_KEY del entorno)"
         if settings["llm_provider"] == "nvidia" else "(sin clave)"
@@ -125,9 +127,9 @@ def _profile_summary(db: Database, profile: dict[str, Any]) -> dict[str, Any]:
         "created_at": profile["created_at"],
         "updated_at": profile["updated_at"],
         "portfolio_id": profile.get("portfolio_id"),
-        "market": mercado.code,
-        "currency": mercado.currency,
-        "currency_symbol": mercado.currency_symbol,
+        "market": market.code,
+        "currency": market.currency,
+        "currency_symbol": market.currency_symbol,
         "llm_provider": settings["llm_provider"],
         "llm_model": settings["llm_model"],
         "llm_api_key_masked": mask_secret(settings["llm_api_key"], empty=vacia),
@@ -187,8 +189,8 @@ def profile_metrics(
     return {
         "equity": equity,
         "initial_budget": budget,
-        # Contra el presupuesto asignado, no contra el primer snapshot: es la
-        # pregunta que se hace quien compara dos experimentos.
+        # Against the assigned budget, not against the first snapshot: it is the
+        # question whoever compares two experiments asks.
         "total_return_pct": (
             round((equity / budget - 1) * 100, 2) if equity and budget else None
         ),
@@ -207,7 +209,7 @@ def profile_metrics(
 
 
 def profile_detail(db: Database, profile: dict[str, Any]) -> dict[str, Any]:
-    """El resumen mas todo lo que la pantalla de ajustes necesita."""
+    """The summary plus everything the settings screen needs."""
     settings = db.get_settings(profile["id"])
     payload = _profile_summary(db, profile)
     payload["settings"] = settings
@@ -218,12 +220,12 @@ def profile_detail(db: Database, profile: dict[str, Any]) -> dict[str, Any]:
 
 
 def derived_limits(settings: dict[str, Any]) -> dict[str, Any]:
-    """Los nueve limites efectivos, mas cuales salen de los deslizadores.
+    """The nine effective limits, plus which ones come from the sliders.
 
-    Lo calcula `src/risk_presets.py`, el mismo modulo que usa el ciclo. Que la
-    interfaz no rehaga la cuenta es el punto entero de F6.5: dos formulas
-    acabarian discrepando el dia que se retoque un ancla, y la pantalla
-    prometeria unos limites mientras el agente aplica otros.
+    `src/risk_presets.py` computes it, the same module the cycle uses. The
+    interface not redoing the arithmetic is the whole point of F6.5: two formulas
+    would end up disagreeing the day an anchor is tweaked, and the screen would
+    promise one set of limits while the agent applied another.
     """
     limits = risk_presets.resolve_limits(settings)
     payload = {
@@ -241,18 +243,18 @@ def derived_limits(settings: dict[str, Any]) -> dict[str, Any]:
 
 
 # ----------------------------------------------------------------------
-# Precios: lo que se usa para valorar posiciones abiertas
+# Prices: what is used to value open positions
 # ----------------------------------------------------------------------
 
 def _price_index(db: Database, symbols: list[str]) -> dict[str, dict[str, Any]]:
-    """Ultimo precio por simbolo, prefiriendo la cotizacion en vivo.
+    """Last price per symbol, preferring the live quote.
 
-    Dos fuentes y un orden: `quotes_live` la escribe el ingestor cada minuto;
-    `market_snapshots` es el precio que vio el analista en su ultimo ciclo, que
-    puede ser de ayer. Se prefiere la primera y **se dice cual se ha usado**, en
-    lugar de servir un numero a secas: una posicion valorada con el cierre de
-    anteayer y otra con el precio de hace un minuto no se pueden sumar sin
-    saberlo.
+    Two sources and one order: `quotes_live` is written by the ingestor every
+    minute; `market_snapshots` is the price the analyst saw on its last cycle,
+    which may be yesterday's. The first is preferred and **which one was used is
+    stated**, instead of serving a bare number: a position valued with the close
+    from two days ago and another with a price from a minute ago cannot be added
+    together without knowing it.
     """
     if not symbols:
         return {}
@@ -306,18 +308,18 @@ def positions(
         "       thesis, horizon_days, opened_at, closed_at, exit_price, "
         "       realized_pnl, exit_reason "
         f"from positions where {clause} "
-        # Las abiertas primero: es lo que se mira. Luego por fecha, con
-        # `closed_at` cayendo a `opened_at` para que las abiertas no queden todas
-        # juntas al final por tener NULL.
+        # Open ones first: that is what gets looked at. Then by date, with
+        # `closed_at` falling back to `opened_at` so the open ones do not all end
+        # up bunched at the end for having NULL.
         "order by (status = 'open') desc, coalesce(closed_at, opened_at) desc "
         "limit ? offset ?",
         (*params, clamp_limit(limit), max(0, offset)),
     )
 
     abiertas = [row["symbol"] for row in rows if row["status"] == "open"]
-    precios = _price_index(db, sorted(set(abiertas)))
+    prices = _price_index(db, sorted(set(abiertas)))
     for row in rows:
-        _value_position(row, precios.get(row["symbol"]))
+        _value_position(row, prices.get(row["symbol"]))
     return rows, total
 
 
@@ -345,7 +347,7 @@ def _value_position(row: dict[str, Any], price: dict[str, Any] | None) -> None:
     row["unrealized_pnl"] = round((last - entry) * qty, 2)
     row["unrealized_pnl_pct"] = round((last / entry - 1) * 100, 2)
     stop = row["stop_price"]
-    # Cuanto respira la posicion antes de tocar el stop, en % del precio actual.
+    # How much room the position has before touching the stop, in % of the current price.
     row["stop_distance_pct"] = round((last / stop - 1) * 100, 2) if stop else None
 
 
@@ -353,10 +355,11 @@ def decisions(
     db: Database, portfolio_id: str, *, symbol: str = "", action: str = "",
     verdict: str = "", cycle_id: str = "", limit: int = 100, offset: int = 0,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Decisiones con el veredicto de riesgo y el destino de la orden.
+    """Decisions with the risk verdict and the order's fate.
 
-    Es la tabla que da sentido al experimento: junta lo que el modelo propuso
-    con lo que el Risk Manager permitio y con lo que acabo ocurriendo.
+    It is the table that gives the experiment its meaning: it joins what the
+    model proposed with what the Risk Manager allowed and with what ended up
+    happening.
     """
     where = ["d.portfolio_id = ?"]
     params: list[Any] = [portfolio_id]
@@ -518,9 +521,9 @@ def _age_seconds(stamp: str | None) -> float | None:
 def quotes(db: Database, *, symbols: list[str] | None = None) -> list[dict[str, Any]]:
     rows = list(db.latest_quotes(symbols).values())
     for row in rows:
-        # La distancia entre `as_of` (lo que dice el proveedor) y ahora es el
-        # retraso real del dato. Es exactamente la pregunta abierta de F2.1c: si
-        # Yahoo sirve Europa con 15 minutos de desfase, se vera aqui.
+        # The gap between `as_of` (what the provider says) and now is the datum's
+        # real lag. It is exactly the open question of F2.1c: if Yahoo serves
+        # Europe 15 minutes behind, it will show up here.
         row["age_seconds"] = _age_seconds(row.get("as_of"))
     rows.sort(key=lambda row: row["symbol"])
     return rows
@@ -531,9 +534,9 @@ def ingest_status(db: Database, *, recent: int = 20) -> dict[str, Any]:
     backfills = db.ingest_health(limit=1, kind="backfill")
     por_mercado = db.active_universe_by_market()
 
-    # Fallos seguidos contados desde el mas reciente hacia atras: es lo que mira
-    # el propio ingestor para escalar a error (F2.8), y lo que distingue "un
-    # minuto perdido" de "Yahoo lleva media hora sin responder".
+    # Consecutive failures counted from the most recent one backwards: it is what
+    # the ingestor itself looks at to escalate to an error (F2.8), and what tells
+    # "one lost minute" from "Yahoo has not answered for half an hour".
     seguidos = 0
     for run in ticks:
         if run["symbols_ok"] or not run["finished_at"]:
@@ -577,12 +580,11 @@ def _ingest_verdict(
     ticks: list[dict[str, Any]], seguidos: int, desde: float | None,
     por_mercado: dict[str, list[str]],
 ) -> tuple[bool, str]:
-    """Sano o no, y por que.
+    """Healthy or not, and why.
 
-    "Sin ticks" no es un fallo si no hay ninguna bolsa abierta: el ingestor
-    duerme fuera de la ventana operativa a proposito. Sin esta distincion el
-    panel estaria en rojo todas las noches, y un rojo que sale siempre acaba
-    sin mirarse.
+    "No ticks" is not a failure when no exchange is open: the ingestor sleeps
+    outside the operating window on purpose. Without that distinction the panel
+    would be red every night, and a red that is always on ends up unwatched.
     """
     abierto = [
         code for code in por_mercado
@@ -620,16 +622,16 @@ def _ingest_verdict(
 # ----------------------------------------------------------------------
 
 def analytics(db: Database, portfolio_id: str) -> dict[str, Any]:
-    """Las cinco series que pintan las graficas, en un solo viaje.
+    """The five series that paint the charts, in a single trip.
 
-    Van juntas y no en cinco endpoints porque son **una sola pantalla**: cinco
-    peticiones para dibujarla darian cinco estados de carga y cinco formas de
-    fallar a medias, para leer cinco agregados del mismo fichero local.
+    They travel together and not in five endpoints because they are **one single
+    screen**: five requests to draw it would give five loading states and five
+    ways of half-failing, in order to read five aggregates of the same local file.
 
-    Tres de ellas salen de vistas que ya existen en `schema.sql`
+    Three of them come from views that already exist in `schema.sql`
     (`v_conviction_calibration`, `v_risk_rejections`, `v_performance_by_symbol`),
-    asi que la consola y la web no pueden acabar contando cosas distintas: cada
-    numero tiene una sola definicion, y esta en el esquema.
+    so the console and the web cannot end up telling different stories: each
+    number has one single definition, and it is in the schema.
     """
     curva = db.query(
         "select as_of, equity, cash, positions_value, open_positions, day_pnl_pct "
@@ -637,7 +639,7 @@ def analytics(db: Database, portfolio_id: str) -> dict[str, Any]:
         (portfolio_id,),
     )
     return {
-        "equity_curve": [{**fila, "drawdown_pct": dd} for fila, dd in
+        "equity_curve": [{**row, "drawdown_pct": dd} for row, dd in
                          zip(curva, _drawdown_series(curva))],
         "calibration": db.query(
             "select conviction_bucket, trades, avg_pnl, win_rate_pct "
@@ -669,20 +671,20 @@ def analytics(db: Database, portfolio_id: str) -> dict[str, Any]:
 
 
 def _drawdown_series(curva: list[dict[str, Any]]) -> list[float]:
-    """Caida desde el maximo previo, punto a punto.
+    """Drop from the previous peak, point by point.
 
-    Se calcula aqui y no en el navegador para que la grafica y el `max_drawdown`
-    de `run.py report` no puedan discrepar: es la misma definicion que
-    `dashboard._max_drawdown_pct`, y tenerla en dos lenguajes seria tenerla dos
-    veces.
+    It is computed here and not in the browser so the chart and `run.py report`'s
+    `max_drawdown` cannot disagree: it is the same definition as
+    `dashboard._max_drawdown_pct`, and having it in two languages would be having
+    it twice.
     """
     pico: float | None = None
-    salida: list[float] = []
-    for fila in curva:
-        equity = fila.get("equity")
+    output: list[float] = []
+    for row in curva:
+        equity = row.get("equity")
         if not equity:
-            salida.append(0.0)
+            output.append(0.0)
             continue
         pico = equity if pico is None else max(pico, equity)
-        salida.append(round((equity / pico - 1) * 100, 2) if pico > 0 else 0.0)
-    return salida
+        output.append(round((equity / pico - 1) * 100, 2) if pico > 0 else 0.0)
+    return output

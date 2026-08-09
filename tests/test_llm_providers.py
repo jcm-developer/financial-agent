@@ -1,13 +1,14 @@
-"""F6.6 y F6.7: proveedor de modelo y clave de API por perfil.
+"""F6.6 and F6.7: model provider and API key per profile.
 
-Nada de esto habla con la red: se prueban la tabla de proveedores, la resolucion
-de credenciales y el enmascarado. Lo que importa aqui son tres cosas que fallarian
-en silencio o a la hora mas inoportuna:
+None of this talks to the network: what gets tested is the provider table, the
+resolution of credentials and the masking. What matters here are three things
+that would fail silently or at the most inopportune moment:
 
-  * un proveedor sin implementar tiene que decir "aun no", no "desconocido",
-  * la clave de NIM **no** debe usarse contra OpenAI: eso no falla al resolver,
-    falla a mitad del ciclo con un 401 que nadie relaciona con el perfil,
-  * la clave no debe aparecer entera en ninguna salida.
+  * an unimplemented provider has to say "not yet", not "unknown",
+  * the NIM key must **not** be used against OpenAI: that does not fail at
+    resolution, it fails halfway through the cycle with a 401 nobody relates to
+    the profile,
+  * the key must not appear whole in any output.
 """
 
 from __future__ import annotations
@@ -37,34 +38,34 @@ def perfil(db):
 # -- Tabla de proveedores ----------------------------------------------------
 
 
-def test_los_dos_proveedores_implementados():
+def test_the_two_implemented_providers():
     assert set(PROVIDERS) == {"nvidia", "openai"}
 
 
-def test_nvidia_es_el_valor_por_defecto():
+def test_nvidia_is_the_default():
     assert resolve_provider("").name == "nvidia"
 
 
-def test_el_nombre_se_normaliza():
+def test_the_name_is_normalised():
     assert resolve_provider("  OpenAI  ").name == "openai"
 
 
-def test_anthropic_dice_que_todavia_no():
-    """El esquema admite 'anthropic' desde F1.2, pero no esta implementado.
+def test_anthropic_says_not_yet():
+    """The schema has admitted 'anthropic' since F1.2, but it is not implemented.
 
-    Distinguir "aun no" de "no existe" importa: el primero es una tarea
-    pendiente (F9.1), el segundo seria una errata.
+    Telling "not yet" from "does not exist" matters: the first is a pending task
+    (F9.1), the second would be a typo.
     """
     with pytest.raises(LLMError, match="no esta implementado todavia"):
         resolve_provider("anthropic")
 
 
-def test_un_proveedor_inventado_se_rechaza():
+def test_a_made_up_provider_is_refused():
     with pytest.raises(LLMError, match="desconocido"):
         resolve_provider("gemini")
 
 
-def test_cada_proveedor_trae_su_url():
+def test_each_provider_brings_its_own_url():
     assert "nvidia.com" in PROVIDERS["nvidia"].default_base_url
     assert "openai.com" in PROVIDERS["openai"].default_base_url
 
@@ -72,13 +73,13 @@ def test_cada_proveedor_trae_su_url():
 # -- Cliente -----------------------------------------------------------------
 
 
-def test_el_cliente_usa_la_url_del_proveedor():
+def test_the_client_uses_the_providers_url():
     with LLMClient(api_key="k", provider="openai", model="gpt-x") as client:
         assert str(client._client.base_url).startswith("https://api.openai.com")
 
 
-def test_una_url_explicita_pisa_la_del_proveedor():
-    """Hace falta para apuntar a un proxy o a un despliegue propio."""
+def test_an_explicit_url_overrides_the_providers():
+    """Needed to point at a proxy or at a deployment of your own."""
     with LLMClient(
         api_key="k", provider="openai", base_url="http://localhost:8080/v1",
         model="m",
@@ -86,13 +87,13 @@ def test_una_url_explicita_pisa_la_del_proveedor():
         assert "localhost:8080" in str(client._client.base_url)
 
 
-def test_sin_clave_el_cliente_no_se_construye():
-    """Mejor aqui que en la primera llamada, con el ciclo ya abierto."""
+def test_with_no_key_the_client_is_not_built():
+    """Better here than on the first call, with the cycle already open."""
     with pytest.raises(LLMError, match="Falta la clave"):
         LLMClient(api_key="", provider="openai", model="m")
 
 
-def test_el_error_nombra_el_proveedor():
+def test_the_error_names_the_provider():
     with pytest.raises(LLMError, match="OpenAI"):
         LLMClient(api_key="", provider="openai", model="m")
 
@@ -100,7 +101,7 @@ def test_el_error_nombra_el_proveedor():
 # -- Clave por perfil (F6.7) -------------------------------------------------
 
 
-def test_nvidia_cae_al_entorno_si_el_perfil_no_trae_clave(db, perfil):
+def test_nvidia_falls_back_to_the_environment_when_the_profile_has_no_key(db, perfil):
     """Compatibilidad: quien ya tenia NVIDIA_API_KEY sigue funcionando."""
     settings = resolve_settings(db, perfil, infra=INFRA)
 
@@ -108,7 +109,7 @@ def test_nvidia_cae_al_entorno_si_el_perfil_no_trae_clave(db, perfil):
     assert settings.model_api_key == "nvapi-del-entorno"
 
 
-def test_la_clave_del_perfil_manda_sobre_la_del_entorno(db, perfil):
+def test_the_profiles_key_wins_over_the_environments(db, perfil):
     db.update_settings(perfil, {"llm_api_key": "nvapi-del-perfil"})
 
     settings = resolve_settings(db, perfil, infra=INFRA)
@@ -116,12 +117,12 @@ def test_la_clave_del_perfil_manda_sobre_la_del_entorno(db, perfil):
     assert settings.model_api_key == "nvapi-del-perfil"
 
 
-def test_openai_sin_clave_de_perfil_se_rechaza(db, perfil):
-    """La clave de NIM no vale para OpenAI.
+def test_openai_without_a_profile_key_is_refused(db, perfil):
+    """The NIM key is no good for OpenAI.
 
-    Si se aceptara el respaldo del entorno, el fallo llegaria como un 401 dentro
-    del primer analisis del ciclo, con filas ya escritas y sin pista de que el
-    problema era el perfil.
+    If the environment fallback were accepted, the failure would arrive as a 401
+    inside the cycle's first analysis, with rows already written and no clue that
+    the problem was the profile.
     """
     db.update_settings(perfil, {"llm_provider": "openai"})
 
@@ -129,7 +130,7 @@ def test_openai_sin_clave_de_perfil_se_rechaza(db, perfil):
         resolve_settings(db, perfil, infra=INFRA)
 
 
-def test_openai_con_clave_de_perfil_resuelve(db, perfil):
+def test_openai_with_a_profile_key_resolves(db, perfil):
     db.update_settings(
         perfil, {"llm_provider": "openai", "llm_api_key": "sk-propia"}
     )
@@ -139,7 +140,7 @@ def test_openai_con_clave_de_perfil_resuelve(db, perfil):
     assert (settings.llm_provider, settings.model_api_key) == ("openai", "sk-propia")
 
 
-def test_la_url_del_entorno_solo_aplica_a_nvidia(db, perfil):
+def test_the_environments_url_only_applies_to_nvidia(db, perfil):
     """`NVIDIA_BASE_URL` apuntando a OpenAI seria un fallo dificil de ver."""
     db.update_settings(
         perfil, {"llm_provider": "openai", "llm_api_key": "sk-propia"}
@@ -147,16 +148,16 @@ def test_la_url_del_entorno_solo_aplica_a_nvidia(db, perfil):
 
     settings = resolve_settings(db, perfil, infra=INFRA)
 
-    assert settings.model_base_url == ""  # el cliente pone la de OpenAI
+    assert settings.model_base_url == ""  # the client supplies OpenAI's
 
 
-def test_la_url_del_entorno_si_aplica_a_nvidia(db, perfil):
+def test_the_environments_url_does_apply_to_nvidia(db, perfil):
     settings = resolve_settings(db, perfil, infra=INFRA)
 
     assert settings.model_base_url == "http://nim-stub"
 
 
-def test_un_proveedor_sin_implementar_falla_al_resolver_el_perfil(db, perfil):
+def test_an_unimplemented_provider_fails_while_resolving_the_profile(db, perfil):
     db.update_settings(perfil, {"llm_provider": "anthropic"})
 
     with pytest.raises(ConfigError, match="experimento-01"):
@@ -166,37 +167,37 @@ def test_un_proveedor_sin_implementar_falla_al_resolver_el_perfil(db, perfil):
 # -- Enmascarado -------------------------------------------------------------
 
 
-def test_la_clave_enmascarada_conserva_prefijo_y_cola():
+def test_the_masked_key_keeps_prefix_and_tail():
     assert mask_secret("nvapi-abcdefgh1234") == "nvapi-...1234"
 
 
-def test_el_enmascarado_es_ascii():
-    """Se imprime en la consola de Windows, que destroza el caracter de elipsis."""
+def test_the_masking_is_ascii():
+    """It is printed to the Windows console, which mangles the ellipsis character."""
     assert mask_secret("nvapi-abcdefgh1234").isascii()
 
 
-def test_se_puede_cambiar_el_texto_de_clave_vacia():
-    """Con NVIDIA, columna vacia = clave del entorno, no ausencia de clave."""
+def test_the_empty_key_text_can_be_changed():
+    """With NVIDIA, an empty column = key from the environment, not no key."""
     assert mask_secret("", empty="(del entorno)") == "(del entorno)"
 
 
-def test_el_enmascarado_no_deja_ver_el_cuerpo():
+def test_the_masking_does_not_reveal_the_body():
     enmascarada = mask_secret("sk-supersecretovalor9999")
     assert "supersecreto" not in enmascarada
 
 
-def test_sin_clave_se_dice_explicitamente():
-    """Vacio se veria como un fallo de pintado; "(sin clave)" es informacion."""
+def test_with_no_key_it_is_said_explicitly():
+    """Empty would look like a rendering fault; "(sin clave)" is information."""
     assert mask_secret(None) == "(sin clave)"
     assert mask_secret("   ") == "(sin clave)"
 
 
-def test_una_clave_corta_no_se_filtra_entera():
+def test_a_short_key_is_not_leaked_whole():
     assert "abc" not in mask_secret("abc")
 
 
-def test_el_snapshot_del_ciclo_no_lleva_la_clave_del_perfil(db, perfil):
-    """F6.3 + F6.7: la clave por perfil tampoco puede acabar en el historico."""
+def test_the_cycle_snapshot_does_not_carry_the_profiles_key(db, perfil):
+    """F6.3 + F6.7: the per-profile key must not end up in the history either."""
     db.update_settings(perfil, {"llm_api_key": "nvapi-secreto-del-perfil"})
     settings = resolve_settings(db, perfil, infra=INFRA)
 

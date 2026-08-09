@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F8.8 migra el frontend entero al inglés y cambia las rutas; quedan los comentarios y docstrings de Python)
+Última actualización: 2026-08-09 (F8.8 cerrada: el código está entero en inglés y las rutas cambiaron; el texto de pantalla sigue en español)
 
 ---
 
@@ -1242,7 +1242,7 @@ diez sesiones en silencio.
       universo— pero toca esquema, `db.py`, `profile_settings.py`, `config.py`, el screener
       y sus tests, así que conviene hacerlo de una vez y no a medias. FE.11 ya usa el
       nombre bueno en `Market.min_turnover`, así que hoy el código convive con los dos.
-- [ ] **F8.8** Pasar el código existente al inglés. La convención quedó escrita el
+- [x] **F8.8** Pasar el código existente al inglés (2026-08-09). La convención quedó escrita el
       2026-08-09 en [CLAUDE.md](CLAUDE.md) («El código va en inglés, lo que se lee en
       español») y en [DESIGN.md](DESIGN.md), y **rige para el código nuevo desde ya**; esta
       tarea es la deuda de lo que ya estaba escrito.
@@ -1275,10 +1275,22 @@ diez sesiones en silencio.
       (`simbolos`/`barras`/`caidos` → `symbols`/`bars`/`stale`), que son claves de JSON y
       por tanto código.
 
-      **Falta la otra mitad: los comentarios y docstrings de Python**, unos 1.100 bloques
-      repartidos por `src/`, `api/`, `tools/`, `run.py` y los tests, más los ~243 nombres de
-      test en español. Van traducidos `broker.py`, `models.py`, `universe_data.py`,
-      `bar_cache.py`, `indicators.py`, `risk.py` y `conftest.py`.
+      **Hecho también: Python entero.** Los ~740 bloques de comentario y docstring de
+      `src/`, `api/`, `tools/`, `run.py` y `tests/`, los 247 nombres de test en español y
+      35 identificadores sueltos que se habían colado (`mercado`, `filas`, `huecos`,
+      `MAX_UNIVERSO_SEGUIDO`…). Los docstrings alimentan el OpenAPI, así que hubo que
+      regenerar `app/src/api/types.ts`.
+
+      **Dos herramientas y un error del que aprender.** El renombrado se hizo tokenizando
+      con `tokenize` y sustituyendo solo tokens `NAME`, nunca por texto plano: un primer
+      intento con reemplazo directo convirtió «las barras» en «las bars», porque contiene
+      «as barras». La traducción de comentarios se aplicó por rango de líneas, y ahí se
+      coló el fallo de verdad: un rango mal calculado en `test_api.py` borró tres líneas de
+      código —dos `assert` incluidos— **sin romper ningún test**, porque lo que quedaba
+      seguía pasando. Se detectó comparando el árbol sintáctico de los 65 ficheros contra
+      `HEAD`, ignorando docstrings, y comprobando que la lista de sentencias fuera idéntica.
+      Esa comparación es la verificación que faltaba: los tests en verde no bastan cuando
+      lo que se borra son los propios tests.
 
       **Decisión sobre los literales:** los mensajes de log y de excepción **no se traducen**
       pese a lo que dice la tabla de CLAUDE.md, y no es un descuido. El log del ciclo se

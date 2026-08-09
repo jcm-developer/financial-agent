@@ -1,19 +1,19 @@
 #!/usr/bin/env python
-"""Planificador de ciclos. Es el proceso principal del contenedor `scheduler`.
+"""Cycle scheduler. It is the main process of the `scheduler` container.
 
-Duerme hasta la siguiente hora configurada y lanza un ciclo. Se implementa aqui
-en lugar de instalar cron en la imagen porque asi los logs salen por stdout (que
-es donde Docker los espera) y el contenedor no necesita un gestor de procesos.
+It sleeps until the next configured time and launches a cycle. It is implemented
+here instead of installing cron in the image because that way the logs come out
+on stdout (which is where Docker expects them) and the container needs no process
+manager.
 
-Configuracion por entorno:
+Configuration by environment:
 
-    CYCLE_TIMES    Horas de ejecucion, "HH:MM" separadas por comas. Def. "22:15"
-    CYCLE_TZ       Zona horaria de esas horas. Def. "Europe/Madrid"
-    RUN_ON_START   Si es true, ejecuta un ciclo al arrancar. Def. false
+    CYCLE_TIMES    Run times, "HH:MM" separated by commas. Default "22:15"
+    CYCLE_TZ       Time zone of those times. Default "Europe/Madrid"
+    RUN_ON_START   If true, runs a cycle at startup. Default false
 
-Cada ciclo se ejecuta como un subproceso aparte a proposito: si una llamada al
-modelo se cuelga o el proceso muere, el planificador sobrevive y la siguiente
-ejecucion sigue en pie.
+Each cycle runs as a separate subprocess on purpose: if a call to the model hangs
+or the process dies, the scheduler survives and the next run is still standing.
 """
 
 from __future__ import annotations
@@ -33,8 +33,8 @@ sys.path.insert(0, str(APP_DIR))
 
 log = logging.getLogger("scheduler")
 
-# Trozos de espera cortos para que el contenedor responda a `docker stop` en
-# segundos en lugar de esperar el timeout de SIGKILL.
+# Short waiting slices so the container answers `docker stop` in seconds instead
+# of waiting out the SIGKILL timeout.
 SLEEP_CHUNK_SECONDS = 30
 
 _stopping = False
@@ -78,12 +78,12 @@ def next_run(now: datetime, times: list[tuple[int, int]]) -> datetime:
             candidate = day.replace(hour=hour, minute=minute, second=0, microsecond=0)
             if candidate > now:
                 return candidate
-    # Inalcanzable: con dos dias de margen siempre hay una hora posterior.
+    # Unreachable: with two days of margin there is always a later time.
     raise RuntimeError("No se pudo calcular la siguiente ejecucion.")
 
 
 def sleep_until(target: datetime, timezone: ZoneInfo) -> bool:
-    """Espera hasta `target`. Devuelve False si llega una senal de parada."""
+    """Waits until `target`. Returns False if a stop signal arrives."""
     while not _stopping:
         remaining = (target - datetime.now(timezone)).total_seconds()
         if remaining <= 0:
@@ -103,8 +103,8 @@ def run_cycle() -> int:
     if result.returncode == 0:
         log.info("Ciclo completado en %.0fs.", elapsed)
     else:
-        # No se aborta: un ciclo fallido (red, cuota del modelo) no debe impedir
-        # el intento de manana.
+        # It is not aborted: a failed cycle (network, model quota) must not stop
+        # tomorrow's attempt.
         log.error(
             "El ciclo termino con codigo %d tras %.0fs. Revisa el log anterior "
             "y `python run.py report`.", result.returncode, elapsed,
@@ -113,11 +113,11 @@ def run_cycle() -> int:
 
 
 def validate_config() -> bool:
-    """Comprueba perfil y credenciales una vez, antes de dormir horas en balde.
+    """Checks profile and credentials once, before sleeping for hours in vain.
 
-    Se resuelve el perfil aqui aunque el ciclo lo vuelva a resolver en su
-    subproceso: descubrir que no hay ningun perfil activo a las 22:15, tras ocho
-    horas dormido, es la peor hora posible para enterarse.
+    The profile is resolved here even though the cycle resolves it again in its
+    subprocess: finding out there is no active profile at 22:15, after eight
+    hours asleep, is the worst possible time to learn it.
     """
     from src.config import ConfigError, Infra
 
@@ -149,8 +149,8 @@ def main() -> int:
     signal.signal(signal.SIGINT, _handle_signal)
 
     if not validate_config():
-        # Salida limpia: con `restart: on-failure` el contenedor no entra en
-        # bucle de reinicios por un .env a medio rellenar.
+        # Clean exit: with `restart: on-failure` the container does not enter a
+        # restart loop over a half-filled .env.
         return 0
 
     tz_name = (os.getenv("CYCLE_TZ") or "Europe/Madrid").strip()

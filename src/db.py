@@ -1,20 +1,19 @@
-"""Persistencia en SQLite local.
+"""Persistence in local SQLite.
 
-Un principio gobierna este modulo: **el broker es la fuente de verdad de lo que
-se posee, la base de datos es la fuente de verdad de por que se posee.**
-Cantidades y precios se leen siempre del broker; tesis, stops y objetivos viven
-aqui.
+One principle governs this module: **the broker is the source of truth for what
+is held, the database is the source of truth for why it is held.** Quantities and
+prices are always read from the broker; theses, stops and targets live here.
 
-De ahi la reconciliacion al inicio de cada ciclo: si un fallo dejo una orden
-ejecutada sin registrar, se detecta comparando ambas fuentes en lugar de confiar
-en que la escritura anterior salio bien.
+Hence the reconciliation at the start of each cycle: if a failure left an
+executed order unrecorded, it is detected by comparing both sources instead of
+trusting that the previous write went through.
 
-Notas de implementacion:
-  * `schema.sql` se ejecuta al abrir la conexion, asi que anadir una tabla alli
-    la crea en el siguiente arranque sin migraciones manuales.
-  * WAL activado: permite abrir la base con otro cliente (DB Browser, la CLI de
-    sqlite3) para consultar mientras el bot escribe.
-  * `foreign_keys` hay que activarlo por conexion; SQLite lo trae apagado.
+Implementation notes:
+  * `schema.sql` runs when the connection is opened, so adding a table there
+    creates it on the next startup with no manual migrations.
+  * WAL enabled: it allows opening the database with another client (DB Browser,
+    the sqlite3 CLI) to query while the bot writes.
+  * `foreign_keys` has to be enabled per connection; SQLite ships it off.
 """
 
 from __future__ import annotations
@@ -33,15 +32,16 @@ log = logging.getLogger(__name__)
 
 SCHEMA_PATH = Path(__file__).resolve().parent.parent / "schema.sql"
 
-# Columnas anadidas despues de la primera version del esquema.
+# Columns added after the schema's first version.
 #
-# `schema.sql` es idempotente para tablas, pero `create table if not exists` no
-# anade columnas a una tabla que ya existe: sobre una base viva, una columna
-# nueva en el CREATE TABLE simplemente no aparece. Aqui van esas columnas con su
-# definicion **identica** a la de `schema.sql`, y `_add_missing_columns` las
-# inserta con ALTER TABLE cuando faltan.
+# `schema.sql` is idempotent for tables, but `create table if not exists` does
+# not add columns to a table that already exists: over a live database, a new
+# column in the CREATE TABLE simply does not appear. Those columns go here with a
+# definition **identical** to the one in `schema.sql`, and `_add_missing_columns`
+# inserts them with ALTER TABLE when they are missing.
 #
-# En una base recien creada esto no hace nada: el CREATE TABLE ya las trajo.
+# On a freshly created database this does nothing: the CREATE TABLE already
+# brought them.
 ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "agent_settings": {
         "market": "text not null default 'us' check (market in ('us', 'eu'))",
@@ -53,15 +53,15 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "skip_when_market_closed": "integer not null default 1",
     },
     "ingest_runs": {
-        # Sin CHECK a proposito: SQLite no sabe anadir una restriccion con ALTER
-        # TABLE, asi que exigirla aqui obligaria a recrear la tabla sobre una base
-        # viva. El CHECK esta en `schema.sql` para las bases nuevas y quien
-        # escribe es solo `start_ingest_run`.
+        # Deliberately without a CHECK: SQLite cannot add a constraint with ALTER
+        # TABLE, so demanding one here would force recreating the table over a
+        # live database. The CHECK is in `schema.sql` for new databases and the
+        # only writer is `start_ingest_run`.
         "kind": "text not null default 'tick'",
     },
     "cycles": {
-        # F6.9. Con `default 0` los ciclos anteriores a la columna quedan como
-        # "ninguna llamada", que es lo correcto: de ellos no se sabe.
+        # F6.9. With `default 0` the cycles predating the column come out as "no
+        # calls", which is right: nothing is known about them.
         "analyst_calls": "integer not null default 0",
         "analyst_failures": "integer not null default 0",
     },
@@ -85,20 +85,21 @@ def _dumps(value: Any) -> str:
 
 
 def _text(value: Any) -> str | None:
-    """Valor legible para el historial de parametros. None se conserva.
+    """Readable value for the settings history. None is preserved.
 
-    El historial se lee a ojo, asi que se guarda el texto y no un JSON: interesa
-    ver "5 -> 8", no '{"v": 8}'.
+    The history is read by eye, so the text is stored and not JSON: what matters
+    is seeing "5 -> 8", not '{"v": 8}'.
     """
     return None if value is None else str(value)
 
 
 class Database:
     def __init__(self, *, path: str | Path, read_only: bool = False) -> None:
-        """`read_only=True` abre la base sin permiso de escritura.
+        """`read_only=True` opens the database with no write permission.
 
-        Lo usa el dashboard: asi la interfaz web no puede alterar el historico ni
-        por un fallo de codigo, en lugar de confiar en que solo hace SELECT.
+        The dashboard uses it: that way the web interface cannot alter the
+        history even through a coding error, instead of trusting that it only
+        does SELECTs.
         """
         self.path = Path(path).expanduser().resolve()
         self.read_only = read_only
@@ -145,12 +146,12 @@ class Database:
         self._add_missing_columns()
 
     def _add_missing_columns(self) -> None:
-        """Anade con ALTER TABLE las columnas de `ADDED_COLUMNS` que falten.
+        """Adds with ALTER TABLE the columns of `ADDED_COLUMNS` that are missing.
 
-        Se ejecuta en cada arranque y normalmente no hace nada. Es lo que
-        completa la promesa de "schema.sql hace de migracion": sin esto, anadir
-        una columna funcionaria en una base nueva y fallaria en la que ya esta
-        corriendo, que es el peor reparto posible.
+        It runs on every startup and normally does nothing. It is what completes
+        the promise that "schema.sql acts as the migration": without it, adding a
+        column would work on a new database and fail on the one already running,
+        which is the worst possible split.
         """
         for table, columns in ADDED_COLUMNS.items():
             existing = self._columns(table)
@@ -198,14 +199,14 @@ class Database:
         self._execute(f"update {table} set {assignments} where id = :__id", params)
 
     def query(self, sql: str, params: tuple = ()) -> list[dict[str, Any]]:
-        """Consulta libre de lectura. La usan el dashboard y el comando report."""
+        """Free-form read query. The dashboard and the report command use it."""
         return [dict(row) for row in self._execute(sql, params).fetchall()]
 
     def execute(self, sql: str, params: tuple = ()) -> int:
-        """Escritura libre, para herramientas y mantenimiento (`tools/`).
+        """Free-form write, for tools and maintenance (`tools/`).
 
-        El ciclo no la usa: pasa por los metodos con nombre, que garantizan que
-        cada fila lleva sus campos obligatorios. Devuelve las filas afectadas.
+        The cycle does not use it: it goes through the named methods, which
+        guarantee each row carries its mandatory fields. Returns the affected rows.
         """
         if self.read_only:
             raise DatabaseError("La base esta abierta en solo lectura.")
@@ -222,11 +223,11 @@ class Database:
             ) from exc
 
     def _columns(self, table: str) -> set[str]:
-        """Columnas reales de una tabla.
+        """A table's real columns.
 
-        Se usa para validar los nombres de campo que llegan de fuera antes de
-        interpolarlos en el SQL: los valores van parametrizados, pero los nombres
-        de columna no pueden ir en un placeholder.
+        Used to validate the field names arriving from outside before
+        interpolating them into the SQL: the values are parameterised, but column
+        names cannot go in a placeholder.
         """
         return {row["name"] for row in self.query(f"pragma table_info({table})")}
 
@@ -235,11 +236,11 @@ class Database:
     def create_profile(
         self, *, name: str, description: str = "", settings: dict[str, Any] | None = None
     ) -> str:
-        """Crea un perfil con sus parametros por defecto y su cartera.
+        """Creates a profile with its default settings and its book.
 
-        Las tres cosas se crean juntas porque un perfil sin parametros o sin
-        cartera no es utilizable, y dejarlo a medias solo daria errores mas
-        adelante y mas lejos del origen.
+        The three are created together because a profile with no settings or no
+        book is unusable, and leaving it half-made would only produce errors
+        later and further from their origin.
         """
         name = name.strip()
         if not name:
@@ -270,7 +271,7 @@ class Database:
             self.update_settings(profile_id, settings, source="create")
 
         current = self.get_settings(profile_id)
-        # Siempre paper: la unica implementacion de broker es el simulador.
+        # Always paper: the only broker implementation is the simulator.
         self.ensure_portfolio(
             name=name,
             mode="paper",
@@ -310,11 +311,11 @@ class Database:
         self, profile_id: str, *, name: str | None = None,
         description: str | None = None,
     ) -> list[str]:
-        """Renombra o redescribe un perfil. Devuelve lo que cambio.
+        """Renames or redescribes a profile. Returns what changed.
 
-        Existe para que la API no tenga que construir el UPDATE a mano: la
-        conexion acotada de `api/guard.py` niega el SQL libre a proposito, asi
-        que toda escritura pasa por un metodo con nombre donde se ve que toca.
+        It exists so the API does not have to build the UPDATE by hand: the fenced
+        connection of `api/guard.py` denies free-form SQL on purpose, so every
+        write goes through a named method where what it touches can be seen.
         """
         payload: dict[str, Any] = {}
         if name is not None:
@@ -340,14 +341,14 @@ class Database:
         self._update("profiles", profile_id, payload)
 
     def delete_profile(self, profile_id: str) -> None:
-        """Borra el perfil y, en cascada, su cartera y todo su historico.
+        """Deletes the profile and, in cascade, its book and all of its history.
 
-        El libro del broker simulado hay que borrarlo a mano: `sim_accounts.id`
-        **es** el portfolio_id, pero sin `references`, asi que la cascada de
-        `portfolios` no lo alcanza. Sin esta linea, borrar un perfil dejaba
-        atras su efectivo, sus posiciones simuladas y sus ejecuciones —
-        `sim_positions` y `sim_fills` si cuelgan de `sim_accounts`— y el fichero
-        crecia con contabilidad de experimentos que ya no existen.
+        The simulated broker's ledger has to be deleted by hand: `sim_accounts.id`
+        **is** the portfolio_id, but without a `references`, so `portfolios`'s
+        cascade does not reach it. Without this line, deleting a profile left
+        behind its cash, its simulated positions and its fills —`sim_positions`
+        and `sim_fills` do hang off `sim_accounts`— and the file grew with the
+        bookkeeping of experiments that no longer exist.
         """
         self._execute(
             "delete from sim_accounts where id in "
@@ -369,11 +370,11 @@ class Database:
     def update_settings(
         self, profile_id: str, changes: dict[str, Any], *, source: str = "api"
     ) -> list[str]:
-        """Actualiza parametros y deja constancia de cada cambio.
+        """Updates settings and leaves a record of each change.
 
-        Devuelve los campos que cambiaron de verdad. Los que llegan con el mismo
-        valor que ya tenian no se registran: el historial esta para explicar un
-        cambio de comportamiento, y una fila que no cambia nada solo estorba.
+        Returns the fields that genuinely changed. The ones arriving with the same
+        value they already had are not recorded: the history is there to explain a
+        change of behaviour, and a row that changes nothing only gets in the way.
         """
         if not changes:
             return []
@@ -450,11 +451,11 @@ class Database:
         ]
 
     def active_universe(self) -> list[str]:
-        """Simbolos que el ingestor debe seguir cada minuto.
+        """Symbols the ingestor must follow every minute.
 
-        Es la union de los universos de los perfiles activos y de los simbolos
-        con posicion abierta. Lo segundo importa: una posicion no deja de
-        necesitar precio porque su simbolo salga del universo del screener.
+        It is the union of the active profiles' universes and of the symbols with
+        an open position. The second matters: a position does not stop needing a
+        price because its symbol drops out of the screener's universe.
         """
         rows = self.query(
             "select symbol from profile_universe u "
@@ -466,18 +467,18 @@ class Database:
         return sorted({row["symbol"] for row in rows})
 
     def active_universe_by_market(self) -> dict[str, list[str]]:
-        """Lo mismo que `active_universe`, pero repartido por bolsa.
+        """The same as `active_universe`, but split by exchange.
 
-        Es lo que el ingestor necesita desde que el mercado es un parametro del
-        perfil: pedir un simbolo europeo a las 16:00 CET tiene sentido y pedirlo
-        a las 22:00 no, y la respuesta depende del simbolo, no del reloj del
-        proceso.
+        It is what the ingestor needs now that the market is a parameter of the
+        profile: asking for a European symbol at 16:00 CET makes sense and asking
+        for it at 22:00 does not, and the answer depends on the symbol, not on the
+        process's clock.
 
-        Los simbolos de posiciones abiertas cuya cartera no tiene perfil
-        (`portfolios.profile_id` nace NULL en las carteras anteriores a F1.4) se
-        clasifican por el sufijo de Yahoo. Es adivinar, si; la alternativa era
-        descartarlos, y una posicion abierta sin precio es peor que una
-        clasificada de mas.
+        Symbols of open positions whose book has no profile
+        (`portfolios.profile_id` is born NULL in books predating F1.4) are
+        classified by their Yahoo suffix. It is guesswork, yes; the alternative
+        was discarding them, and an open position with no price is worse than one
+        classified too generously.
         """
         from . import market_calendar
 
@@ -519,7 +520,7 @@ class Database:
         self, *, name: str, mode: str, initial_budget: float,
         profile_id: str | None = None,
     ) -> str:
-        """Devuelve el id de la cartera, creandola la primera vez."""
+        """Returns the book's id, creating it the first time."""
         row = self._execute(
             "select id, mode from portfolios where name = ? limit 1", (name,)
         ).fetchone()
@@ -563,11 +564,12 @@ class Database:
         llm_model: str,
         settings: dict[str, Any] | None = None,
     ) -> str:
-        """`settings` es la copia de los parametros con los que corre el ciclo.
+        """`settings` is the copy of the parameters the cycle runs with.
 
-        Opcional en la firma para no obligar a los tests que no la miran, pero el
-        ciclo real siempre la manda: es lo que permite leer una decision vieja con
-        la configuracion que la produjo y no con la de hoy (F6.3).
+        Optional in the signature so as not to burden the tests that do not look
+        at it, but the real cycle always sends it: it is what allows an old
+        decision to be read with the configuration that produced it and not with
+        today's (F6.3).
         """
         cycle_id = _new_id()
         self._insert(
@@ -588,11 +590,11 @@ class Database:
         return cycle_id
 
     def find_running_cycle(self, portfolio_id: str) -> dict[str, Any] | None:
-        """Ciclo en estado 'running' de esta cartera, si lo hay.
+        """This book's cycle in 'running' state, if there is one.
 
-        Sirve para impedir que dos ciclos operen a la vez sobre la misma cartera:
-        se pisarian las posiciones y el efectivo, y dejarian un historico con
-        decisiones duplicadas imposible de interpretar.
+        It serves to stop two cycles trading at once over the same book: they
+        would step on each other's positions and cash, and leave a history with
+        duplicated decisions that cannot be interpreted.
         """
         rows = self._execute(
             "select id, started_at, llm_model from cycles "
@@ -603,11 +605,11 @@ class Database:
         return dict(rows[0]) if rows else None
 
     def abandon_cycle(self, cycle_id: str, reason: str) -> None:
-        """Marca como fallido un ciclo que quedo colgado en 'running'.
+        """Marks as failed a cycle left hanging in 'running'.
 
-        Un proceso que muere a media ejecucion (contenedor reiniciado, Docker
-        caido) deja su fila en 'running' para siempre. Sin esto, ese cadaver
-        bloquearia todos los ciclos posteriores.
+        A process that dies mid-run (container restarted, Docker down) leaves its
+        row in 'running' forever. Without this, that corpse would block every
+        later cycle.
         """
         self._update(
             "cycles",
@@ -631,9 +633,9 @@ class Database:
             payload["equity_end"] = round(equity_end, 2)
         if error:
             payload["error"] = error[:4000]
-        # Se escriben incluso valiendo 0: "se pregunto 20 veces y respondio a
-        # todas" es informacion, y distinguirla de "no se sabe" es justo el
-        # objetivo de F6.9.
+        # They are written even when they are 0: "it was asked 20 times and
+        # answered every one" is information, and telling it apart from "nothing
+        # is known" is precisely the point of F6.9.
         if analyst_calls is not None:
             payload["analyst_calls"] = int(analyst_calls)
         if analyst_failures is not None:
@@ -788,7 +790,7 @@ class Database:
     # -- Posiciones --------------------------------------------------------
 
     def get_open_positions(self, portfolio_id: str) -> dict[str, dict[str, Any]]:
-        """Posiciones abiertas indexadas por simbolo, con su tesis y niveles."""
+        """Open positions indexed by symbol, with their thesis and levels."""
         rows = self._execute(
             "select * from positions where portfolio_id = ? and status = 'open'",
             (portfolio_id,),
@@ -867,7 +869,7 @@ class Database:
     def sync_position_from_broker(
         self, position_id: str, *, qty: float, entry_price: float
     ) -> None:
-        """Alinea cantidad y precio medio con lo que dice el broker."""
+        """Aligns quantity and average price with what the broker says."""
         self._update(
             "positions",
             position_id,
@@ -908,7 +910,7 @@ class Database:
     # -- Datos de mercado en vivo (ingestor) -------------------------------
 
     def upsert_quotes(self, quotes: list[dict[str, Any]]) -> int:
-        """Ultimo precio de cada simbolo. Una fila por simbolo, se reemplaza."""
+        """Last price of each symbol. One row per symbol, replaced."""
         now = _now()
         return self._executemany(
             "insert or replace into quotes_live "
@@ -935,10 +937,10 @@ class Database:
         return {row["symbol"]: row for row in rows}
 
     def upsert_bars_1m(self, bars: list[dict[str, Any]]) -> int:
-        """Barras de un minuto.
+        """One-minute bars.
 
-        `insert or replace` y no `insert or ignore`: la barra del minuto en curso
-        cambia mientras el mercado sigue abierto, asi que hay que poder pisarla.
+        `insert or replace` and not `insert or ignore`: the current minute's bar
+        changes while the market is still open, so it has to be overwritable.
         """
         return self._executemany(
             "insert or replace into bars_1m "
@@ -953,13 +955,13 @@ class Database:
         )
 
     def bars_1m_timestamps(self, symbol: str, *, since: str) -> set[str]:
-        """Marcas de tiempo ya guardadas de un simbolo desde `since`.
+        """Timestamps already stored for a symbol since `since`.
 
-        Existe para el relleno de huecos (F2.10): el proveedor devuelve dias
-        enteros y sin esto habria que reescribirlos todos. Con el indice
-        `bars_1m (symbol, ts desc)` son unos pocos miles de filas por simbolo, y
-        se pide de una en una a proposito: un `in (...)` de 89 simbolos por 7 dias
-        traeria medio millon de filas a memoria de golpe.
+        It exists for the gap backfill (F2.10): the provider returns whole days
+        and without this they would all have to be rewritten. With the
+        `bars_1m (symbol, ts desc)` index it is a few thousand rows per symbol,
+        and it is asked for one at a time on purpose: an `in (...)` of 89 symbols
+        over 7 days would bring half a million rows into memory at once.
         """
         return {
             row["ts"]
@@ -993,12 +995,12 @@ class Database:
     def ingest_health(
         self, *, limit: int = 60, kind: str | None = None
     ) -> list[dict[str, Any]]:
-        """Ultimas pasadas del ingestor, para pintar el estado en la interfaz.
+        """The ingestor's latest runs, to paint the state in the interface.
 
-        `kind='tick'` deja fuera los rellenos de huecos (F2.10). Conviene
-        filtrarlos al mirar latencias: un backfill descarga varios dias de una
-        vez, asi que una sola de sus filas desplaza cualquier media de un minuto.
-        Por defecto no filtra, para que nada quede invisible por descuido.
+        `kind='tick'` leaves the gap backfills out (F2.10). They are worth
+        filtering when looking at latencies: a backfill downloads several days at
+        once, so a single one of its rows shifts any one-minute average. By
+        default it does not filter, so nothing goes invisible by oversight.
         """
         if kind is None:
             return self.query(
@@ -1010,11 +1012,11 @@ class Database:
         )
 
     def prune_bars_1m(self, *, keep_days: int) -> int:
-        """Borra barras de un minuto mas viejas que `keep_days`.
+        """Deletes one-minute bars older than `keep_days`.
 
-        No hay consolidacion a diario porque no hace falta: las barras diarias ya
-        las mantiene `bar_cache`, que es de donde el agente calcula indicadores.
-        Esto solo evita que el fichero crezca sin fin.
+        There is no daily consolidation because none is needed: the daily bars are
+        already maintained by `bar_cache`, which is where the agent computes
+        indicators from. This only stops the file growing without end.
         """
         if keep_days < 1:
             raise DatabaseError("keep_days debe ser al menos 1.")
@@ -1029,15 +1031,15 @@ class Database:
         portfolio_id: str,
         broker_positions: dict[str, BrokerPosition],
     ) -> ReconcileReport:
-        """Alinea el registro con la realidad del broker.
+        """Aligns the record with the broker's reality.
 
-        Tres casos:
-          * Registrada abierta pero ausente en el broker -> se cerro fuera del
-            bot (a mano, o un cierre cuyo registro fallo). Se marca cerrada.
-          * En el broker sin registro abierto -> huerfana. Se registra para que
-            vuelva a estar vigilada; el llamante le asigna un stop.
-          * En ambos con cantidad o precio distintos -> se copia el dato del
-            broker, que es el autoritativo.
+        Three cases:
+          * Recorded open but absent at the broker -> it was closed outside the
+            bot (by hand, or a close whose record failed). It is marked closed.
+          * At the broker with no open record -> orphan. It is recorded so it goes
+            back under watch; the caller assigns it a stop.
+          * In both with a different quantity or price -> the broker's datum is
+            copied, being the authoritative one.
         """
         tracked = self.get_open_positions(portfolio_id)
         report = ReconcileReport()

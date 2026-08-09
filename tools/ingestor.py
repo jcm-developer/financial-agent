@@ -1,45 +1,46 @@
 #!/usr/bin/env python
-"""Ingestor de precios: un tick por minuto mientras haya alguna bolsa abierta.
+"""Price ingestor: one tick per minute while any exchange is open.
 
-Es el proceso principal del contenedor `ingestor`. La logica vive en
-`src/ingest.py`; aqui solo esta el bucle, el reloj y el apagado limpio.
+It is the main process of the `ingestor` container. The logic lives in
+`src/ingest.py`; here there is only the loop, the clock and the clean shutdown.
 
-**Sigue varias bolsas a la vez.** Desde que el mercado es un parametro del perfil
-(`agent_settings.market`), dos perfiles activos pueden operar en Madrid y en
-Nueva York, cuyas sesiones se solapan solo tres horas y media. Cada tick pide
-unicamente los simbolos de las bolsas que estan **dentro de su ventana
-operativa** en ese instante: pedir un valor europeo a las 22:00 CET no da un
-error, da la barra rancia del cierre, que es peor porque parece un dato.
+**It follows several exchanges at once.** Now that the market is a parameter of
+the profile (`agent_settings.market`), two active profiles can trade in Madrid
+and in New York, whose sessions overlap for only three and a half hours. Each
+tick asks only for the symbols of the exchanges that are **inside their operating
+window** at that instant: asking for a European stock at 22:00 CET does not give
+an error, it gives the stale bar from the close, which is worse because it looks
+like a datum.
 
-La ventana no es la sesion. En la zona euro va de 09:15 a 17:45 frente a una
-sesion de 09:00 a 17:30: se dejan pasar los 15 primeros minutos, que son la
-resaca de la subasta de apertura, y se trabajan 15 despues del cierre, porque la
-ultima barra no aparece cuando suena la campana. Ver `Market` en
+The window is not the session. In the euro zone it runs 09:15 to 17:45 against a
+session of 09:00 to 17:30: the first 15 minutes are let go, being the hangover of
+the opening auction, and 15 minutes past the close are worked, because the last
+bar does not appear when the bell rings. See `Market` in
 `src/market_calendar.py`.
 
-Configuracion por entorno:
+Configuration by environment:
 
-    INGEST_ENABLED        false para apagarlo sin tocar el compose. Def. true
-    INGEST_REFRESH_MIN    cada cuantos minutos se relee el universo. Def. 5
-    INGEST_KEEP_DAYS      dias de barras de 1m que se conservan. Def. 90
-    INGEST_BACKFILL_DAYS  dias que revisa el relleno diario. 0 lo apaga. Def. 5
-    INGEST_MAX_FAILURES   fallos seguidos antes de gritar. Def. 5
-    INGEST_THREADS        descargar en paralelo. Def. false (ver src/ingest.py)
-    INGEST_OFFSET_SECONDS segundos tras el cambio de minuto. Def. 5
-    DB_PATH               ruta de la base
+    INGEST_ENABLED        false to switch it off without touching compose. Def. true
+    INGEST_REFRESH_MIN    how often the universe is re-read, in minutes. Def. 5
+    INGEST_KEEP_DAYS      days of 1m bars kept. Def. 90
+    INGEST_BACKFILL_DAYS  days the daily backfill reviews. 0 switches it off. Def. 5
+    INGEST_MAX_FAILURES   consecutive failures before shouting. Def. 5
+    INGEST_THREADS        download in parallel. Def. false (see src/ingest.py)
+    INGEST_OFFSET_SECONDS seconds after the minute rolls over. Def. 5
+    DB_PATH               path to the database
 
-Sobre el reloj: se despierta unos segundos *despues* del cambio de minuto, no
-justo en el, porque la barra de un minuto no esta disponible hasta que ese minuto
-ha terminado. Pedirla en el segundo 0 devuelve la del minuto anterior a medias.
+About the clock: it wakes up a few seconds *after* the minute rolls over, not
+right on it, because a one-minute bar is not available until that minute has
+ended. Asking for it at second 0 returns the previous minute's, half-formed.
 
-Con todas las bolsas cerradas no se pide nada: se duerme hasta la proxima
-apertura -la mas temprana de las que se siguen- en tramos cortos, para que
-`docker stop` responda en segundos en vez de esperar al SIGKILL.
+With every exchange closed nothing is requested: it sleeps until the next open
+-the earliest of the ones being followed- in short slices, so `docker stop`
+answers in seconds instead of waiting for the SIGKILL.
 
-Antes de esa siesta corre el mantenimiento diario, una vez al dia: **relleno de
-huecos** y **poda**. En ese orden, y ahi y no al arrancar, porque es el unico
-momento en que la sesion ya esta completa en Yahoo y pedir varios dias de golpe
-no compite con los ticks del minuto.
+Before that nap it runs the daily maintenance, once a day: **gap backfill** and
+**pruning**. In that order, and there and not at startup, because it is the only
+moment when the session is already complete at Yahoo and asking for several days
+at once does not compete with the minute's ticks.
 """
 
 from __future__ import annotations
@@ -97,7 +98,7 @@ def _get_bool(key: str, default: bool) -> bool:
 
 
 def sleep_until(target: datetime) -> bool:
-    """Espera hasta `target`. Devuelve False si llega una senal de parada."""
+    """Waits until `target`. Returns False if a stop signal arrives."""
     while not _stopping:
         restante = (target - datetime.now(timezone.utc)).total_seconds()
         if restante <= 0:
@@ -128,11 +129,11 @@ def _describe_universe(universos: dict[str, list[str]]) -> str:
 
 
 def podar(db: Database, keep_days: int) -> None:
-    """Poda diaria de barras de 1 minuto.
+    """Daily pruning of 1-minute bars.
 
-    Sin esto el fichero crece para siempre: ~19.500 filas al dia con 50 simbolos.
-    Las barras diarias no se pierden -- viven en `bar_cache`, que es de donde el
-    agente calcula indicadores.
+    Without it the file grows forever: ~19,500 rows a day with 50 symbols. The
+    daily bars are not lost -- they live in `bar_cache`, which is where the agent
+    computes indicators from.
     """
     try:
         borradas = db.prune_bars_1m(keep_days=keep_days)
@@ -143,19 +144,20 @@ def podar(db: Database, keep_days: int) -> None:
 
 
 def rellenar(db: Database, provider: YahooQuotes, symbols: list[str], days: int) -> None:
-    """Relleno diario de huecos (F2.10). Corre al cerrar, con la poda.
+    """Daily gap backfill (F2.10). It runs at the close, with the pruning.
 
-    Al cierre y no al arrancar: es cuando la sesion ya esta completa en Yahoo y
-    cuando pedir 89 simbolos por varios dias no compite con los ticks del minuto.
+    At the close and not at startup: that is when the session is already complete
+    at Yahoo and when asking for 89 symbols over several days does not compete
+    with the minute's ticks.
 
-    Lo que arregla es la **sesion perdida entera**. Un hueco dentro de la sesion
-    ya se cura solo -- cada tick pide el dia completo --, pero si el proceso murio
-    el viernes por la tarde, el lunes ningun tick vuelve a mirar el viernes.
+    What it fixes is the **whole lost session**. A gap within the session already
+    heals by itself -- each tick asks for the complete day -- but if the process
+    died on Friday afternoon, on Monday no tick ever looks back at Friday.
     """
     if days < 1 or not symbols:
         return
-    # Con 89 simbolos son ~4-5 minutos de descarga: sin poder abandonar, un
-    # `docker stop` a esta hora esperaria todo eso y acabaria en SIGKILL.
+    # With 89 symbols that is ~4-5 minutes of downloading: without being able to
+    # abandon, a `docker stop` at this hour would wait it all out and end in SIGKILL.
     resultado = backfill_gaps(
         db, provider, symbols, days=days, should_stop=lambda: _stopping
     )
@@ -167,22 +169,22 @@ def rellenar(db: Database, provider: YahooQuotes, symbols: list[str], days: int)
         )
         return
     if not resultado.ok:
-        # Aviso y no error: manana se vuelve a intentar, y la ventana de 1 minuto
-        # de Yahoo son 30 dias, asi que hay margen de sobra para recuperarlo.
+        # A warning and not an error: tomorrow it tries again, and Yahoo's
+        # 1-minute window is 30 days, so there is plenty of room to recover it.
         log.warning("Relleno de huecos fallido, se reintentara manana: %s",
                     resultado.error)
         return
-    if not resultado.huecos:
+    if not resultado.gaps:
         log.info(
             "Relleno: sin huecos en los ultimos %d dias (%d simbolos, %d ms).",
             resultado.dias, resultado.con_datos, resultado.latencia_ms,
         )
         return
-    peores = sorted(resultado.huecos.items(), key=lambda kv: -kv[1])[:5]
+    peores = sorted(resultado.gaps.items(), key=lambda kv: -kv[1])[:5]
     log.info(
         "Relleno: %d barras recuperadas en %d simbolos de los ultimos %d dias. "
         "Mayores huecos: %s",
-        sum(resultado.huecos.values()), len(resultado.huecos), resultado.dias,
+        sum(resultado.gaps.values()), len(resultado.gaps), resultado.dias,
         ", ".join(f"{s} ({n})" for s, n in peores),
     )
 
@@ -216,8 +218,8 @@ def main() -> int:
         "relleno %d dias, paralelo=%s",
         db_path, refresh_min, keep_days, backfill_days, threads,
     )
-    for mercado in market_calendar.MARKETS.values():
-        log.info("Mercado %s: %s", mercado.code, market_calendar.describe(market=mercado))
+    for market in market_calendar.MARKETS.values():
+        log.info("Mercado %s: %s", market.code, market_calendar.describe(market=market))
 
     universos: dict[str, list[str]] = {}
     symbols_edad = 10**9        # fuerza relectura en el primer tick
@@ -231,10 +233,10 @@ def main() -> int:
         while not _stopping:
             if symbols_edad >= refresh_min:
                 nuevos = db.active_universe_by_market()
-                # Un codigo de mercado que no este en el registro se descarta con
-                # un aviso en lugar de reventar: el CHECK del esquema deberia
-                # impedirlo, pero esto es un demonio que corre semanas y morir
-                # por una fila rara dejaria sin precios a los perfiles sanos.
+                # A market code that is not in the registry is discarded with a
+                # warning instead of blowing up: the schema's CHECK should prevent
+                # it, but this is a daemon that runs for weeks and dying over one
+                # odd row would leave the healthy profiles with no prices.
                 desconocidos = set(nuevos) - set(market_calendar.MARKETS)
                 for code in sorted(desconocidos):
                     log.error(
@@ -248,35 +250,35 @@ def main() -> int:
                 symbols_edad = 0
 
             if not universos:
-                # Sin perfiles activos no hay nada que seguir. No es un error, y
-                # no se duerme hasta ninguna apertura: sin universo tampoco se
-                # sabe que bolsas mirar.
+                # With no active profiles there is nothing to follow. It is not an
+                # error, and it does not sleep until any open: with no universe
+                # there is no knowing which exchanges to watch either.
                 if not sleep_until(next_tick(offset)):
                     break
                 symbols_edad += 1
                 continue
 
-            # `is_operating`, no `is_session_open`: la ventana empieza despues de
-            # la apertura y termina despues del cierre. Los ultimos minutos son
-            # los que capturan la barra final, que no llega en el instante en que
-            # suena la campana.
+            # `is_operating`, not `is_session_open`: the window starts after the
+            # open and ends after the close. The last minutes are the ones that
+            # capture the final bar, which does not arrive at the instant the bell
+            # rings.
             abiertos = [
                 code for code in universos
                 if market_calendar.is_operating(market=code)
             ]
 
             if not abiertos:
-                # Aprovecha que no hay nada que hacer para el mantenimiento
-                # diario: primero recuperar lo que falte, luego tirar lo viejo.
+                # It takes advantage of having nothing to do for the daily
+                # maintenance: first recover what is missing, then throw out the old.
                 hoy = datetime.now(timezone.utc).date().isoformat()
                 if ultimo_mantenimiento != hoy:
                     todos = sorted({s for ss in universos.values() for s in ss})
                     rellenar(db, provider, todos, backfill_days)
                     podar(db, keep_days)
                     ultimo_mantenimiento = hoy
-                    # El relleno ha podido escribir barras posteriores a lo que
-                    # habia: sin releer, el primer tick de manana las daria por
-                    # nuevas y las reescribiria enteras.
+                    # The backfill may have written bars later than what was
+                    # there: without re-reading, tomorrow's first tick would take
+                    # them for new and rewrite them whole.
                     last_ts = load_last_timestamps(db)
 
                 apertura = min(
@@ -292,8 +294,8 @@ def main() -> int:
                 )
                 if not sleep_until(apertura):
                     break
-                # Se relee el universo al despertar: entre medias han podido
-                # activarse o pausarse perfiles.
+                # The universe is re-read on waking: profiles may have been
+                # activated or paused in the meantime.
                 symbols_edad = 10**9
                 continue
 
@@ -309,10 +311,10 @@ def main() -> int:
                     resultado.con_datos, resultado.pedidos, resultado.barras_escritas,
                     resultado.latencia_descarga_ms, resultado.latencia_escritura_ms,
                 )
-                if resultado.vacios:
+                if resultado.empty:
                     log.warning(
-                        "Sin datos: %s", ", ".join(resultado.vacios[:10])
-                        + ("..." if len(resultado.vacios) > 10 else ""),
+                        "Sin datos: %s", ", ".join(resultado.empty[:10])
+                        + ("..." if len(resultado.empty) > 10 else ""),
                     )
             else:
                 fallos_seguidos += 1

@@ -1,10 +1,10 @@
-"""Tests de `should_run`: cuando merece la pena gastar un ciclo.
+"""Tests of `should_run`: when a cycle is worth spending.
 
-Este modulo existe por un fallo concreto: la primera version exigia mercado
-abierto, y con barras diarias eso descartaba justo el mejor momento del dia —el
-rato posterior al cierre, cuando la sesion ya esta completa—. Un planificador
-puesto a las 22:15 de Madrid (16:15 ET) se saltaba TODOS los ciclos y el agente no
-volvia a operar. Los casos de abajo fijan la semantica correcta.
+This module exists because of a concrete bug: the first version demanded an open
+market, and with daily bars that ruled out precisely the best moment of the day
+—the stretch after the close, when the session is already complete—. A scheduler
+set to 22:15 Madrid time (16:15 ET) skipped EVERY cycle and the agent never
+traded again. The cases below pin down the correct semantics.
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ def et(year, month, day, hour, minute=0):
 # -- Barras diarias ----------------------------------------------------------
 
 def test_daily_runs_right_after_the_close():
-    """El caso que estaba roto: 16:15 ET es el momento natural para barras
-    diarias, con la sesion recien terminada."""
+    """The case that was broken: 16:15 ET is the natural moment for daily bars,
+    with the session just finished."""
     allowed, reason = mc.should_run("1d", et(2026, 8, 10, 16, 15))
 
     assert allowed
@@ -35,8 +35,8 @@ def test_daily_runs_right_after_the_close():
 
 
 def test_the_users_scheduled_time_actually_runs():
-    """22:15 en Madrid son 16:15 ET. Es la configuracion por defecto del
-    planificador, asi que tiene que ejecutarse."""
+    """22:15 in Madrid is 16:15 ET. It is the scheduler's default configuration,
+    so it has to run."""
     madrid_2215 = datetime(2026, 8, 10, 22, 15, tzinfo=MADRID)
 
     allowed, _ = mc.should_run("1d", madrid_2215)
@@ -51,8 +51,8 @@ def test_daily_runs_during_the_session_too():
 
 
 def test_daily_runs_before_the_open():
-    """A las 6 de la manana la barra de ayer ya esta completa: hay algo que
-    analizar."""
+    """At 6 in the morning yesterday's bar is already complete: there is
+    something to analyse."""
     allowed, _ = mc.should_run("1d", et(2026, 8, 10, 6, 0))
 
     assert allowed
@@ -63,8 +63,8 @@ def test_daily_runs_before_the_open():
     et(2026, 8, 9, 12, 0),    # domingo
 ])
 def test_daily_skips_weekends(moment):
-    """Es el ahorro que motivo el calendario: sin sesion, las barras son las
-    mismas del viernes y analizarlas seria repetir decisiones."""
+    """It is the saving that motivated the calendar: with no session, the bars are
+    Friday's own and analysing them would be repeating decisions."""
     allowed, reason = mc.should_run("1d", moment)
 
     assert not allowed
@@ -87,8 +87,8 @@ def test_hourly_runs_during_the_session():
 
 
 def test_hourly_skips_after_the_close():
-    """A diferencia del diario: fuera de sesion no llegan barras horarias nuevas,
-    asi que el ciclo repetiria el analisis anterior."""
+    """Unlike the daily case: outside the session no new hourly bars arrive, so
+    the cycle would repeat the previous analysis."""
     allowed, reason = mc.should_run("1h", et(2026, 8, 10, 16, 15))
 
     assert not allowed
@@ -109,7 +109,7 @@ def test_hourly_skips_weekends():
 
 
 def test_hourly_respects_an_early_close():
-    """La vispera de Navidad cierra a las 13:00 ET."""
+    """Christmas Eve closes at 13:00 ET."""
     assert mc.should_run("1h", et(2026, 12, 24, 12, 30))[0]
     assert not mc.should_run("1h", et(2026, 12, 24, 13, 30))[0]
 
@@ -118,8 +118,8 @@ def test_hourly_respects_an_early_close():
 
 @pytest.mark.parametrize("hora_madrid", [16, 18, 20])
 def test_the_documented_intraday_schedule_falls_inside_the_session(hora_madrid):
-    """`CYCLE_TIMES=16:30,18:30,20:30` es lo que recomienda el .env.example para
-    barras horarias. Si alguna cayera fuera de sesion, seria un ciclo perdido."""
+    """`CYCLE_TIMES=16:30,18:30,20:30` is what .env.example recommends for hourly
+    bars. If any fell outside the session, it would be a lost cycle."""
     moment = datetime(2026, 8, 10, hora_madrid, 30, tzinfo=MADRID)
 
     allowed, reason = mc.should_run("1h", moment)
@@ -128,7 +128,7 @@ def test_the_documented_intraday_schedule_falls_inside_the_session(hora_madrid):
 
 
 def test_the_reason_is_always_informative():
-    """El motivo acaba en el log y en el dashboard: nunca debe quedar vacio."""
+    """The reason ends up in the log and in the dashboard: it must never be empty."""
     for interval in ("1d", "1h"):
         for moment in (et(2026, 8, 10, 12), et(2026, 8, 8, 12), et(2026, 8, 10, 20)):
             _, reason = mc.should_run(interval, moment)

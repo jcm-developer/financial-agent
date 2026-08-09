@@ -1,35 +1,36 @@
-"""Ingesta de precios minuto a minuto.
+"""Minute-by-minute price ingestion.
 
-Aqui vive la logica; el bucle que la invoca cada minuto esta en
-`tools/ingestor.py`. Estan separados para que esto se pueda probar sin red y sin
-esperar un minuto real por caso de prueba.
+The logic lives here; the loop that calls it every minute is in
+`tools/ingestor.py`. They are separate so this can be tested without network and
+without waiting a real minute per test case.
 
-Tres decisiones que conviene entender antes de tocar nada:
+Three decisions worth understanding before touching anything:
 
-  * **Un endpoint por simbolo.** yfinance no descarga en lote: pedir 50 simbolos
-    son 50 peticiones HTTP a Yahoo. Lo midio el spike (`tools/spike_1m.py`): en
-    serie ~8s, en paralelo ~1.5s. Cabe holgado dentro del minuto con 50
-    simbolos, pero no escala: a ~170 ms por simbolo, unos 200 agotarian el
-    minuto. Si el universo crece, toca paralelizar o cambiar de fuente.
+  * **One endpoint per symbol.** yfinance does not download in batches: asking
+    for 50 symbols is 50 HTTP requests to Yahoo. The spike measured it
+    (`tools/spike_1m.py`): ~8s serial, ~1.5s in parallel. It fits comfortably
+    inside the minute with 50 symbols, but it does not scale: at ~170 ms per
+    symbol, some 200 would use the minute up. If the universe grows, it is time
+    to parallelise or change source.
 
-  * **Se reescribe la ultima barra siempre.** La barra del minuto en curso sigue
-    cambiando mientras el mercado esta abierto, asi que no basta con escribir lo
-    que es nuevo: hay que pisar tambien la ultima que ya teniamos. De ahi el
-    `>=` en `_bars_to_write` y el `insert or replace` en la base.
+  * **The last bar is always rewritten.** The current minute's bar keeps changing
+    while the market is open, so writing only what is new is not enough: the last
+    one we already had has to be overwritten too. Hence the `>=` in
+    `_bars_to_write` and the `insert or replace` in the database.
 
-  * **Un fallo no detiene la ingesta.** Un minuto perdido es un hueco en el
-    historico, no una averia: el siguiente tick lo intenta otra vez. Solo se
-    escala a error tras varios fallos seguidos, que ya sugiere algo sistematico
-    (429 sostenido, red caida, Yahoo cambiado).
+  * **A failure does not stop the ingestion.** A lost minute is a gap in the
+    history, not a breakage: the next tick tries again. It only escalates to an
+    error after several consecutive failures, which already suggests something
+    systematic (sustained 429, network down, Yahoo changed).
 
-  * **Que huecos se curan solos y cual no** (F2.10). Cada tick pide `period=1d`,
-    o sea la sesion entera, y escribe todo lo que sea posterior a la ultima barra
-    conocida. Eso quiere decir que una caida *dentro* de la sesion se rellena en
-    el tick siguiente sola, por larga que sea. Lo que no se cura es **la sesion
-    que se perdio entera**: si el proceso muere a media tarde y vuelve al dia
-    siguiente, `period=1d` ya no alcanza a la de ayer y el hueco se queda para
-    siempre. De ahi `backfill_gaps`, que corre una vez al dia fuera de ventana y
-    pide varios dias en lugar de uno.
+  * **Which gaps heal by themselves and which one does not** (F2.10). Each tick
+    asks for `period=1d`, that is, the whole session, and writes everything later
+    than the last known bar. That means an outage *within* the session is filled
+    in on the next tick by itself, however long it was. What does not heal is
+    **the session that was lost whole**: if the process dies mid-afternoon and
+    comes back the next day, `period=1d` no longer reaches yesterday's and the
+    gap stays forever. Hence `backfill_gaps`, which runs once a day outside the
+    window and asks for several days instead of one.
 """
 
 from __future__ import annotations
@@ -47,33 +48,32 @@ from .indicators import Bar
 
 log = logging.getLogger(__name__)
 
-# Cuantas barras recientes se reescriben aunque ya se tuvieran. Cubre el hueco de
-# un tick perdido sin tener que reescribir la sesion entera cada minuto.
+# How many recent bars get rewritten even when we already had them. It covers the
+# gap of one lost tick without rewriting the whole session every minute.
 SOLAPE_BARRAS = 3
 
-# Umbrales del aviso de contencion (F2.9).
+# Thresholds of the contention warning (F2.9).
 #
-# La primera calibracion se hizo en el anfitrion Windows —~1.1 ms/fila sin
-# competencia— y se puso el aviso en 5 "para dejar margen a discos mas lentos".
-# Ese margen no llegaba: medido dentro del contenedor, que es donde esto corre de
-# verdad, una escritura tranquila cuesta **~3.6-3.9 ms/fila**, asi que cualquier
-# carga normal rozaba el umbral y con la maquina ocupada lo pasaba. Un aviso que
-# salta en una carga inicial sana es exactamente el que se acaba ignorando, que
-# es contra lo que se escribio esta medicion.
+# The first calibration was done on the Windows host —~1.1 ms/row with no
+# competition— and the warning was set at 5 "to leave room for slower disks".
+# That room never arrived: measured inside the container, which is where this
+# really runs, a quiet write costs **~3.6-3.9 ms/row**, so any normal load
+# brushed the threshold and with a busy machine went past it. A warning that
+# fires during a healthy initial load is exactly the one that ends up ignored,
+# which is what this measurement was written against.
 #
-# 15 deja unas 4 veces el coste tranquilo del contenedor. Lo que se busca detectar
-# es una espera por `busy_timeout`, que son cientos de ms por fila, no un disco
-# lento.
+# 15 leaves about 4 times the container's quiet cost. What it is meant to detect
+# is a wait on `busy_timeout`, which is hundreds of ms per row, not a slow disk.
 UMBRAL_ESCRITURA_MS = 1000
 UMBRAL_MS_POR_FILA = 15.0
 
-# Dias que pide el relleno de huecos por defecto. Cubre un puente entero, que es
-# el caso realista: el ordenador apagado de viernes a lunes.
+# Days the gap backfill asks for by default. It covers a whole long weekend,
+# which is the realistic case: the computer switched off from Friday to Monday.
 BACKFILL_DIAS = 5
 
-# Tope duro por peticion. Yahoo sirve como mucho 7 dias de barras de 1 minuto en
-# una sola llamada (y solo 30 dias de historico en total): pedir mas no da error,
-# devuelve un marco vacio, que es la peor forma de fallar. Se recorta aqui.
+# Hard cap per request. Yahoo serves at most 7 days of 1-minute bars in a single
+# call (and only 30 days of history in total): asking for more does not error, it
+# returns an empty frame, which is the worst way to fail. It is clamped here.
 BACKFILL_DIAS_MAX = 7
 
 
@@ -83,11 +83,11 @@ class IngestError(RuntimeError):
 
 @dataclass
 class IngestResult:
-    """Lo medido en un tick. Es lo que acaba en `ingest_runs`."""
+    """What was measured in one tick. It is what ends up in `ingest_runs`."""
 
     pedidos: int = 0
     con_datos: int = 0
-    vacios: list[str] = field(default_factory=list)
+    empty: list[str] = field(default_factory=list)
     barras_escritas: int = 0
     latencia_descarga_ms: int = 0
     latencia_escritura_ms: int = 0
@@ -101,22 +101,22 @@ class IngestResult:
 
 @dataclass
 class BackfillResult:
-    """Lo medido en un relleno de huecos. Tambien acaba en `ingest_runs`."""
+    """What was measured in one gap backfill. It also ends up in `ingest_runs`."""
 
     dias: int = 0
     pedidos: int = 0
     con_datos: int = 0
     barras_escritas: int = 0
-    #: Simbolos a los que les faltaba algo, con cuantas barras. Es el dato que
-    #: interesa leer: dice si hubo hueco y de que tamano.
-    huecos: dict[str, int] = field(default_factory=dict)
-    #: Simbolos ya comparados y escritos. Con `interrumpido`, dice hasta donde se
-    #: llego; sin el, es la lista completa.
+    #: Symbols that were missing something, with how many bars. It is the datum
+    #: worth reading: it says whether there was a gap and how big.
+    gaps: dict[str, int] = field(default_factory=dict)
+    #: Symbols already compared and written. With `interrupted`, it says how far
+    #: it got; without it, it is the complete list.
     revisados: list[str] = field(default_factory=list)
     latencia_ms: int = 0
     rate_limited: bool = False
-    #: Se abandono entre simbolos por una senal de parada. No es un fallo: lo
-    #: hecho esta escrito y manana se vuelve a mirar la misma ventana.
+    #: It was abandoned between symbols by a stop signal. That is not a failure:
+    #: what was done is written and tomorrow the same window is looked at again.
     interrumpido: bool = False
     error: str | None = None
 
@@ -126,15 +126,15 @@ class BackfillResult:
 
 
 class QuoteProvider(Protocol):
-    """Fuente de barras de un minuto.
+    """Source of one-minute bars.
 
-    Existe como interfaz por una razon practica y otra de diseno: los tests
-    necesitan una fuente sin red, y cambiar de proveedor si Yahoo empieza a
-    limitar por IP no deberia tocar nada mas que esta pieza.
+    It exists as an interface for one practical reason and one of design: the
+    tests need a source without network, and changing provider if Yahoo starts
+    rate-limiting by IP should touch nothing but this piece.
 
-    `days` es lo unico que separa un tick de un relleno: el tick pide el dia en
-    curso y el relleno pide varios. Es un parametro y no un metodo aparte para
-    que un proveedor nuevo no tenga dos caminos que se puedan desincronizar.
+    `days` is the only thing separating a tick from a backfill: the tick asks for
+    the current day and the backfill asks for several. It is a parameter and not a
+    separate method so a new provider does not have two paths that can drift apart.
     """
 
     def fetch(self, symbols: list[str], *, days: int = 1) -> dict[str, list[Bar]]:
@@ -142,12 +142,12 @@ class QuoteProvider(Protocol):
 
 
 class YahooQuotes:
-    """Barras de 1 minuto desde Yahoo, via yfinance.
+    """1-minute bars from Yahoo, via yfinance.
 
-    `threads` por defecto en False como hace `src/market_data.py`: en paralelo la
-    cache interna de yfinance ha dado "database is locked" en Windows y ha
-    devuelto simbolos vacios *sin avisar*. Es intermitente, asi que no se activa
-    sin haberlo medido en sesion (F2.1c).
+    `threads` defaults to False as in `src/market_data.py`: in parallel,
+    yfinance's internal cache has given "database is locked" on Windows and
+    returned empty symbols *without warning*. It is intermittent, so it is not
+    switched on without having measured it in a real session (F2.1c).
     """
 
     def __init__(
@@ -199,37 +199,37 @@ class YahooQuotes:
             if frame is None or getattr(frame, "empty", True):
                 return {}
 
-            salida: dict[str, list[Bar]] = {}
+            output: dict[str, list[Bar]] = {}
             for symbol in symbols:
                 bars = YahooMarketData._extract_bars(
                     frame, symbol, single=len(symbols) == 1
                 )
                 if bars:
-                    salida[symbol] = bars
-            return salida
+                    output[symbol] = bars
+            return output
 
         raise IngestError(f"Yahoo fallo tras {self.max_retries} intentos: {ultimo_error}")
 
 
 def _es_rate_limit(exc: Exception) -> bool:
-    texto = f"{type(exc).__name__}: {exc}".lower()
-    return "429" in texto or "too many requests" in texto or "rate limit" in texto
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return "429" in text or "too many requests" in text or "rate limit" in text
 
 
 def _utc(moment: datetime) -> datetime:
-    """Todo se guarda en UTC. yfinance devuelve estas marcas en hora de Nueva
-    York, y mezclar husos en la base seria una fuente silenciosa de huecos."""
+    """Everything is stored in UTC. yfinance returns these marks in New York
+    time, and mixing zones in the database would be a silent source of gaps."""
     if moment.tzinfo is None:
         return moment.replace(tzinfo=timezone.utc)
     return moment.astimezone(timezone.utc)
 
 
 def _bars_to_write(bars: list[Bar], last_ts: str | None) -> list[Bar]:
-    """Barras que hay que escribir para este simbolo.
+    """Bars that have to be written for this symbol.
 
-    Se incluye la ultima que ya teniamos, no solo las posteriores: mientras el
-    minuto esta en curso su barra sigue cambiando, asi que quedarse con la
-    primera version congelaria un cierre que aun no era el cierre.
+    The last one we already had is included, not just the later ones: while the
+    minute is in progress its bar keeps changing, so keeping the first version
+    would freeze a close that was not the close yet.
     """
     if last_ts is None:
         return bars
@@ -237,16 +237,16 @@ def _bars_to_write(bars: list[Bar], last_ts: str | None) -> list[Bar]:
     recientes = [b for b in bars if _utc(b.timestamp).isoformat() >= last_ts]
     if recientes:
         return recientes
-    # Nada nuevo: se refresca un solape corto por si un tick anterior escribio
-    # una barra a medias.
+    # Nothing new: a short overlap is refreshed in case an earlier tick wrote a
+    # half-formed bar.
     return bars[-SOLAPE_BARRAS:]
 
 
 def load_last_timestamps(db: Database) -> dict[str, str]:
-    """Ultima barra conocida de cada simbolo, para no reescribir la sesion entera.
+    """Last known bar of each symbol, so as not to rewrite the whole session.
 
-    Se consulta una vez al arrancar y se mantiene en memoria: hacerlo en cada
-    tick seria un `group by` sobre cientos de miles de filas cada minuto.
+    It is queried once at startup and kept in memory: doing it on every tick
+    would be a `group by` over hundreds of thousands of rows every minute.
     """
     return {
         row["symbol"]: row["ultimo"]
@@ -255,12 +255,13 @@ def load_last_timestamps(db: Database) -> dict[str, str]:
 
 
 def _prev_close(db: Database, symbol: str) -> float | None:
-    """Cierre de la sesion anterior, si `bar_cache` lo tiene.
+    """Previous session's close, if `bar_cache` has it.
 
-    Sale de ahi y no de una peticion aparte porque una peticion por simbolo y
-    minuto solo para esto duplicaria la carga contra Yahoo. Si el agente todavia
-    no ha corrido, `bar_cache` estara vacio y esto devuelve None: el porcentaje
-    del dia cae entonces a la apertura como referencia, que siempre existe.
+    It comes from there and not from a separate request because one request per
+    symbol and minute just for this would double the load against Yahoo. If the
+    agent has not run yet, `bar_cache` will be empty and this returns None: the
+    day's percentage then falls back to the open as its reference, which always
+    exists.
     """
     rows = db.query(
         "select close from bar_cache where symbol = ? and interval = '1d' "
@@ -277,10 +278,10 @@ def ingest_once(
     *,
     last_ts: dict[str, str] | None = None,
 ) -> IngestResult:
-    """Un tick completo: descarga, escritura y registro. No lanza nunca.
+    """A complete tick: download, write and record. It never raises.
 
-    Que no lance es deliberado: lo invoca un bucle que debe seguir vivo. Un tick
-    fallido se anota en `ingest_runs` y el siguiente minuto lo reintenta.
+    Never raising is deliberate: it is invoked by a loop that must stay alive. A
+    failed tick is noted in `ingest_runs` and the next minute retries it.
     """
     result = IngestResult(pedidos=len(symbols))
     if not symbols:
@@ -292,7 +293,7 @@ def ingest_once(
     t0 = time.monotonic()
     try:
         por_simbolo = provider.fetch(symbols)
-    except Exception as exc:  # noqa: BLE001 - el bucle no puede morir por esto
+    except Exception as exc:  # noqa: BLE001 - the loop cannot die from this
         result.error = str(exc)
         result.rate_limited = _es_rate_limit(exc)
         result.latencia_descarga_ms = int((time.monotonic() - t0) * 1000)
@@ -305,7 +306,7 @@ def ingest_once(
         return result
 
     result.latencia_descarga_ms = int((time.monotonic() - t0) * 1000)
-    result.vacios = sorted(set(symbols) - set(por_simbolo))
+    result.empty = sorted(set(symbols) - set(por_simbolo))
     result.con_datos = len(por_simbolo)
 
     filas_barras: list[dict] = []
@@ -345,10 +346,10 @@ def ingest_once(
     result.latencia_escritura_ms = int((time.monotonic() - t1) * 1000)
     result.barras_escritas = len(filas_barras)
 
-    # Contencion con el ciclo del agente (F2.9). Se mide por coste *por fila*, no
-    # por tiempo total: el primer tick escribe la sesion entera (~1.950 filas con
-    # 5 simbolos) y tarda segundos sin que nadie lo este bloqueando. Lo que
-    # delata una espera por `busy_timeout` es tardar mucho para pocas filas.
+    # Contention with the agent's cycle (F2.9). It is measured by cost *per row*,
+    # not by total time: the first tick writes the whole session (~1,950 rows with
+    # 5 symbols) and takes seconds without anyone blocking it. What gives away a
+    # wait on `busy_timeout` is taking a long time for few rows.
     ms_por_fila = (
         result.latencia_escritura_ms / result.barras_escritas
         if result.barras_escritas else result.latencia_escritura_ms
@@ -363,7 +364,7 @@ def ingest_once(
     db.finish_ingest_run(
         run_id,
         symbols_ok=result.con_datos,
-        symbols_failed=len(result.vacios),
+        symbols_failed=len(result.empty),
         latency_ms=result.latencia_descarga_ms + result.latencia_escritura_ms,
         rate_limited=result.rate_limited,
         error=result.error[:500] if result.error else None,
@@ -379,33 +380,34 @@ def backfill_gaps(
     days: int = BACKFILL_DIAS,
     should_stop: Callable[[], bool] | None = None,
 ) -> BackfillResult:
-    """Rellena las barras que falten de los ultimos `days` dias. No lanza nunca.
+    """Fills in the bars missing from the last `days` days. It never raises.
 
-    Es la mitad que le faltaba a F2.10. La otra -- la poda -- vive en el bucle.
+    It is the half F2.10 was missing. The other -- the pruning -- lives in the loop.
 
-    **Que arregla que el tick no arregle.** Un tick pide el dia en curso, asi que
-    una caida dentro de la sesion se recupera sola en el minuto siguiente. Lo que
-    no se recupera es una sesion perdida entera: con el proceso parado de viernes
-    a lunes, el lunes `period=1d` solo trae el lunes y el viernes se queda vacio
-    para siempre, porque nada volvera a mirar atras. Esto mira atras.
+    **What it fixes that the tick does not.** A tick asks for the current day, so
+    an outage within the session recovers by itself the next minute. What does not
+    recover is a whole lost session: with the process stopped from Friday to
+    Monday, on Monday `period=1d` only brings Monday and Friday stays empty
+    forever, because nothing will ever look back. This looks back.
 
-    **Escribe solo lo que falta, no lo que trae.** Reescribir cinco dias enteros
-    cada tarde serian ~225.000 filas con el universo europeo, y con `insert or
-    replace` no fallaria: se notaria solo como una tarea que tarda cada vez mas.
-    Comparar contra lo que ya hay cuesta una consulta por simbolo sobre un indice
-    y de paso da la unica cifra que interesa leer -- cuantas barras faltaban.
+    **It writes only what is missing, not what it fetched.** Rewriting five whole
+    days every afternoon would be ~225,000 rows with the European universe, and
+    with `insert or replace` it would not fail: it would show up only as a task
+    taking longer and longer. Comparing against what is already there costs one
+    query per symbol over an index, and along the way gives the only figure worth
+    reading -- how many bars were missing.
 
-    **Y escribe simbolo a simbolo, no todo al final.** Medido el 2026-08-08
-    contra Yahoo: 3 simbolos por 5 dias son 7.635 barras y 9 s, o sea unos 3 s por
-    simbolo, ~4-5 minutos con los 89 europeos. Eso es demasiado para una sola
-    transaccion: coincide con la hora del ciclo del agente (las 18:00 en Madrid
-    son "fuera de ventana" para los dos) y una escritura larga ahi es justo la
-    contencion que R3 vigila. Por lotes, ademas, una parada a media faena deja
-    hecho lo que llevaba.
+    **And it writes symbol by symbol, not everything at the end.** Measured on
+    2026-08-08 against Yahoo: 3 symbols over 5 days are 7,635 bars and 9 s, that
+    is about 3 s per symbol, ~4-5 minutes with the 89 European ones. That is too
+    much for a single transaction: it coincides with the agent's cycle time (18:00
+    in Madrid is "outside the window" for both) and a long write there is exactly
+    the contention R3 watches. In batches, besides, a stop halfway leaves what it
+    had done.
 
-    `should_stop` permite abandonar entre simbolos. Sin eso, un `docker stop` a la
-    hora del mantenimiento esperaria los minutos que dura la descarga y acabaria
-    en SIGKILL.
+    `should_stop` allows abandoning between symbols. Without it, a `docker stop`
+    at maintenance time would wait out the minutes the download takes and end in
+    SIGKILL.
     """
     result = BackfillResult(dias=max(1, min(days, BACKFILL_DIAS_MAX)))
     if not symbols or days < 1:
@@ -413,9 +415,9 @@ def backfill_gaps(
 
     result.pedidos = len(symbols)
     run_id = db.start_ingest_run(symbols_requested=len(symbols), kind="backfill")
-    # Margen de un dia sobre la ventana pedida: la comparacion se hace contra lo
-    # que hay en la base desde este corte, y quedarse corto haria que las barras
-    # mas antiguas del lote parecieran nuevas todas las tardes.
+    # One day of margin over the requested window: the comparison is made against
+    # what is in the database from this cut-off, and falling short would make the
+    # batch's oldest bars look new every afternoon.
     desde = (
         datetime.now(timezone.utc) - timedelta(days=result.dias + 1)
     ).isoformat()
@@ -423,7 +425,7 @@ def backfill_gaps(
     t0 = time.monotonic()
     try:
         por_simbolo = provider.fetch(symbols, days=result.dias)
-    except Exception as exc:  # noqa: BLE001 - el bucle no puede morir por esto
+    except Exception as exc:  # noqa: BLE001 - the loop cannot die from this
         result.error = str(exc)
         result.rate_limited = _es_rate_limit(exc)
         result.latencia_ms = int((time.monotonic() - t0) * 1000)
@@ -440,9 +442,9 @@ def backfill_gaps(
     for symbol, bars in sorted(por_simbolo.items()):
         if should_stop is not None and should_stop():
             result.interrumpido = True
-            # Queda escrito en `ingest_runs` aunque no sea una averia: una pasada
-            # a medias que se registrara como completa haria pensar que la ventana
-            # ya se reviso entera.
+            # It stays written in `ingest_runs` even though it is not a breakage:
+            # a half pass recorded as complete would suggest the window had
+            # already been reviewed in full.
             result.error = (
                 f"interrumpido por senal de parada tras "
                 f"{len(result.revisados)}/{result.con_datos} simbolos"
@@ -450,26 +452,27 @@ def backfill_gaps(
             break
 
         conocidas = db.bars_1m_timestamps(symbol, since=desde)
-        filas: list[dict] = []
+        rows: list[dict] = []
         faltan = 0
         for indice, bar in enumerate(bars):
             ts = _utc(bar.timestamp).isoformat()
             if ts < desde:
                 continue
             nueva = ts not in conocidas
-            # La ultima barra se reescribe aunque ya se tuviera, por lo mismo que
-            # el tick reescribe la suya: la version que guardamos pudo capturarse
-            # con el minuto a medias. En Estados Unidos, con la ventana operativa
-            # pegada al cierre (drain=0), esa version a medias es justo la del
-            # cierre de sesion, que es la barra que mas se mira.
+            # The last bar is rewritten even when we already had it, for the same
+            # reason the tick rewrites its own: the version we stored may have
+            # been captured with the minute half done. In the United States, with
+            # the operating window flush against the close (drain=0), that
+            # half-done version is precisely the session close, which is the bar
+            # that gets looked at most.
             ultima = indice == len(bars) - 1
             if not nueva and not ultima:
                 continue
-            # Solo cuenta como hueco lo que faltaba de verdad: si el refresco de
-            # la ultima barra entrara en la cuenta, cada simbolo tendria "1 hueco"
-            # todas las tardes y la cifra dejaria de significar nada.
+            # Only what was genuinely missing counts as a gap: if refreshing the
+            # last bar entered the tally, every symbol would have "1 gap" every
+            # afternoon and the figure would stop meaning anything.
             faltan += int(nueva)
-            filas.append({
+            rows.append({
                 "symbol": symbol,
                 "ts": ts,
                 "open": bar.open, "high": bar.high, "low": bar.low,
@@ -477,20 +480,21 @@ def backfill_gaps(
             })
 
         try:
-            db.upsert_bars_1m(filas)
+            db.upsert_bars_1m(rows)
         except Exception as exc:  # noqa: BLE001 - un simbolo no tumba el resto
             result.error = f"Fallo al escribir {symbol}: {exc}"
             log.error("%s", result.error)
             continue
 
         result.revisados.append(symbol)
-        result.barras_escritas += len(filas)
+        result.barras_escritas += len(rows)
         if faltan:
-            result.huecos[symbol] = faltan
+            result.gaps[symbol] = faltan
 
     result.latencia_ms = int((time.monotonic() - t0) * 1000)
-    # `symbols_ok` son los revisados, no los que devolvio el proveedor: si se
-    # abandono a medias, contar los recibidos daria una pasada por completa.
+    # `symbols_ok` are the ones reviewed, not the ones the provider returned: if
+    # it was abandoned halfway, counting what arrived would pass a partial run off
+    # as a complete one.
     db.finish_ingest_run(
         run_id,
         symbols_ok=len(result.revisados),

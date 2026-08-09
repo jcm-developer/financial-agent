@@ -1,15 +1,16 @@
-"""Historico de operativa: posiciones, decisiones, ordenes, ciclos, analitica.
+"""Trading history: positions, decisions, orders, cycles, analytics.
 
-Todo de solo lectura, y no por convencion: estos endpoints reciben `ReadDb`, que
-es SQLite abierto en modo `ro`. Aunque alguien escribiera aqui un UPDATE por
-error, el motor lo rechazaria.
+All read-only, and not by convention: these endpoints receive `ReadDb`, which is
+SQLite opened in `ro` mode. Even if someone wrote an UPDATE here by mistake, the
+engine would refuse it.
 
-Aqui vivia `/api/dashboard`, que devolvia el ensamblado de doce consultas de
-`src/dashboard.py` entero y sin modelo Pydantic. Se retiro en F4.11 con el
-dashboard viejo al que servia: el frontend nunca llego a usarlo —se arma con los
-endpoints tipados de abajo, que era la decision de F4— y dejarlo habria sido
-mantener una segunda forma de contar el mismo experimento, sin tipos y sin nadie
-que la ejercitara. `build_dashboard` sigue donde estaba: lo usa `run.py report`.
+`/api/dashboard` used to live here, returning the assembly of twelve queries of
+`src/dashboard.py` whole and without a Pydantic model. It was retired in F4.11
+along with the old dashboard it served: the frontend never came to use it —it is
+built from the typed endpoints below, which was the decision of F4— and keeping
+it would have meant maintaining a second way of counting the same experiment,
+untyped and with nobody exercising it. `build_dashboard` stays where it was:
+`run.py report` uses it.
 """
 
 from __future__ import annotations
@@ -34,12 +35,12 @@ router = APIRouter(prefix="/api", tags=["operativa"])
 
 @router.get("/analytics", response_model=Analytics)
 def analytics(db: ReadDb, profile: ProfileQuery):
-    """Las cinco series de las graficas (F4.6).
+    """The five series behind the charts (F4.6).
 
-    Tres salen de vistas que ya existen en `schema.sql`, asi que la consola y la
-    web no pueden acabar contando cosas distintas del mismo experimento. Es la
-    regla de la que salio tambien `/api/dashboard`: una sola definicion de cada
-    numero, en el sitio donde ya estaba.
+    Three come from views that already exist in `schema.sql`, so the console and
+    the web cannot end up telling different stories about the same experiment.
+    It is the same rule `/api/dashboard` came from: one single definition of
+    each number, in the place where it already was.
     """
     _, portfolio_id = resolve_portfolio(db, profile)
     return queries.analytics(db, portfolio_id)
@@ -97,11 +98,11 @@ def risk_events(
     rule: str = "", symbol: str = "",
     limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0),
 ):
-    """Los rechazos son la evidencia de que la barrera de riesgo funciona.
+    """The rejections are the evidence that the risk barrier works.
 
-    Por eso tienen endpoint propio y no solo una columna en `decisions`: contra
-    que limite choca el modelo mas a menudo es una de las preguntas del
-    experimento, no un detalle de una fila.
+    That is why they get their own endpoint and not just a column in
+    `decisions`: which limit the model hits most often is one of the
+    experiment's questions, not a detail of a row.
     """
     _, portfolio_id = resolve_portfolio(db, profile)
     rows, total = queries.risk_events(
@@ -126,11 +127,12 @@ def cycles(
 
 @router.get("/cycles/{cycle_id}", response_model=CycleDetail)
 def cycle_detail(db: ReadDb, cycle_id: str):
-    """Un ciclo con la copia de los parametros con los que corrio (F6.3).
+    """One cycle, with the copy of the settings it ran under (F6.3).
 
-    `settings` viene a None en los ciclos anteriores a esa tarea. Es informacion
-    que falta, no un cero: quien compare experimentos necesita distinguir
-    "corrio con estos ajustes" de "no se sabe con que ajustes corrio".
+    `settings` comes back as None for cycles predating that task. That is
+    missing information, not a zero: whoever compares experiments needs to tell
+    "it ran with these settings" from "we do not know which settings it ran
+    with".
     """
     row = queries.cycle_detail(db, cycle_id)
     if row is None:

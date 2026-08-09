@@ -1,17 +1,17 @@
-"""Orquestacion de un ciclo del agente.
+"""Orchestration of one agent cycle.
 
-Orden deliberado de las fases:
+The order of the phases is deliberate:
 
-  1. Reconciliar con el broker      -> partir de la realidad, no del registro.
-  2. Datos de mercado               -> una sola peticion para todo el universo.
-  3. Kill switch de perdida diaria  -> si salta, no se abre nada nuevo.
-  4. Salidas obligatorias           -> stop/objetivo alcanzado, sin consultar al LLM.
-  5. Revision de salidas por el LLM -> tesis degradada.
-  6. Entradas                       -> analisis, filtro de riesgo, ejecucion.
-  7. Curva de capital y cierre      -> siempre, incluso si algo fallo.
+  1. Reconcile with the broker      -> start from reality, not from the record.
+  2. Market data                    -> a single request for the whole universe.
+  3. Daily-loss kill switch         -> if it trips, nothing new is opened.
+  4. Forced exits                   -> stop/target hit, without asking the LLM.
+  5. LLM review of exits            -> thesis degraded.
+  6. Entries                        -> analysis, risk filter, execution.
+  7. Equity curve and close         -> always, even if something failed.
 
-Las salidas van antes que las entradas por una razon practica: liberan cash y
-huecos de posicion que las entradas de este mismo ciclo pueden aprovechar.
+Exits go before entries for a practical reason: they free cash and position slots
+that this very cycle's entries can use.
 """
 
 from __future__ import annotations
@@ -33,15 +33,15 @@ from .sim_broker import Quote, SimBroker
 
 log = logging.getLogger(__name__)
 
-# Minutos tras los que un ciclo en 'running' se da por muerto y deja de bloquear.
-# Un ciclo normal con el embudo tarda ~20; 90 da margen de sobra sin dejar el
-# agente parado toda la noche por un contenedor que murio.
+# Minutes after which a cycle in 'running' is presumed dead and stops blocking.
+# A normal cycle with the funnel takes ~20; 90 leaves plenty of room without
+# leaving the agent stopped all night because of a container that died.
 STALE_CYCLE_MINUTES = 90
 
 
 @dataclass
 class CycleReport:
-    """Resumen de lo ocurrido, para el log final y para los tests."""
+    """Summary of what happened, for the final log and for the tests."""
 
     cycle_id: str | None = None
     status: str = "completed"
@@ -78,8 +78,8 @@ class CycleReport:
             f"Salidas: {self.exits_forced} forzadas / "
             f"{self.exits_discretionary} discrecionales",
         ]
-        # Solo se menciona cuando hay fallos: "0 de 33" en cada resumen es ruido
-        # que acaba sin leerse, y esta linea tiene que resaltar cuando aparece.
+        # Only mentioned when there are failures: "0 of 33" in every summary is
+        # noise that ends up unread, and this line has to stand out when it appears.
         if self.analyst_failures:
             lines.append(
                 f"Analista: {self.analyst_failures} de {self.analyst_calls} "
@@ -116,10 +116,10 @@ class TradingCycle:
 
     @classmethod
     def build(cls, settings: Settings, llm: LLMClient) -> TradingCycle:
-        """Monta el ciclo con el proveedor de datos configurado.
+        """Assembles the cycle with the configured data provider.
 
-        El broker simulado necesita la base de datos y el id de cartera, asi que
-        se crean primero.
+        The simulated broker needs the database and the book id, so those are
+        created first.
         """
         database = Database(path=settings.db_path)
         portfolio_id = database.ensure_portfolio(
@@ -152,10 +152,10 @@ class TradingCycle:
         report = CycleReport()
         settings = self.settings
 
-        # El calendario se consulta antes de gastar nada: sin barras nuevas,
-        # analizar seria repetir las decisiones del ciclo anterior gastando cuota.
-        # Con barras diarias el momento natural es justo despues del cierre, asi
-        # que la comprobacion no es "esta abierto" sino "hay sesion hoy".
+        # The calendar is consulted before spending anything: with no new bars,
+        # analysing would mean repeating the previous cycle's decisions while
+        # burning quota. With daily bars the natural moment is right after the
+        # close, so the check is not "is it open" but "is there a session today".
         allowed, reason = market_calendar.should_run(
             settings.bar_interval, market=settings.market
         )
@@ -171,10 +171,10 @@ class TradingCycle:
             initial_budget=settings.initial_budget,
         )
 
-        # Un solo ciclo por cartera a la vez. Dos en paralelo se pisan el efectivo
-        # y las posiciones, y dejan un historico con decisiones duplicadas que ya
-        # no se puede interpretar. Pasa con facilidad: basta lanzar uno a mano
-        # mientras el planificador arranca el suyo.
+        # One cycle per book at a time. Two in parallel step on each other's cash
+        # and positions, and leave a history with duplicated decisions that can no
+        # longer be interpreted. It happens easily: launching one by hand while
+        # the scheduler starts its own is enough.
         blocked = self._check_no_other_cycle_running(portfolio_id)
         if blocked is not None:
             report.status = "skipped"
@@ -182,13 +182,13 @@ class TradingCycle:
             log.warning("Ciclo no iniciado: %s", blocked)
             return report
 
-        # Las posiciones abiertas son obligatorias: necesitan revision aunque el
-        # screener no las seleccione. El proveedor anade sus propios candidatos.
+        # Open positions are mandatory: they need reviewing even when the screener
+        # does not select them. The provider adds its own candidates.
         required = tuple(sorted(self.db.get_open_positions(portfolio_id)))
 
-        # Los datos van ANTES de leer la cuenta: el broker simulado no tiene
-        # fuente de precios propia, asi que sin ellos no puede valorar la cartera
-        # ni ejecutar.
+        # The data comes BEFORE reading the account: the simulated broker has no
+        # price source of its own, so without it the book cannot be valued nor
+        # anything executed.
         snapshots = self.market_data.fetch_snapshots(required)
         symbols = tuple(sorted(snapshots))
         self._prime_broker(snapshots)
@@ -202,10 +202,10 @@ class TradingCycle:
 
         self._warn_if_budget_exceeds_account(account)
 
-        # `settings.snapshot()` deja en la fila los parametros exactos de este
-        # ciclo (F6.3). Sin esa copia, editar los ajustes a mitad de un
-        # experimento haria ilegible el historico: las decisiones de ayer se
-        # leerian con la configuracion de hoy.
+        # `settings.snapshot()` leaves this cycle's exact parameters in the row
+        # (F6.3). Without that copy, editing the settings halfway through an
+        # experiment would make the history unreadable: yesterday's decisions
+        # would be read with today's configuration.
         cycle_id = self.db.start_cycle(
             portfolio_id=portfolio_id,
             equity_start=account.equity,
@@ -239,8 +239,8 @@ class TradingCycle:
             report.errors.append(f"Error inesperado: {exc}")
             log.exception("Error inesperado en el ciclo.")
 
-        # Cierre del ciclo: se ejecuta pase lo que pase, para no dejar filas
-        # colgadas en estado 'running'.
+        # Closing the cycle: it runs whatever happens, so no rows are left
+        # hanging in the 'running' state.
         try:
             final_account = self.broker.get_account_state()
             report.equity_end = final_account.equity
@@ -258,8 +258,8 @@ class TradingCycle:
             report.errors.append(f"No se pudo guardar la curva de capital: {exc}")
             log.warning("No se pudo guardar la curva de capital: %s", exc)
 
-        # Se leen aqui, y no al final de `_run_phases`, porque tambien cuentan si
-        # una excepcion corto las fases a media faena.
+        # They are read here, and not at the end of `_run_phases`, because they
+        # also count if an exception cut the phases off mid-way.
         report.analyst_calls = self.analyst.calls
         report.analyst_failures = self.analyst.failures
         self._grade_analyst(report)
@@ -281,31 +281,33 @@ class TradingCycle:
     # ------------------------------------------------------------------
 
     def _grade_analyst(self, report: CycleReport) -> None:
-        """Distingue "el modelo dijo que no" de "no hubo modelo".
+        """Tells "the model said no" apart from "there was no model".
 
-        `Analyst` se traga los `LLMError` a proposito: un 429 en un simbolo no
-        debe tumbar el ciclo entero. Pero cuando la causa es la cuota agotada o
-        el proveedor caido, falla en **todas** las llamadas seguidas, y el ciclo
-        terminaba en 'completed' con cero propuestas: indistinguible de una
-        sesion en la que el modelo no vio nada. Un experimento de dos semanas
-        puede perder diez sesiones asi sin que el historico lo diga.
+        `Analyst` swallows the `LLMError`s on purpose: a 429 on one symbol must
+        not take the whole cycle down. But when the cause is exhausted quota or a
+        provider outage, it fails on **every** call in a row, and the cycle used to
+        end in 'completed' with zero proposals: indistinguishable from a session
+        in which the model saw nothing. A two-week experiment can lose ten
+        sessions that way without the history saying so.
 
-        Tres decisiones:
+        Three decisions:
 
-          * **Solo el fallo total degrada el estado.** Un ciclo con 3 fallos de
-            33 si analizo y pudo operar; marcarlo 'failed' mentiria en la otra
-            direccion. Queda el recuento en la fila y una nota en `error`.
-          * **No se toca un ciclo que ya venia 'failed' o 'halted'.** El kill
-            switch es el titular de su ciclo, y ademas no evalua entradas por
-            definicion, asi que sus llamadas son pocas y no representativas.
-          * **Se reutiliza 'failed' en lugar de anadir un estado nuevo.**
-            `cycles.status` tiene un CHECK con cuatro valores y SQLite no sabe
-            alterar una restriccion: meter 'degraded' obligaria a reconstruir la
-            tabla de la que cuelgan otras seis con `on delete cascade`. Peor: en
-            una base ya creada el CHECK viejo rechazaria el valor nuevo, y el
-            fallo apareceria justo el dia que se agota la cuota, o sea el dia que
-            esto tiene que funcionar. El recuento en columnas da el matiz sin
-            tocar el CHECK.
+          * **Only total failure degrades the status.** A cycle with 3 failures
+            out of 33 did analyse and could trade; marking it 'failed' would lie
+            in the other direction. The tally stays in the row and a note in
+            `error`.
+          * **A cycle that already came in as 'failed' or 'halted' is left
+            alone.** The kill switch is the headline of its own cycle, and it does
+            not evaluate entries by definition, so its calls are few and not
+            representative.
+          * **'failed' is reused instead of adding a new status.**
+            `cycles.status` has a CHECK with four values and SQLite cannot alter a
+            constraint: adding 'degraded' would force rebuilding the table six
+            others hang off with `on delete cascade`. Worse: on an already created
+            database the old CHECK would reject the new value, and the failure
+            would show up on precisely the day the quota runs out, that is, the
+            day this has to work. The tally in columns gives the nuance without
+            touching the CHECK.
         """
         failures, calls = report.analyst_failures, report.analyst_calls
         if not failures:
@@ -351,7 +353,7 @@ class TradingCycle:
             portfolio_id=portfolio_id, broker_positions=broker_positions
         )
 
-        # --- 2. Registro de los datos que vio el analista -----------------
+        # --- 2. Recording the data the analyst saw ------------------------
         snapshot_ids: dict[str, int] = {}
         for symbol, snapshot in snapshots.items():
             try:
@@ -363,8 +365,8 @@ class TradingCycle:
 
         tracked = self.db.get_open_positions(portfolio_id)
 
-        # Las huerfanas adoptadas no tienen stop: se les asigna uno por ATR para
-        # que queden protegidas desde este mismo ciclo.
+        # Adopted orphans have no stop: one is assigned by ATR so they are
+        # protected from this very cycle on.
         self._assign_stops_to_orphans(
             reconcile_report.adopted_orphans, snapshots, broker_positions, tracked
         )
@@ -391,9 +393,9 @@ class TradingCycle:
             }
             for symbol, row in tracked.items()
         }
-        # Un simbolo que se cierra en este ciclo no se vuelve a abrir en el mismo
-        # ciclo: seria comprar y vender el mismo dia sobre la misma tesis, que es
-        # churn puro y en una cuenta real cuenta como day trade.
+        # A symbol closed in this cycle is not reopened in the same cycle: that
+        # would be buying and selling on the same day over the same thesis, which
+        # is pure churn and in a real account counts as a day trade.
         closed_this_cycle: set[str] = set()
 
         forced_exits = self.risk.mandatory_exits(broker_positions, levels)
@@ -463,12 +465,13 @@ class TradingCycle:
             report.status = "halted"
             return
 
-        # Estado refrescado: las ventas de este ciclo liberaron cash y huecos.
+        # Refreshed state: this cycle's sales freed cash and slots.
         account = self.broker.get_account_state()
         report.equity_end = account.equity
 
-        # Todo lo que el proveedor haya devuelto y no tengamos ya es candidato: con
-        # embudo son los seleccionados por el screener, sin embudo la watchlist.
+        # Everything the provider returned that we do not already hold is a
+        # candidate: with the funnel those are the screener's picks, without it
+        # the watchlist.
         candidates = [
             symbol for symbol in symbols
             if symbol not in account.open_symbols
@@ -524,8 +527,8 @@ class TradingCycle:
                 report, portfolio_id, cycle_id, snapshot, proposal, verdict,
                 decision_id, risk_event_id,
             ):
-                # Refrescar para que los limites de los siguientes candidatos
-                # cuenten con la posicion recien abierta.
+                # Refreshed so the limits for the following candidates account
+                # for the position just opened.
                 account = self.broker.get_account_state()
                 report.equity_end = account.equity
 
@@ -598,8 +601,8 @@ class TradingCycle:
                 entry_order_id=order_id,
             )
         except DatabaseError as exc:
-            # La orden ya esta enviada: esto no se puede deshacer. Se registra en
-            # alto para que la reconciliacion del proximo ciclo la adopte.
+            # The order is already sent: this cannot be undone. It is logged loudly
+            # so the next cycle's reconciliation adopts it.
             log.error(
                 "Orden de %s enviada pero no se pudo registrar la posicion: %s. "
                 "La reconciliacion del proximo ciclo la adoptara.", symbol, exc,
@@ -706,7 +709,7 @@ class TradingCycle:
         broker_positions: dict,
         tracked: dict[str, dict],
     ) -> None:
-        """Coloca un stop por ATR en las posiciones adoptadas sin niveles."""
+        """Places an ATR stop on the adopted positions that have no levels."""
         for symbol, position_id in orphans:
             snapshot = snapshots.get(symbol)
             position = broker_positions.get(symbol)
@@ -735,11 +738,11 @@ class TradingCycle:
     def _maybe_raise_stop(
         self, row: dict, proposal: Proposal, position
     ) -> None:
-        """Permite al LLM subir el stop, nunca bajarlo.
+        """Lets the LLM raise the stop, never lower it.
 
-        Un modelo que puede alejar el stop puede anular la proteccion; que solo
-        pueda acercarlo convierte la sugerencia en un trailing stop discrecional
-        sin riesgo anadido.
+        A model that can move the stop further away can void the protection; being
+        able only to bring it closer turns the suggestion into a discretionary
+        trailing stop with no added risk.
         """
         suggested = proposal.suggested_stop
         if suggested is None:
@@ -759,12 +762,12 @@ class TradingCycle:
             log.warning("No se pudo actualizar el stop de %s: %s", position.symbol, exc)
 
     def _check_no_other_cycle_running(self, portfolio_id: str) -> str | None:
-        """Devuelve el motivo por el que no se puede arrancar, o None si via libre.
+        """Returns the reason it cannot start, or None when the way is clear.
 
-        Un ciclo que quedo colgado en 'running' —contenedor reiniciado, Docker
-        caido a media ejecucion— se da por abandonado pasado `STALE_CYCLE_MINUTES`
-        y deja de bloquear. Sin esa salida, un unico proceso muerto detendria el
-        agente para siempre.
+        A cycle left hanging in 'running' —container restarted, Docker down
+        mid-run— is presumed abandoned after `STALE_CYCLE_MINUTES` and stops
+        blocking. Without that escape hatch, a single dead process would stop the
+        agent forever.
         """
         try:
             other = self.db.find_running_cycle(portfolio_id)
@@ -803,16 +806,16 @@ class TradingCycle:
         )
 
     def _prime_broker(self, snapshots: dict[str, MarketSnapshot]) -> None:
-        """Entrega al broker simulado los precios de este ciclo.
+        """Hands the simulated broker this cycle's prices.
 
-        Se valora con el cierre de la sesion de decision y se ejecuta con la
-        apertura siguiente. Mantener las dos cosas alineadas es lo que hace la
-        simulacion honesta: el stop se comprueba contra el mismo cierre que vio
-        el analista, y la orden resultante se llena a la apertura posterior, que
-        es el orden real de los acontecimientos.
+        Valuation uses the decision session's close and execution uses the
+        following open. Keeping the two aligned is what makes the simulation
+        honest: the stop is checked against the same close the analyst saw, and
+        the resulting order fills at the later open, which is the real order of
+        events.
 
-        Con un broker que tuviera precios propios no haria nada, y por eso la
-        comprobacion de tipo sigue aqui.
+        With a broker that had prices of its own it would do nothing, and that is
+        why the type check is still here.
         """
         if not isinstance(self.broker, SimBroker):
             return
@@ -827,8 +830,8 @@ class TradingCycle:
         }
         self.broker.set_quotes(quotes)
 
-        # La sesion es la de la barra de ejecucion; sirve de referencia para el
-        # P&L diario y el kill switch.
+        # The session is the execution bar's; it serves as the reference for the
+        # daily P&L and the kill switch.
         sessions = [s.session for s in snapshots.values() if s.session]
         if sessions:
             self.broker.roll_session(max(sessions))

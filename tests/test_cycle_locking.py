@@ -1,14 +1,13 @@
-"""Tests del bloqueo de ciclos concurrentes.
+"""Tests of the concurrent-cycle lock.
 
-Este modulo nace de un incidente real: se lanzo un ciclo a mano mientras el
-planificador arrancaba el suyo, y ambos empezaron con dos segundos de diferencia
-sobre la misma cartera. Dos ciclos en paralelo se pisan el efectivo y las
-posiciones, y dejan un historico con decisiones duplicadas que ya no se puede
-interpretar.
+This module was born from a real incident: a cycle was launched by hand while the
+scheduler was starting its own, and both began two seconds apart over the same
+book. Two cycles in parallel step on each other's cash and positions, and leave a
+history with duplicated decisions that can no longer be interpreted.
 
-El otro lado del problema es igual de importante: un proceso que muere a media
-ejecucion deja su fila en 'running' para siempre, y sin caducidad ese cadaver
-bloquearia el agente indefinidamente.
+The other side of the problem is just as important: a process that dies mid-run
+leaves its row in 'running' forever, and with no expiry that corpse would block
+the agent indefinitely.
 """
 
 from __future__ import annotations
@@ -32,7 +31,7 @@ from helpers import (
 
 
 def a_running_cycle(database: Database, portfolio_id: str, *, minutes_ago: float):
-    """Inserta un ciclo colgado en 'running' con la antiguedad que se pida."""
+    """Inserts a cycle hanging in 'running' with whatever age is asked for."""
     cycle_id = database.start_cycle(
         portfolio_id=portfolio_id, equity_start=10_000.0, cash_start=10_000.0,
         market_open=True, symbols=["AAPL"], llm_model="stub",
@@ -99,7 +98,7 @@ def test_abandon_cycle_marks_it_failed_with_the_reason(db):
 # -- Comportamiento del ciclo ------------------------------------------------
 
 def test_a_second_cycle_refuses_to_start(db):
-    """El incidente exacto: un ciclo a mano mientras el planificador corre."""
+    """The exact incident: a cycle by hand while the scheduler runs."""
     settings = make_settings(watchlist=("AAPL",))
     cycle = make_cycle(
         db, settings, StubLLM(entry=BUY, exit_=HOLD_EXIT),
@@ -111,13 +110,13 @@ def test_a_second_cycle_refuses_to_start(db):
 
     assert report.status == "skipped"
     assert "ya hay un ciclo en marcha" in report.halted_reason.lower()
-    # No se abrio nada: el bloqueo actua antes de tocar el broker.
+    # Nothing was opened: the lock acts before the broker is touched.
     assert db.query("select * from sim_positions") == []
 
 
 def test_the_blocked_cycle_does_not_download_anything(db):
-    """El bloqueo va antes de la descarga de datos, que es la parte cara: con el
-    embudo son minutos y cientos de miles de barras."""
+    """The lock comes before the data download, which is the expensive part: with
+    the funnel that is minutes and hundreds of thousands of bars."""
     class CountingMarketData(StubMarketData):
         calls = 0
 
@@ -138,8 +137,8 @@ def test_the_blocked_cycle_does_not_download_anything(db):
 
 
 def test_a_stale_cycle_is_abandoned_and_stops_blocking(db):
-    """Un contenedor que muere deja la fila en 'running'. Pasado el plazo, se da
-    por muerta y el agente vuelve a funcionar solo."""
+    """A container that dies leaves the row in 'running'. Past the deadline it is
+    presumed dead and the agent starts working again on its own."""
     settings = make_settings(watchlist=("AAPL",))
     cycle = make_cycle(
         db, settings, StubLLM(entry=BUY, exit_=HOLD_EXIT),
@@ -158,8 +157,8 @@ def test_a_stale_cycle_is_abandoned_and_stops_blocking(db):
 
 
 def test_a_cycle_just_under_the_limit_still_blocks(db):
-    """La caducidad no debe llegar antes de tiempo: un ciclo lento pero vivo
-    seguiria trabajando, y abandonarlo dejaria dos corriendo."""
+    """The expiry must not arrive early: a slow but living cycle would still be
+    working, and abandoning it would leave two running."""
     settings = make_settings(watchlist=("AAPL",))
     cycle = make_cycle(
         db, settings, StubLLM(entry=BUY, exit_=HOLD_EXIT),
@@ -171,13 +170,13 @@ def test_a_cycle_just_under_the_limit_still_blocks(db):
 
 
 def test_the_stale_limit_leaves_room_for_a_real_cycle():
-    """Un ciclo con el embudo tarda ~20 minutos; el limite debe quedar holgado por
-    encima para no matar ejecuciones legitimas."""
+    """A cycle with the funnel takes ~20 minutes; the limit has to sit comfortably
+    above that so legitimate runs are not killed."""
     assert STALE_CYCLE_MINUTES >= 60
 
 
 def test_consecutive_cycles_work_normally(db):
-    """El bloqueo no debe estorbar el caso normal: un ciclo tras otro."""
+    """The lock must not get in the way of the normal case: one cycle after another."""
     settings = make_settings(watchlist=("AAPL",))
     llm = StubLLM(entry=BUY, exit_=HOLD_EXIT)
 

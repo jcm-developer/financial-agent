@@ -1,35 +1,36 @@
 #!/usr/bin/env python
-"""Punto de entrada del agente.
+"""The agent's entry point.
 
-    python run.py check       Verifica configuracion y conectividad. Empieza aqui.
-    python run.py status      Muestra el estado de la cuenta y las posiciones.
-    python run.py cycle       Ejecuta un ciclo completo de analisis y operativa.
-    python run.py report      Analitica del historico: P&L, calibracion, rechazos.
-    python run.py api         API REST + interfaz en http://127.0.0.1:8000
-    python run.py profiles    Lista los perfiles de experimento.
+    python run.py check       Verifies configuration and connectivity. Start here.
+    python run.py status      Shows the account's state and its positions.
+    python run.py cycle       Runs a full cycle of analysis and trading.
+    python run.py report      Analytics of the history: P&L, calibration, rejections.
+    python run.py api         REST API + interface at http://127.0.0.1:8000
+    python run.py profiles    Lists the experiment profiles.
 
-Para empezar un experimento nuevo en una bolsa concreta:
+To start a new experiment on a specific exchange:
 
     python run.py new-profile --name europa-01 --market eu
     python run.py activate --profile europa-01
 
-El mercado del perfil (`eu` o `us`) fija horario, calendario de festivos y
-divisa. Un perfil cubre una sola bolsa: no hay conversion de divisa en ninguna
-parte del proyecto. Ver [src/market_calendar.py](src/market_calendar.py).
+The profile's market (`eu` or `us`) fixes the hours, the holiday calendar and the
+currency. One profile covers a single exchange: there is no currency conversion
+anywhere in the project. See [src/market_calendar.py](src/market_calendar.py).
 
-**Los parametros del agente viven en la base de datos, no en el `.env`** (F6.4):
-cada perfil de experimento lleva los suyos en `agent_settings`. Del entorno solo
-sale la infraestructura (`DB_PATH`, `NVIDIA_API_KEY`, `LOG_LEVEL`).
+**The agent's parameters live in the database, not in the `.env`** (F6.4): each
+experiment profile carries its own in `agent_settings`. Only the infrastructure
+comes from the environment (`DB_PATH`, `NVIDIA_API_KEY`, `LOG_LEVEL`).
 
-Si vienes de la version anterior, importa tu `.env` a un perfil una sola vez:
+If you are coming from the previous version, import your `.env` into a profile
+just once:
 
     python run.py import-profile --name experimento-01
 
-Con varios perfiles activos, `--profile <nombre>` elige contra cual se opera.
+With several active profiles, `--profile <name>` picks which one is traded.
 
-`cycle` esta pensado para lanzarse desde el planificador una o dos veces al dia,
-no en bucle continuo: los modelos gratuitos de NIM tienen limites de peticiones y
-el horizonte del agente es de dias.
+`cycle` is meant to be launched by the scheduler once or twice a day, not in a
+continuous loop: NIM's free models have request limits and the agent's horizon is
+measured in days.
 """
 
 from __future__ import annotations
@@ -43,10 +44,10 @@ from dataclasses import replace
 from src.config import ConfigError, DashboardSettings, Infra, Settings
 from src.cycle import TradingCycle
 from src.llm import LLMClient, LLMError
-#: El tope de simbolos seguidos en vivo vive en `profile_settings` porque el
-#: `POST /api/profiles` de F3.3 aplica la misma regla. Aqui solo se usa para el
-#: texto de --help.
-from src.profile_settings import MAX_LIVE_SYMBOLS as MAX_UNIVERSO_SEGUIDO
+#: The cap on symbols followed live lives in `profile_settings` because F3.3's
+#: `POST /api/profiles` applies the same rule. Here it is only used for the
+#: --help text.
+from src.profile_settings import MAX_LIVE_SYMBOLS as MAX_LIVE_SYMBOLS
 
 
 def setup_logging(level: str) -> None:
@@ -72,21 +73,21 @@ def _print_header(title: str) -> None:
 # ----------------------------------------------------------------------
 
 def command_check(settings: Settings) -> int:
-    """Comprueba las integraciones por separado para que un fallo diga
-    exactamente que pieza esta mal configurada."""
+    """Checks the integrations separately so a failure says exactly which piece
+    is misconfigured."""
     failures: list[str] = []
 
     _print_header("Configuracion")
     print(f"  {settings.describe()}")
     if settings.screener.enabled:
-        # Se dice explicitamente: con embudo la watchlist no se usa, y verla
-        # impresa hacia pensar lo contrario.
+        # Said explicitly: with the funnel the watchlist is not used, and seeing
+        # it printed made people think otherwise.
         print("  Watchlist ignorada: manda el fichero de universo.")
     else:
         print(f"  Watchlist: {', '.join(settings.watchlist)}")
 
     if settings.risk_summary:
-        # Ya lleva los nueve limites y de donde salen, asi que no se repiten.
+        # It already carries the nine limits and where they come from, so they are not repeated.
         print(f"  {settings.risk_summary}")
     else:
         risk = settings.risk
@@ -101,21 +102,21 @@ def command_check(settings: Settings) -> int:
 
     from src import market_calendar
 
-    mercado = market_calendar.get_market(settings.market)
-    _print_header(f"Calendario de mercado -- {mercado.label}")
+    market = market_calendar.get_market(settings.market)
+    _print_header(f"Calendario de mercado -- {market.label}")
 
-    print(f"  {market_calendar.describe(market=mercado)}")
-    print(f"  Sesion {mercado.open_time:%H:%M}-{mercado.close_time:%H:%M} "
-          f"hora local, divisa {mercado.currency}")
-    # La ventana operativa solo se nombra cuando difiere de la sesion: repetir
-    # las mismas horas dos veces seguidas solo invita a leerlas mal.
-    if (mercado.warmup_minutes or mercado.drain_minutes):
-        print(f"  Ventana operativa {mercado.operating_open:%H:%M}-"
-              f"{mercado.operating_close:%H:%M}  "
-              f"(+{mercado.warmup_minutes} min tras la apertura, "
-              f"+{mercado.drain_minutes} tras el cierre)")
+    print(f"  {market_calendar.describe(market=market)}")
+    print(f"  Sesion {market.open_time:%H:%M}-{market.close_time:%H:%M} "
+          f"hora local, divisa {market.currency}")
+    # The operating window is only named when it differs from the session:
+    # repeating the same hours twice in a row only invites misreading them.
+    if (market.warmup_minutes or market.drain_minutes):
+        print(f"  Ventana operativa {market.operating_open:%H:%M}-"
+              f"{market.operating_close:%H:%M}  "
+              f"(+{market.warmup_minutes} min tras la apertura, "
+              f"+{market.drain_minutes} tras el cierre)")
     allowed, reason = market_calendar.should_run(
-        settings.bar_interval, market=mercado
+        settings.bar_interval, market=market
     )
     if allowed:
         print(f"  Un ciclo ahora SI se ejecutaria: {reason}")
@@ -130,8 +131,8 @@ def command_check(settings: Settings) -> int:
         from src.market_data import YahooMarketData, build_market_data
 
         if settings.screener.enabled:
-            # Con embudo no se prueba el universo entero: seria descargar 500
-            # simbolos solo para diagnosticar. Se sondea con tres.
+            # With the funnel the whole universe is not tested: that would mean
+            # downloading 500 symbols just to diagnose. Three are probed instead.
             from src.screener import load_universe
 
             universe = load_universe(settings.screener.universe_file)
@@ -167,9 +168,9 @@ def command_check(settings: Settings) -> int:
                 f"{_show(indicators.get('atr_14')):>8}"
                 f"{indicators.get('bars_available'):>8}  {snapshot.session or 'n/d'}"
             )
-        unidad = "sesion" if settings.bar_interval == "1d" else "hora"
-        print(f"      DECISION = cierre de la ultima {unidad} completa (lo que ve el")
-        print(f"      analista). EJECUCION = apertura de la {unidad} siguiente,")
+        unit = "sesion" if settings.bar_interval == "1d" else "hora"
+        print(f"      DECISION = cierre de la ultima {unit} completa (lo que ve el")
+        print(f"      analista). EJECUCION = apertura de la {unit} siguiente,")
         print("      donde se opera. Que sean distintos es lo que evita operar")
         print("      con informacion del futuro.")
     except Exception as exc:  # noqa: BLE001
@@ -293,11 +294,11 @@ def _show(value: object) -> str:
 # ----------------------------------------------------------------------
 
 def command_status(settings: Settings) -> int:
-    """Estado de la cuenta.
+    """Account state.
 
-    Con el broker simulado hace falta descargar precios para poder valorar la
-    cartera: el simulador no tiene fuente de datos propia, usa los mismos precios
-    que ve el analista.
+    With the simulated broker, prices have to be downloaded before the book can
+    be valued: the simulator has no data source of its own, it uses the same
+    prices the analyst sees.
     """
     from src.db import Database
     from src.sim_broker import Quote, SimBroker
@@ -318,8 +319,8 @@ def command_status(settings: Settings) -> int:
         )
         held = broker.held_symbols()
         if held:
-            # Se piden solo las posiciones abiertas: `status` no necesita cribar
-            # el universo ni gastar peticiones en candidatos nuevos.
+            # Only the open positions are requested: `status` needs neither to
+            # sift the universe nor to spend requests on new candidates.
             from src.market_data import YahooMarketData
 
             snapshots = YahooMarketData(
@@ -339,11 +340,11 @@ def command_status(settings: Settings) -> int:
 
     from src import market_calendar
 
-    mercado = market_calendar.get_market(settings.market)
-    money = mercado.currency_symbol
+    market = market_calendar.get_market(settings.market)
+    money = market.currency_symbol
 
     _print_header(
-        f"Cuenta ({settings.portfolio_name}, {settings.mode}, {mercado.currency})"
+        f"Cuenta ({settings.portfolio_name}, {settings.mode}, {market.currency})"
     )
     print(f"  Equity          {money}{account.equity:>14,.2f}")
     print(f"  Cash            {money}{account.cash:>14,.2f}")
@@ -377,21 +378,21 @@ def command_status(settings: Settings) -> int:
 # ----------------------------------------------------------------------
 
 def command_report(dash: DashboardSettings) -> int:
-    """Version en consola del dashboard.
+    """Console version of the dashboard.
 
-    Reutiliza el mismo ensamblado de datos que la web (`build_dashboard`), asi
-    que las dos vistas no pueden divergir. Abre la base en solo lectura y no
-    necesita credenciales de broker ni de LLM.
+    It reuses the same data assembly as the web (`build_dashboard`), so the two
+    views cannot diverge. It opens the database read-only and needs neither
+    broker nor LLM credentials.
     """
     from src.dashboard import build_dashboard
     from src.db import Database, DatabaseError
 
     from src import market_calendar
 
-    # La divisa sale del perfil de la cartera. `report` no recibe `Settings`
-    # -mirar el historico no debe exigir la clave del modelo-, asi que se
-    # consulta aqui. Sin perfil (carteras anteriores a F1.4) se cae al default,
-    # que es justo lo que esas carteras eran.
+    # The currency comes from the book's profile. `report` receives no `Settings`
+    # -looking at the history must not demand the model key-, so it is looked up
+    # here. With no profile (books predating F1.4) it falls back to the default,
+    # which is exactly what those books were.
     money = market_calendar.get_market().currency_symbol
     try:
         with Database(path=dash.db_path, read_only=True) as database:
@@ -561,11 +562,11 @@ def command_cycle(settings: Settings) -> int:
 # ----------------------------------------------------------------------
 
 def command_api(dash: DashboardSettings, *, host: str, port: int) -> int:
-    """La API de F3, que ademas sirve el build de React de `app/dist` (F3.7).
+    """F3's API, which also serves the React build from `app/dist` (F3.7).
 
-    Es la unica interfaz desde F4.11: el `serve` que levantaba el dashboard de
-    `web/index.html` se retiro con el, para que no quedaran dos pantallas
-    disputandose el 8000 y contando el mismo experimento de dos maneras.
+    It is the only interface since F4.11: the `serve` that used to bring up the
+    `web/index.html` dashboard was retired with it, so no two screens would be
+    left fighting over port 8000 and counting the same experiment two ways.
     """
     from api.main import serve as serve_api
 
@@ -597,16 +598,16 @@ def command_profiles(infra: Infra) -> int:
             universe = (
                 settings["universe_file"] or f"{len(symbols)} simbolos propios"
             )
-            # La divisa sale del mercado del perfil. Escribir '$' en un perfil
-            # europeo invita a comparar dos presupuestos como si fueran la misma
-            # unidad, y con dos experimentos en paralelo eso pasa solo.
-            mercado = market_calendar.get_market(settings["market"])
+            # The currency comes from the profile's market. Writing '$' in a
+            # European profile invites comparing two budgets as if they were the
+            # same unit, and with two experiments in parallel that happens by itself.
+            market = market_calendar.get_market(settings["market"])
             print(f"  {profile['name']}  [{profile['status']}]  "
-                  f"mercado={mercado.code} ({mercado.currency})")
+                  f"mercado={market.code} ({market.currency})")
             print(f"      {describe(settings)}")
-            # Con NVIDIA, una columna vacia no significa "sin clave": significa
-            # que se usa NVIDIA_API_KEY del entorno. Decir "(sin clave)" ahi
-            # mandaria a buscar un problema que no existe.
+            # With NVIDIA, an empty column does not mean "no key": it means
+            # NVIDIA_API_KEY from the environment is used. Saying "(sin clave)"
+            # there would send someone hunting for a problem that does not exist.
             sin_clave = (
                 "(NVIDIA_API_KEY del entorno)"
                 if settings["llm_provider"] == "nvidia" else "(sin clave)"
@@ -615,12 +616,12 @@ def command_profiles(infra: Infra) -> int:
                   f"  clave={mask_secret(settings['llm_api_key'], empty=sin_clave)}")
             print(f"      universo={universe}  "
                   f"({len(symbols)} en vivo)  presupuesto="
-                  f"{mercado.currency_symbol}{float(settings['initial_budget']):,.2f}")
+                  f"{market.currency_symbol}{float(settings['initial_budget']):,.2f}")
     return 0
 
 
 def command_import_profile(infra: Infra, *, name: str, env_file: str | None) -> int:
-    """Crea un perfil que reproduce el `.env`. Puente de un solo uso hacia F6.4."""
+    """Creates a profile reproducing the `.env`. A single-use bridge to F6.4."""
     from src.db import Database, DatabaseError
     from src.profile_settings import import_env_profile
 
@@ -653,15 +654,15 @@ def command_import_profile(infra: Infra, *, name: str, env_file: str | None) -> 
 def command_new_profile(
     infra: Infra, *, name: str, market: str, watch: int, budget: float
 ) -> int:
-    """Crea un perfil desde cero para un mercado, con su universo ya puesto.
+    """Creates a profile from scratch for a market, with its universe in place.
 
-    Existe porque `import-profile` solo sabe partir de un `.env`, y ese `.env`
-    describe el experimento americano heredado. Sin este comando, montar un
-    perfil europeo exigia abrir la base a mano.
+    It exists because `import-profile` only knows how to start from a `.env`, and
+    that `.env` describes the inherited American experiment. Without this command,
+    setting up a European profile meant opening the database by hand.
 
-    La logica vive en `src/profile_settings.create_market_profile`, que comparte
-    con el `POST /api/profiles` de F3.3: aqui solo quedan la impresion y los
-    codigos de salida.
+    The logic lives in `src/profile_settings.create_market_profile`, shared with
+    F3.3's `POST /api/profiles`: only the printing and the exit codes are left
+    here.
     """
     from src.db import Database, DatabaseError
     from src.profile_settings import UniverseError, create_market_profile
@@ -672,32 +673,32 @@ def command_new_profile(
                 database, name=name, market=market, watch=watch, budget=budget
             )
         except ConfigError as exc:
-            # "Elige tu otra cosa": mercado desconocido, sin nombre, universo
-            # demasiado grande para seguirlo entero.
+            # "Pick something else": unknown market, no name, universe too large
+            # to follow whole.
             print(f"  {exc}", file=sys.stderr)
             return 2
         except UniverseError as exc:
-            # El fichero del repositorio esta mal; no es una eleccion del usuario.
+            # The repository's file is wrong; it is not a choice of the user's.
             print(f"  {exc}", file=sys.stderr)
             return 1
         except DatabaseError as exc:
             print(f"  No se pudo crear el perfil: {exc}", file=sys.stderr)
             return 1
 
-    mercado = created.market
+    market = created.market
 
-    _print_header(f"Perfil {name!r} creado en {mercado.label}")
-    print(f"  Divisa: {mercado.currency}   "
-          f"sesion {mercado.open_time:%H:%M}-{mercado.close_time:%H:%M} hora local")
-    print(f"  Screener sobre {mercado.universe_file} "
+    _print_header(f"Perfil {name!r} creado en {market.label}")
+    print(f"  Divisa: {market.currency}   "
+          f"sesion {market.open_time:%H:%M}-{market.close_time:%H:%M} hora local")
+    print(f"  Screener sobre {market.universe_file} "
           f"({created.universe_size} simbolos)")
     print(f"  Ingesta en vivo de {created.watched} simbolos")
-    print(f"  Presupuesto inicial: {mercado.currency_symbol}{budget:,.2f}")
-    print(f"  Benchmark: {mercado.benchmark}")
-    # La cifra va en la divisa del mercado pese al nombre de la columna (F8.7):
-    # ensenarla con su simbolo evita que se lea como dolares.
+    print(f"  Presupuesto inicial: {market.currency_symbol}{budget:,.2f}")
+    print(f"  Benchmark: {market.benchmark}")
+    # The figure is in the market's currency despite the column's name (F8.7):
+    # showing it with its symbol stops it being read as dollars.
     print(f"  Liquidez minima del screener: "
-          f"{mercado.currency_symbol}{mercado.min_turnover:,.0f} al dia")
+          f"{market.currency_symbol}{market.min_turnover:,.0f} al dia")
     print(f"\n  Actívalo cuando lo tengas revisado:  "
           f"python run.py activate --profile {name}")
     return 0
@@ -753,7 +754,7 @@ def main(argv: list[str] | None = None) -> int:
         "--watch", type=int, default=0,
         help="Cuantos simbolos del universo seguir minuto a minuto (solo "
              "new-profile). 0 = todos, permitido solo si el universo es "
-             f"pequeno (<= {MAX_UNIVERSO_SEGUIDO}).",
+             f"pequeno (<= {MAX_LIVE_SYMBOLS}).",
     )
     parser.add_argument(
         "--budget", type=float, default=10_000.0,
@@ -775,9 +776,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    # `report` y `api` solo leen la base -o escriben configuracion-: no se les
-    # exigen credenciales, para poder revisar la operativa con el .env a medio
-    # rellenar.
+    # `report` and `api` only read the database -or write configuration-: no
+    # credentials are demanded of them, so the trading can be reviewed with the
+    # .env half filled in.
     if args.command in {"report", "api"}:
         dash = DashboardSettings.load(env_file=args.env_file)
         setup_logging((os.getenv("LOG_LEVEL") or "INFO").strip().upper())
@@ -832,13 +833,12 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _settings_for(args, infra: Infra, *, allow_env_fallback: bool) -> Settings:
-    """Resuelve los parametros del perfil. `check` puede caer al `.env`.
+    """Resolves the profile's parameters. `check` may fall back to the `.env`.
 
-    Esa excepcion es deliberada: `check` es la herramienta de diagnostico y tiene
-    que poder correr en una instalacion recien clonada, antes de que exista
-    ningun perfil. `cycle` y `status`, en cambio, exigen perfil: operar con
-    parametros que no quedan registrados en ningun sitio es justo lo que F6.4
-    viene a arreglar.
+    That exception is deliberate: `check` is the diagnostic tool and has to be
+    able to run on a freshly cloned install, before any profile exists. `cycle`
+    and `status`, by contrast, demand a profile: trading with parameters that are
+    recorded nowhere is precisely what F6.4 came to fix.
     """
     from src.profile_settings import load_for_cycle
 

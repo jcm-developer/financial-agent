@@ -1,28 +1,29 @@
-"""La aplicacion FastAPI: monta los routers y sirve el frontend.
+"""The FastAPI application: it mounts the routers and serves the frontend.
 
-Sustituyo al `http.server` de la biblioteca estandar con el que servia el
-dashboard viejo, sin dependencias a proposito. Con ~20 endpoints, escrituras y
-SSE esa decision dejo de compensar: enrutado a mano, validacion a mano y sin
-async (D5). Dentro de Docker las dependencias son gratis. Desde F4.11 esto es lo
-unico que sirve la interfaz.
+It replaced the standard library's `http.server` that used to serve the old
+dashboard, deliberately without dependencies. With ~20 endpoints, writes and SSE
+that decision stopped paying off: routing by hand, validation by hand and no
+async (D5). Inside Docker the dependencies are free. Since F4.11 this is the only
+thing serving the interface.
 
-Cuatro cosas que decide este modulo:
+Four things this module decides:
 
-  * **El esquema se aplica al arrancar**, abriendo una vez la base con la
-    conexion normal. Sin eso, una instalacion recien clonada daria 503 en todo
-    hasta que alguien ejecutara un ciclo, y `docker compose up` tiene que
-    levantar algo que funcione.
-  * **El frontend se sirve desde `app/dist`** con vuelta a `index.html` para las
-    rutas del SPA (F3.7). Si ese build falta —`npm run build` sin ejecutar—, el
-    hueco se rellena con una pagina que lo dice, no con un 404 que parezca una
-    averia. En Docker no puede faltar: lo compila la etapa 1 del Dockerfile.
-  * **La vuelta a `index.html` no se traga los 404 de la API.** Cualquier ruta
-    bajo `/api/` que no exista responde 404 en JSON. Sin esa excepcion, una
-    errata en una URL de la interfaz devolveria el HTML de la aplicacion con un
-    200, y el sintoma seria un `JSON.parse` fallando en el navegador tres capas
-    mas abajo.
-  * **Escucha en loopback por defecto y no tiene autenticacion** (F3.8): son
-    datos de una cuenta de inversion en la maquina de uno.
+  * **The schema is applied at startup**, opening the database once with the
+    normal connection. Without that, a freshly cloned install would give 503 on
+    everything until someone ran a cycle, and `docker compose up` has to bring up
+    something that works.
+  * **The frontend is served from `app/dist`** with a fallback to `index.html`
+    for the SPA's routes (F3.7). If that build is missing —`npm run build` never
+    run—, the gap is filled with a page that says so, not with a 404 that would
+    look like a breakage. In Docker it cannot be missing: stage 1 of the
+    Dockerfile compiles it.
+  * **The fallback to `index.html` does not swallow the API's 404s.** Any route
+    under `/api/` that does not exist answers 404 in JSON. Without that
+    exception, a typo in one of the interface's URLs would return the
+    application's HTML with a 200, and the symptom would be a `JSON.parse`
+    failing in the browser three layers down.
+  * **It listens on loopback by default and has no authentication** (F3.8): this
+    is data from an investment account on someone's own machine.
 """
 
 from __future__ import annotations
@@ -54,7 +55,7 @@ API local del agente de trading. Sin autenticacion: escucha en loopback.
 
 
 def create_app(config: ApiConfig | None = None) -> FastAPI:
-    """Construye la aplicacion. `config` explicito es lo que usan los tests."""
+    """Builds the application. An explicit `config` is what the tests use."""
     settings = config or ApiConfig.load()
 
     @asynccontextmanager
@@ -69,8 +70,8 @@ def create_app(config: ApiConfig | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.config = settings
-    # None cuando los controles estan apagados. Los endpoints de control miran
-    # esto: sin runner no hay forma de disparar nada.
+    # None when the controls are switched off. The control endpoints look at
+    # this: with no runner there is no way to fire anything.
     app.state.runner = CycleRunner() if settings.controls else None
 
     app.include_router(profiles.router)
@@ -84,18 +85,19 @@ def create_app(config: ApiConfig | None = None) -> FastAPI:
 
 
 def _ensure_database(db_path: str) -> None:
-    """Crea la base y aplica migraciones si hace falta.
+    """Creates the database and applies migrations if needed.
 
-    Se abre con la conexion normal —no la acotada de `guard.py`— porque aplicar
-    `schema.sql` es crear tablas, y el autorizador lo prohibe. Es una ventana de
-    un solo uso, al arrancar, con SQL que sale del repositorio.
+    It is opened with the normal connection —not the fenced one from `guard.py`—
+    because applying `schema.sql` means creating tables, and the authorizer
+    forbids that. It is a single-use window, at startup, with SQL that comes from
+    the repository.
     """
     try:
         with Database(path=db_path):
             pass
     except (DatabaseError, OSError) as exc:
-        # No se aborta el arranque: la API tiene que poder levantarse para decir
-        # que la base no esta disponible. Cada endpoint devolvera 503.
+        # Startup is not aborted: the API has to be able to come up in order to
+        # say the database is unavailable. Every endpoint will return 503.
         log.warning("No se pudo preparar la base de datos %s: %s", db_path, exc)
 
 
@@ -128,13 +130,13 @@ PLACEHOLDER = """<!doctype html>
 
 
 def _mount_frontend(app: FastAPI, dist: Path) -> None:
-    """Sirve el build del SPA, o el marcador si todavia no hay build.
+    """Serves the SPA build, or the placeholder when there is no build yet.
 
-    No se usa `StaticFiles(html=True)` montado en `/` porque se traga el
-    enrutado: cualquier ruta desconocida —incluidas las de `/api`— acabaria
-    respondiendo el `index.html`. Con una ruta comodin registrada **la ultima**,
-    los routers de la API siguen mandando y solo lo que no es de la API cae en
-    el SPA.
+    `StaticFiles(html=True)` mounted at `/` is not used because it swallows the
+    routing: any unknown route —including those under `/api`— would end up
+    answering with `index.html`. With a wildcard route registered **last**, the
+    API's routers still win and only what is not the API's falls through to the
+    SPA.
     """
     index = dist / "index.html"
 
@@ -148,8 +150,8 @@ def _mount_frontend(app: FastAPI, dist: Path) -> None:
         if not index.is_file():
             return HTMLResponse(PLACEHOLDER)
 
-        # Un fichero real del build (JS, CSS, iconos) se sirve tal cual; el resto
-        # de rutas son del router del SPA y les toca el index.
+        # A real file from the build (JS, CSS, icons) is served as-is; every other
+        # route belongs to the SPA's router and gets the index.
         candidate = (dist / full_path).resolve() if full_path else None
         if (
             candidate is not None
@@ -165,13 +167,13 @@ def _mount_frontend(app: FastAPI, dist: Path) -> None:
         return JSONResponse({"detail": detail}, status_code=404)
 
 
-#: Instancia para `uvicorn api.main:app`. Se crea al importar, que es lo que
-#: espera uvicorn cuando se le pasa la ruta del modulo.
+#: The instance for `uvicorn api.main:app`. It is created on import, which is
+#: what uvicorn expects when it is given a module path.
 app = create_app()
 
 
 def serve(*, host: str = "", port: int = 0, db_path: str = "") -> int:
-    """Arranca uvicorn. Es lo que llama `run.py api`."""
+    """Starts uvicorn. This is what `run.py api` calls."""
     import uvicorn
 
     config = ApiConfig.load(db_path=db_path or None)

@@ -1,20 +1,21 @@
 #!/usr/bin/env python
-"""Genera los tipos de TypeScript del frontend a partir del OpenAPI (F3.6).
+"""Generates the frontend's TypeScript types from the OpenAPI document (F3.6).
 
     python tools/gen_api_types.py                 # -> app/src/api/types.ts
-    python tools/gen_api_types.py --check         # falla si estan desfasados
-    python tools/gen_api_types.py --out otro.ts
+    python tools/gen_api_types.py --check         # fails if they are out of date
+    python tools/gen_api_types.py --out other.ts
 
-**Por que no `openapi-typescript`.** Es la herramienta estandar y hace esto
-mejor, pero necesita Node, y hoy el repositorio no tiene ni `package.json`: el
-frontend llega en F4. Un generador de 150 lineas sin dependencias se puede correr
-desde el primer dia, que es cuando hace falta —los tipos son justo lo que va a
-consumir el andamiaje de F4.1—. Si algun dia el esquema se complica, cambiar a
-`openapi-typescript` es sustituir este fichero, no rehacer nada.
+**Why not `openapi-typescript`.** It is the standard tool and it does this
+better, but it needs Node, and today the repository does not even have a
+`package.json`: the frontend arrives in F4. A 150-line generator with no
+dependencies can be run from day one, which is when it is needed —the types are
+exactly what F4.1's scaffolding is going to consume—. If the schema ever gets
+complicated, moving to `openapi-typescript` means replacing this file, not
+redoing anything.
 
-El `--check` esta pensado para un hook o para F8.6: si alguien añade un campo a
-un modelo de `api/models.py` y no regenera, el fichero de tipos empieza a mentir
-en silencio, que es exactamente lo que F3.6 quiere evitar.
+The `--check` is meant for a hook or for F8.6: if someone adds a field to a model
+in `api/models.py` and does not regenerate, the types file starts lying in
+silence, which is exactly what F3.6 wants to avoid.
 """
 
 from __future__ import annotations
@@ -46,7 +47,7 @@ def _safe(name: str) -> str:
 
 
 def _type(schema: dict[str, Any] | None) -> str:
-    """Un esquema de JSON Schema a su equivalente en TypeScript."""
+    """One JSON Schema schema to its TypeScript equivalent."""
     if not schema:
         return "unknown"
 
@@ -62,7 +63,7 @@ def _type(schema: dict[str, Any] | None) -> str:
     for key in ("anyOf", "oneOf"):
         if key in schema:
             partes = [_type(sub) for sub in schema[key]]
-            # `null` al final: se lee mejor `string | null` que `null | string`.
+            # `null` last: `string | null` reads better than `null | string`.
             partes = sorted(set(partes), key=lambda t: (t == "null", t))
             return " | ".join(partes) or "unknown"
 
@@ -106,8 +107,8 @@ def _literal(value: Any) -> str:
 def _inline_object(schema: dict[str, Any]) -> str:
     required = set(schema.get("required") or ())
     campos = [
-        f"{_key(nombre)}{'' if nombre in required else '?'}: {_type(sub)}"
-        for nombre, sub in (schema.get("properties") or {}).items()
+        f"{_key(name)}{'' if name in required else '?'}: {_type(sub)}"
+        for name, sub in (schema.get("properties") or {}).items()
     ]
     return "{ " + "; ".join(campos) + " }" if campos else "Record<string, never>"
 
@@ -118,37 +119,38 @@ def _key(name: str) -> str:
 
 def _interface(name: str, schema: dict[str, Any]) -> str:
     doc = schema.get("description") or ""
-    lineas: list[str] = []
+    lines: list[str] = []
     if doc:
-        lineas.append("/**")
-        lineas += [f" * {linea}".rstrip() for linea in doc.strip().splitlines()]
-        lineas.append(" */")
+        lines.append("/**")
+        lines += [f" * {line}".rstrip() for line in doc.strip().splitlines()]
+        lines.append(" */")
 
-    # Un modelo sin propiedades (un enum suelto, una union) es un alias, no una
-    # interfaz: `interface X extends string` no existe en TypeScript.
+    # A model with no properties (a loose enum, a union) is an alias, not an
+    # interface: `interface X extends string` does not exist in TypeScript.
     if "properties" not in schema:
-        lineas.append(f"export type {_safe(name)} = {_type(schema)};")
-        return "\n".join(lineas)
+        lines.append(f"export type {_safe(name)} = {_type(schema)};")
+        return "\n".join(lines)
 
     required = set(schema.get("required") or ())
-    lineas.append(f"export interface {_safe(name)} {{")
+    lines.append(f"export interface {_safe(name)} {{")
     for campo, sub in schema["properties"].items():
         sub_doc = sub.get("description")
         if sub_doc:
-            lineas.append(f"  /** {' '.join(sub_doc.split())} */")
+            lines.append(f"  /** {' '.join(sub_doc.split())} */")
         opcional = "" if campo in required else "?"
-        lineas.append(f"  {_key(campo)}{opcional}: {_type(sub)};")
-    lineas.append("}")
-    return "\n".join(lineas)
+        lines.append(f"  {_key(campo)}{opcional}: {_type(sub)};")
+    lines.append("}")
+    return "\n".join(lines)
 
 
 def _paths(spec: dict[str, Any]) -> str:
-    """Un mapa de operaciones: metodo, ruta y tipo de la respuesta 2xx.
+    """A map of operations: method, path and type of the 2xx response.
 
-    No pretende ser un cliente tipado: es lo justo para que el `fetch` del
-    frontend sepa que espera de cada URL sin ir a mirar el codigo Python.
+    It does not aim to be a typed client: it is just enough for the frontend's
+    `fetch` to know what to expect from each URL without going to look at the
+    Python code.
     """
-    lineas = [
+    lines = [
         "/** Operaciones de la API: 'METODO /ruta' -> tipo de la respuesta. */",
         "export interface ApiOperations {",
     ]
@@ -163,19 +165,19 @@ def _paths(spec: dict[str, Any]) -> str:
                     contenido = (respuestas[codigo].get("content") or {})
                     esquema = (contenido.get("application/json") or {}).get("schema")
                     break
-            resumen = operacion.get("summary") or ""
-            if resumen:
-                lineas.append(f"  /** {resumen} */")
-            lineas.append(f'  "{metodo.upper()} {ruta}": {_type(esquema)};')
-    lineas.append("}")
-    return "\n".join(lineas)
+            summary = operacion.get("summary") or ""
+            if summary:
+                lines.append(f"  /** {summary} */")
+            lines.append(f'  "{metodo.upper()} {ruta}": {_type(esquema)};')
+    lines.append("}")
+    return "\n".join(lines)
 
 
 def render(spec: dict[str, Any]) -> str:
     esquemas = (spec.get("components") or {}).get("schemas") or {}
     bloques = [HEADER]
-    for nombre in sorted(esquemas):
-        bloques.append(_interface(nombre, esquemas[nombre]))
+    for name in sorted(esquemas):
+        bloques.append(_interface(name, esquemas[name]))
     bloques.append(_paths(spec))
     return "\n\n".join(bloques) + "\n"
 
@@ -193,24 +195,24 @@ def main(argv: list[str] | None = None) -> int:
 
     spec = create_app().openapi()
     contenido = render(spec)
-    destino = Path(args.out)
+    target = Path(args.out)
 
     if args.check:
-        actual = destino.read_text(encoding="utf-8") if destino.is_file() else ""
+        actual = target.read_text(encoding="utf-8") if target.is_file() else ""
         if actual == contenido:
-            print(f"  {destino} esta al dia.")
+            print(f"  {target} esta al dia.")
             return 0
         print(
-            f"  {destino} no coincide con el OpenAPI actual.\n"
+            f"  {target} no coincide con el OpenAPI actual.\n"
             "  Regeneralo con:  python tools/gen_api_types.py",
             file=sys.stderr,
         )
         return 1
 
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_text(contenido, encoding="utf-8")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(contenido, encoding="utf-8")
     tipos = len((spec.get("components") or {}).get("schemas") or {})
-    print(f"  {tipos} tipos escritos en {destino}")
+    print(f"  {tipos} tipos escritos en {target}")
     return 0
 
 

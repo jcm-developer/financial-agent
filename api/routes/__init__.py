@@ -1,1 +1,1 @@
-"""Los endpoints, repartidos por lo que hacen y no por la tabla que tocan."""
+"""The endpoints, grouped by what they do and not by the table they touch."""

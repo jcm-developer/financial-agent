@@ -1,14 +1,13 @@
-"""Perfiles de experimento, parametros del agente y datos de mercado en vivo.
+"""Experiment profiles, agent settings and live market data.
 
-Cubre las tablas que introduce F1. Lo que mas se prueba aqui no es el camino
-feliz sino tres invariantes que, si se rompen, arruinan el experimento en
-silencio:
+It covers the tables F1 introduces. What gets tested most here is not the happy
+path but three invariants that, if broken, ruin the experiment in silence:
 
-  * borrar un perfil arrastra todo su historico (si no, quedan huerfanos que
-    contaminan las metricas del siguiente),
-  * el historial de parametros registra los cambios reales y solo esos,
-  * las escrituras del ingestor son idempotentes (la barra del minuto en curso
-    se reescribe cada minuto hasta que cierra).
+  * deleting a profile drags all of its history along (otherwise orphans are left
+    that contaminate the next one's metrics),
+  * the settings history records the real changes and only those,
+  * the ingestor's writes are idempotent (the current minute's bar is rewritten
+    every minute until it closes).
 """
 
 from __future__ import annotations
@@ -27,8 +26,8 @@ def _iso(moment: datetime) -> str:
 # -- Perfiles ---------------------------------------------------------------
 
 
-def test_crear_perfil_deja_parametros_y_cartera(db):
-    """Un perfil nace utilizable: con parametros por defecto y con cartera."""
+def test_creating_a_profile_leaves_settings_and_a_book(db):
+    """A profile is born usable: with default settings and with a book."""
     profile_id = db.create_profile(name="experimento-01", description="control")
 
     profile = db.get_profile(profile_id)
@@ -42,11 +41,11 @@ def test_crear_perfil_deja_parametros_y_cartera(db):
     assert settings["diversification"] == 5
 
 
-def test_limites_duros_nacen_nulos(db):
-    """NULL significa 'derivalo de los sliders'.
+def test_hard_limits_are_born_null(db):
+    """NULL means 'derive it from the sliders'.
 
-    Si nacieran con numeros, mover el slider de riesgo no cambiaria nada y el
-    usuario no entenderia por que.
+    If they were born with numbers, moving the risk slider would change nothing
+    and the user would not understand why.
     """
     profile_id = db.create_profile(name="p")
     settings = db.get_settings(profile_id)
@@ -60,22 +59,22 @@ def test_limites_duros_nacen_nulos(db):
     assert settings["advanced_overrides"] == 0
 
 
-def test_nombre_de_perfil_es_unico(db):
+def test_a_profile_name_is_unique(db):
     db.create_profile(name="repetido")
     with pytest.raises(DatabaseError, match="Ya existe"):
         db.create_profile(name="repetido")
 
 
-def test_nombre_vacio_se_rechaza(db):
+def test_an_empty_name_is_refused(db):
     with pytest.raises(DatabaseError, match="nombre"):
         db.create_profile(name="   ")
 
 
-def test_borrar_perfil_arrastra_su_historico(db):
-    """La cascada es lo que permite tirar un experimento fallido de una vez.
+def test_deleting_a_profile_drags_its_history_along(db):
+    """The cascade is what allows throwing a failed experiment away in one go.
 
-    Sin ella quedarian ciclos y decisiones sin dueno, que luego aparecen en las
-    vistas de analisis y corrompen la comparacion entre experimentos.
+    Without it, cycles and decisions would be left ownerless, later turning up in
+    the analysis views and corrupting the comparison between experiments.
     """
     profile_id = db.create_profile(name="a-borrar")
     portfolio_id = db.get_profile(profile_id)["portfolio_id"]
@@ -98,13 +97,14 @@ def test_borrar_perfil_arrastra_su_historico(db):
     assert cycle_id  # el ciclo existio antes del borrado
 
 
-def test_borrar_perfil_arrastra_el_libro_del_broker_simulado(db):
-    """`sim_accounts` no cuelga de `portfolios` con FK: su id **es** el
-    portfolio_id, pero sin `references`, asi que la cascada no lo alcanza sola.
+def test_deleting_a_profile_drags_the_simulated_brokers_ledger_along(db):
+    """`sim_accounts` does not hang off `portfolios` with an FK: its id **is** the
+    portfolio_id, but without a `references`, so the cascade does not reach it on
+    its own.
 
-    Se comprueba aparte porque el sintoma es mudo: el perfil desaparece de todas
-    las pantallas y su efectivo, sus posiciones simuladas y sus ejecuciones
-    siguen ahi ocupando sitio, sin nada que los relacione con nadie.
+    It is checked separately because the symptom is mute: the profile disappears
+    from every screen and its cash, its simulated positions and its fills stay
+    there taking up space, with nothing tying them to anyone.
     """
     from src.sim_broker import SimBroker
 
@@ -124,13 +124,13 @@ def test_borrar_perfil_arrastra_el_libro_del_broker_simulado(db):
         assert restantes == 0, f"{tabla} conservo filas huerfanas: {restantes}"
 
 
-def test_estado_invalido_se_rechaza(db):
+def test_an_invalid_status_is_refused(db):
     profile_id = db.create_profile(name="p")
     with pytest.raises(DatabaseError, match="Estado invalido"):
         db.set_profile_status(profile_id, "encendido")
 
 
-def test_archivar_sella_la_fecha_y_lo_saca_del_listado(db):
+def test_archiving_stamps_the_date_and_takes_it_off_the_listing(db):
     profile_id = db.create_profile(name="viejo")
     db.set_profile_status(profile_id, "archived")
 
@@ -142,7 +142,7 @@ def test_archivar_sella_la_fecha_y_lo_saca_del_listado(db):
 # -- Parametros --------------------------------------------------------------
 
 
-def test_cambiar_parametro_deja_rastro(db):
+def test_changing_a_setting_leaves_a_trace(db):
     profile_id = db.create_profile(name="p")
 
     cambiados = db.update_settings(
@@ -159,10 +159,10 @@ def test_cambiar_parametro_deja_rastro(db):
     assert riesgo["source"] == "ui"
 
 
-def test_reescribir_el_mismo_valor_no_ensucia_el_historial(db):
-    """El historial existe para explicar cambios de comportamiento.
+def test_rewriting_the_same_value_does_not_dirty_the_history(db):
+    """The history exists to explain changes of behaviour.
 
-    Una fila que no cambia nada solo hace mas dificil encontrar la que si.
+    A row that changes nothing only makes it harder to find the one that does.
     """
     profile_id = db.create_profile(name="p")
     db.update_settings(profile_id, {"risk_profile": 7})
@@ -173,27 +173,27 @@ def test_reescribir_el_mismo_valor_no_ensucia_el_historial(db):
     assert len(db.settings_history(profile_id)) == 1
 
 
-def test_parametro_desconocido_se_rechaza(db):
-    """Un nombre de campo mal escrito debe fallar, no guardarse en silencio."""
+def test_an_unknown_setting_is_refused(db):
+    """A misspelt field name must fail, not be stored in silence."""
     profile_id = db.create_profile(name="p")
     with pytest.raises(DatabaseError, match="desconocidos"):
         db.update_settings(profile_id, {"risk_profil": 9})
 
 
-def test_no_se_puede_colar_sql_por_el_nombre_del_campo(db):
-    """Los nombres de columna no admiten placeholder, asi que se validan aparte."""
+def test_sql_cannot_be_smuggled_in_through_the_field_name(db):
+    """Column names take no placeholder, so they are validated separately."""
     profile_id = db.create_profile(name="p")
     with pytest.raises(DatabaseError, match="desconocidos"):
         db.update_settings(profile_id, {"risk_profile = 1, llm_model": "x"})
 
 
-def test_parametros_fuera_de_rango_los_para_el_esquema(db):
+def test_the_schema_stops_settings_out_of_range(db):
     profile_id = db.create_profile(name="p")
     with pytest.raises(DatabaseError):
         db.update_settings(profile_id, {"risk_profile": 11})
 
 
-def test_settings_de_perfil_inexistente(db):
+def test_settings_of_a_profile_that_does_not_exist(db):
     with pytest.raises(DatabaseError, match="no tiene parametros"):
         db.get_settings("no-existe")
 
@@ -201,7 +201,7 @@ def test_settings_de_perfil_inexistente(db):
 # -- Universo ----------------------------------------------------------------
 
 
-def test_universo_se_normaliza_y_se_reemplaza(db):
+def test_the_universe_is_normalised_and_replaced(db):
     profile_id = db.create_profile(name="p")
 
     db.set_profile_universe(profile_id, [" aapl ", "MSFT", "aapl", ""])
@@ -211,7 +211,7 @@ def test_universo_se_normaliza_y_se_reemplaza(db):
     assert db.get_profile_universe(profile_id) == ["NVDA"]
 
 
-def test_universo_activo_solo_mira_perfiles_activos(db):
+def test_the_active_universe_only_looks_at_active_profiles(db):
     activo = db.create_profile(name="activo")
     pausado = db.create_profile(name="pausado")
     db.set_profile_universe(activo, ["AAPL"])
@@ -221,10 +221,10 @@ def test_universo_activo_solo_mira_perfiles_activos(db):
     assert db.active_universe() == ["AAPL"]
 
 
-def test_universo_activo_incluye_posiciones_abiertas(db):
-    """Una posicion abierta necesita precio aunque su simbolo salga del universo.
+def test_the_active_universe_includes_open_positions(db):
+    """An open position needs a price even when its symbol leaves the universe.
 
-    Si no, el agente se quedaria sin poder valorar ni cerrar lo que ya tiene.
+    Otherwise the agent would be left unable to value or close what it already holds.
     """
     profile_id = db.create_profile(name="p")
     portfolio_id = db.get_profile(profile_id)["portfolio_id"]
@@ -243,9 +243,9 @@ def test_universo_activo_incluye_posiciones_abiertas(db):
 # -- Datos de mercado en vivo ------------------------------------------------
 
 
-def test_quotes_live_no_crece(db):
-    """Una fila por simbolo, se reemplaza. Si creciera, seria un historico
-    duplicado de bars_1m."""
+def test_quotes_live_does_not_grow(db):
+    """One row per symbol, replaced. If it grew, it would be a duplicate history
+    of bars_1m."""
     ahora = datetime.now(timezone.utc)
 
     db.upsert_quotes([{"symbol": "AAPL", "price": 100.0, "as_of": _iso(ahora)}])
@@ -255,11 +255,11 @@ def test_quotes_live_no_crece(db):
     assert db.latest_quotes()["AAPL"]["price"] == 101.5
 
 
-def test_bars_1m_reescribe_la_barra_en_curso(db):
-    """La barra del minuto actual cambia mientras el mercado sigue abierto.
+def test_bars_1m_rewrites_the_bar_in_progress(db):
+    """The current minute's bar changes while the market is still open.
 
-    Por eso `insert or replace` y no `insert or ignore`: con ignore, el precio de
-    cierre del minuto se quedaria congelado en el primer valor visto.
+    Hence `insert or replace` and not `insert or ignore`: with ignore, the
+    minute's closing price would stay frozen at the first value seen.
     """
     ts = _iso(datetime(2026, 8, 7, 15, 30, tzinfo=timezone.utc))
     barra = {"symbol": "AAPL", "ts": ts, "open": 100, "high": 100,
@@ -268,13 +268,13 @@ def test_bars_1m_reescribe_la_barra_en_curso(db):
     db.upsert_bars_1m([barra])
     db.upsert_bars_1m([{**barra, "high": 103, "close": 102, "volume": 1500}])
 
-    filas = db.query("select * from bars_1m")
-    assert len(filas) == 1
-    assert filas[0]["close"] == 102
-    assert filas[0]["volume"] == 1500
+    rows = db.query("select * from bars_1m")
+    assert len(rows) == 1
+    assert rows[0]["close"] == 102
+    assert rows[0]["volume"] == 1500
 
 
-def test_prune_respeta_la_ventana(db):
+def test_prune_respects_the_window(db):
     ahora = datetime.now(timezone.utc)
     db.upsert_bars_1m([
         {"symbol": "AAPL", "ts": _iso(ahora - timedelta(days=100)),
@@ -289,13 +289,13 @@ def test_prune_respeta_la_ventana(db):
     assert db.query("select count(1) n from bars_1m")[0]["n"] == 1
 
 
-def test_prune_exige_ventana_positiva(db):
-    """keep_days=0 borraria el historico entero de un tiron."""
+def test_prune_demands_a_positive_window(db):
+    """keep_days=0 would wipe the whole history in one go."""
     with pytest.raises(DatabaseError, match="al menos 1"):
         db.prune_bars_1m(keep_days=0)
 
 
-def test_ingest_run_se_abre_y_se_cierra(db):
+def test_an_ingest_run_opens_and_closes(db):
     run_id = db.start_ingest_run(symbols_requested=50)
     db.finish_ingest_run(
         run_id, symbols_ok=48, symbols_failed=2, latency_ms=1550, rate_limited=False
@@ -307,7 +307,7 @@ def test_ingest_run_se_abre_y_se_cierra(db):
     assert run["finished_at"] is not None
 
 
-def test_ingest_health_devuelve_lo_mas_reciente_primero(db):
+def test_ingest_health_returns_the_most_recent_first(db):
     for _ in range(3):
         db.finish_ingest_run(
             db.start_ingest_run(symbols_requested=10),
@@ -319,25 +319,25 @@ def test_ingest_health_devuelve_lo_mas_reciente_primero(db):
     assert salud[0]["id"] > salud[1]["id"]
 
 
-def test_escrituras_vacias_no_rompen(db):
-    """El ingestor puede terminar un tick sin nada que escribir (mercado en
-    calma, o todos los simbolos fallidos)."""
+def test_empty_writes_do_not_break(db):
+    """The ingestor can finish a tick with nothing to write (a calm market, or
+    every symbol failing)."""
     assert db.upsert_quotes([]) == 0
     assert db.upsert_bars_1m([]) == 0
 
 
 # ----------------------------------------------------------------------
-# La demo, que es la puerta de entrada del README
+# The demo, which is the README's front door
 # ----------------------------------------------------------------------
 
-def test_la_demo_crea_un_perfil_y_no_solo_una_cartera(tmp_path):
-    """Sin perfil, la interfaz de F4 no puede enseñarla.
+def test_the_demo_creates_a_profile_and_not_just_a_book(tmp_path):
+    """With no profile, F4's interface cannot show it.
 
-    `tools/seed_demo.py` llamaba solo a `ensure_portfolio`, que deja una cartera
-    huerfana. La consola la encontraba por nombre y el dashboard viejo la ofrecia
-    en su selector, asi que la demo parecia funcionar; pero la interfaz nueva
-    navega por perfil (`/p/demo/...`) y `/api/profiles` devolvia una lista vacia.
-    Es la primera cosa que dice el README que hagas, asi que se queda fijada.
+    `tools/seed_demo.py` called only `ensure_portfolio`, which leaves an orphan
+    book. The console found it by name and the old dashboard offered it in its
+    selector, so the demo seemed to work; but the new interface navigates by
+    profile (`/p/demo/...`) and `/api/profiles` returned an empty list. It is the
+    first thing the README tells you to do, so it stays pinned down.
     """
     import sys
     from pathlib import Path

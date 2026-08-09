@@ -1,15 +1,15 @@
-"""Disparar y parar ciclos desde la interfaz (F3.4).
+"""Firing and stopping cycles from the interface (F3.4).
 
-Estos son los unicos endpoints que provocan una escritura en el historico, y lo
-hacen **sin poder escribirla ellos**: lanzan `run.py cycle` como subproceso, que
-abre su propia conexion sin acotar. Es la misma separacion que ya tenia el
-dashboard, y con F3.3 pasa de ser prudente a ser necesaria: la API no puede
-tocar `orders` ni `positions` ni queriendo (ver `guard.py`), asi que operar
-tenia que salir del proceso de todas formas.
+These are the only endpoints that cause a write to the history, and they do it
+**without being able to write it themselves**: they launch `run.py cycle` as a
+subprocess, which opens its own unfenced connection. It is the same separation
+the dashboard already had, and with F3.3 it goes from prudent to necessary: the
+API cannot touch `orders` or `positions` even if it wanted to (see `guard.py`),
+so trading had to leave the process either way.
 
-Se desactivan enteros con `API_CONTROLS=false`. No se deduce de la direccion de
-escucha: dentro de Docker hay que escuchar en 0.0.0.0 para que el mapeo de
-puertos funcione, asi que el host no dice nada sobre quien puede llegar.
+They are switched off wholesale with `API_CONTROLS=false`. It is not inferred
+from the listening address: inside Docker you have to listen on 0.0.0.0 for port
+mapping to work, so the host says nothing about who can reach it.
 """
 
 from __future__ import annotations
@@ -36,13 +36,13 @@ def control_status(runner: Runner):
 
 @router.post("/run", response_model=CycleControl)
 def run_cycle(db: ReadDb, runner: Runner, body: CycleRunRequest):
-    """Arranca un ciclo, salvo que ya haya uno en marcha.
+    """Starts a cycle, unless one is already running.
 
-    Se comprueban **las dos** fuentes posibles: el subproceso propio y la tabla
-    `cycles`. La segunda importa porque el contenedor del planificador puede
-    tener un ciclo corriendo del que este proceso no sabe nada, y dos ciclos a la
-    vez sobre la misma cartera se pisarian las posiciones y el efectivo, dejando
-    un historico con decisiones duplicadas imposible de interpretar.
+    **Both** possible sources are checked: this process's own subprocess and the
+    `cycles` table. The second matters because the scheduler's container may have
+    a cycle running that this process knows nothing about, and two cycles at once
+    over the same book would step on each other's positions and cash, leaving a
+    history with duplicated decisions that cannot be interpreted.
     """
     _require_controls(runner)
 
@@ -65,10 +65,10 @@ def run_cycle(db: ReadDb, runner: Runner, body: CycleRunRequest):
 
 @router.post("/stop", response_model=ActionResult)
 def stop_cycle(runner: Runner):
-    """Pide la parada del ciclo que lanzo esta API.
+    """Asks the cycle this API launched to stop.
 
-    Solo puede parar el suyo: el del planificador corre en otro contenedor. Se
-    dice asi en el mensaje en lugar de fingir que no hay ninguno.
+    It can only stop its own: the scheduler's runs in another container. That is
+    said in the message rather than pretending there is none.
     """
     _require_controls(runner)
     ok, message = runner.stop()
@@ -92,6 +92,6 @@ def _cycle_running_elsewhere(db: Database) -> bool:
             db.query("select count(1) as n from cycles where status = 'running'")[0]["n"]
         )
     except DatabaseError:
-        # Si no se puede leer, no se bloquea el arranque: el propio ciclo tiene
-        # su comprobacion (`find_running_cycle`) y es la que manda de verdad.
+        # If it cannot be read, the start is not blocked: the cycle has its own
+        # check (`find_running_cycle`) and that is the one that really decides.
         return False

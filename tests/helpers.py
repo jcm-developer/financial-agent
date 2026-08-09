@@ -1,12 +1,12 @@
-"""Dobles y utilidades compartidas por los tests de ciclo.
+"""Doubles and utilities shared by the cycle's tests.
 
-Viven aqui y no dentro de un modulo de tests para que un fichero de tests no
-tenga que importar a otro: eso ata el orden de ejecucion y rompe en cuanto
-`tests/` no es un paquete.
+They live here and not inside a test module so no test file has to import
+another: that ties the execution order and breaks the moment `tests/` is not a
+package.
 
-Se sustituyen solo las dos fronteras externas —el modelo y la descarga de barras—
-y todo lo demas corre de verdad: analista, Risk Manager, broker simulado y base
-de datos.
+Only the two external boundaries are replaced —the model and the bar download—
+and everything else runs for real: analyst, Risk Manager, simulated broker and
+database.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ WATCHLIST = ("AAPL", "MSFT")
 
 
 class StubLLM:
-    """Devuelve una respuesta fija segun si se le pregunta por una entrada o por
-    una salida. Distingue por el prompt de sistema, igual que haria el modelo."""
+    """Returns a fixed response depending on whether it is asked about an entry
+    or an exit. It tells them apart by the system prompt, as the model would."""
 
     def __init__(self, *, entry: dict, exit_: dict) -> None:
         self.entry = entry
@@ -46,11 +46,11 @@ class StubLLM:
 
 
 class StubMarketData:
-    """Barras sinteticas. `closes` fija el cierre de cada sesion; la apertura se
-    deriva para que precio de decision y de ejecucion nunca coincidan.
+    """Synthetic bars. `closes` sets each session's close; the open is derived so
+    the decision price and the execution price never coincide.
 
-    Respeta el contrato real: devuelve sus propios candidatos mas los simbolos
-    obligatorios que le pasen.
+    It honours the real contract: it returns its own candidates plus whatever
+    mandatory symbols it is given.
     """
 
     def __init__(self, closes_by_symbol: dict[str, list[float]]) -> None:
@@ -97,8 +97,8 @@ def make_settings(**overrides) -> Settings:
         initial_budget=10_000.0, watchlist=WATCHLIST,
         lookback_days=200, dry_run=False, log_level="CRITICAL",
         bar_interval="1d",
-        # Los tests no dependen del reloj: si respetaran el calendario, la suite
-        # solo pasaria en horario de mercado.
+        # The tests do not depend on the clock: if they honoured the calendar,
+        # the suite would only pass during market hours.
         skip_when_market_closed=False,
         risk=RiskLimits(min_conviction=65, max_open_positions=5),
     )

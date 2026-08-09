@@ -1,22 +1,21 @@
-"""Lanzar un ciclo desde la interfaz, como subproceso.
+"""Launching a cycle from the interface, as a subprocess.
 
-Es el patron que ya estaba resuelto en el `web/server.py` del dashboard viejo, y
-que F3.4 mandaba reaprovechar. Se copio en vez de importarse porque aquel modulo
-tenia fecha de caducidad: **se borro en F4.11**, y una dependencia apuntando a el
-habria sido un fallo esperando al dia señalado. Copiarlo costo un fichero;
-importarlo habria costado el arranque de la API.
+It is the pattern already solved in the old dashboard's `web/server.py`, which
+F3.4 said to reuse. It was copied rather than imported because that module had an
+expiry date: **it was deleted in F4.11**, and a dependency pointing at it would
+have been a failure waiting for the appointed day. Copying it cost one file;
+importing it would have cost the API's startup.
 
-**Subproceso y no un hilo con `TradingCycle` dentro.** Tres razones, y ninguna es
-teorica:
+**A subprocess and not a thread with `TradingCycle` inside.** Three reasons, none
+of them theoretical:
 
-  * Un ciclo tarda veinte minutos y hace llamadas de red largas. Aislado, un
-    fallo suyo no se lleva por delante el servidor.
-  * Se puede matar. Un hilo de Python no.
-  * **La API no puede escribir en el historico** (ver `guard.py`), y el ciclo
-    tiene que hacerlo. Dentro del proceso serviria de poco acotar la conexion de
-    la API si el ciclo escribiera desde el mismo sitio; fuera, quien opera es
-    `run.py cycle` con su propia conexion, igual que si lo hubiera lanzado el
-    planificador.
+  * A cycle takes twenty minutes and makes long network calls. Isolated, a
+    failure of its own does not take the server down with it.
+  * It can be killed. A Python thread cannot.
+  * **The API cannot write to the history** (see `guard.py`), and the cycle has
+    to. In-process, fencing the API's connection would be worth little if the
+    cycle wrote from the same place; outside, the one trading is `run.py cycle`
+    with its own connection, exactly as if the scheduler had launched it.
 """
 
 from __future__ import annotations
@@ -32,13 +31,13 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 APP_DIR = Path(__file__).resolve().parent.parent
-#: Lineas de log que se guardan para enseñar en la interfaz. Es un buffer
-#: circular: un ciclo largo escribe miles y solo interesan las ultimas.
+#: Log lines kept to show in the interface. It is a ring buffer: a long cycle
+#: writes thousands and only the last ones are of interest.
 LOG_TAIL = 400
 
 
 class CycleRunner:
-    """Un ciclo a la vez, con su salida disponible para la interfaz."""
+    """One cycle at a time, with its output available to the interface."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -94,7 +93,7 @@ class CycleRunner:
         return True, "Ciclo lanzado."
 
     def _pump(self, process: subprocess.Popen) -> None:
-        """Vuelca la salida del subproceso al buffer circular."""
+        """Drains the subprocess's output into the ring buffer."""
         try:
             if process.stdout is not None:
                 for line in process.stdout:
@@ -127,11 +126,11 @@ class CycleRunner:
         }
 
     def lines_since(self, index: int) -> tuple[int, list[str]]:
-        """Las lineas a partir de `index`, para el SSE.
+        """The lines from `index` on, for the SSE.
 
-        Devuelve tambien el indice nuevo. El buffer es circular, asi que si el
-        cliente se queda muy atras se le sirve lo que hay: perder lineas viejas
-        de un log en vivo es aceptable, bloquear el flujo por conservarlas no.
+        It also returns the new index. The buffer is circular, so a client that
+        falls a long way behind gets whatever is there: losing old lines of a
+        live log is acceptable, blocking the stream to keep them is not.
         """
         lines = list(self._lines)
         index = max(0, min(index, len(lines)))
@@ -148,11 +147,11 @@ class CycleRunner:
         return int((end - start).total_seconds())
 
     def _stage(self) -> str:
-        """Etapa actual, a partir de las marcas que el ciclo deja en el log.
+        """The current stage, from the marks the cycle leaves in the log.
 
-        Se deduce del texto y no de un canal estructurado porque el ciclo ya
-        escribe esas lineas para la consola: inventar un protocolo aparte
-        obligaria a `cycle.py` a saber que existe una interfaz.
+        It is inferred from the text and not from a structured channel because
+        the cycle already writes those lines for the console: inventing a
+        separate protocol would force `cycle.py` to know an interface exists.
         """
         if not self._lines:
             return "arrancando" if self.running else "inactivo"
@@ -173,8 +172,8 @@ class CycleRunner:
         return "en curso" if self.running else "terminado"
 
 
-#: Estado que se sirve cuando los controles estan apagados (F3.8). La forma es
-#: la misma que la de `status()` para que la interfaz no tenga dos caminos.
+#: The state served when the controls are switched off (F3.8). The shape matches
+#: `status()` so the interface does not need two code paths.
 DISABLED_STATUS = {
     "enabled": False,
     "running": False,

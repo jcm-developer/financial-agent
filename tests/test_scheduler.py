@@ -1,8 +1,8 @@
-"""Tests del planificador de ciclos.
+"""Tests of the cycle scheduler.
 
-Un fallo de planificacion es silencioso — el contenedor parece vivo y no ejecuta
-nada, o ejecuta dos veces seguidas — asi que el calculo de la siguiente hora se
-prueba explicitamente, incluido el cambio de dia y el de hora.
+A scheduling failure is silent — the container looks alive and runs nothing, or
+runs twice in a row — so the calculation of the next time is tested explicitly,
+including the day rollover and the daylight-saving change.
 """
 
 from __future__ import annotations
@@ -73,8 +73,8 @@ def test_next_run_chooses_the_earliest_upcoming_time():
 
 
 def test_next_run_never_returns_the_current_instant():
-    """Devolver "ahora" provocaria una segunda ejecucion inmediata del ciclo que
-    acaba de terminar."""
+    """Returning "now" would cause an immediate second run of the cycle that has
+    just finished."""
     now = at(2026, 8, 7, 22, 15)
     assert next_run(now, [(22, 15)]) == at(2026, 8, 8, 22, 15)
 
@@ -88,8 +88,8 @@ def test_next_run_crosses_the_year_boundary():
 
 
 def test_next_run_is_timezone_aware():
-    """La hora programada es local: en UTC ese mismo instante seria otra hora, y
-    el ciclo caeria fuera del cierre de mercado."""
+    """The scheduled time is local: in UTC that same instant would be another
+    hour, and the cycle would fall outside the market close."""
     result = next_run(at(2026, 8, 7, 10, 0), [(22, 15)])
 
     assert result.tzinfo is MADRID
@@ -97,8 +97,8 @@ def test_next_run_is_timezone_aware():
 
 
 def test_next_run_still_advances_across_a_dst_change():
-    """El ultimo domingo de octubre Madrid pasa de UTC+2 a UTC+1. Lo que importa
-    es que la siguiente ejecucion siga siendo posterior a la actual."""
+    """On the last Sunday of October Madrid goes from UTC+2 to UTC+1. What
+    matters is that the next run is still later than the current one."""
     now = at(2026, 10, 24, 23, 0)
 
     result = next_run(now, [(22, 15)])

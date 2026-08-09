@@ -1,28 +1,27 @@
-"""Cliente de modelo, multi-proveedor (F6.6).
+"""Model client, multi-provider (F6.6).
 
-Dos proveedores tras la misma interfaz: **NVIDIA NIM** (por defecto, capa
-gratuita) y **OpenAI**. Los dos exponen `/chat/completions` con el mismo formato
-de peticion y respuesta, asi que la diferencia entre ellos es literalmente la URL
-base y la clave: no hay dos implementaciones, hay una con una tabla de
-proveedores. Por eso basta con httpx y el proyecto sigue sin arrastrar ningun
-SDK.
+Two providers behind the same interface: **NVIDIA NIM** (the default, free tier)
+and **OpenAI**. Both expose `/chat/completions` with the same request and
+response format, so the difference between them is literally the base URL and the
+key: there are not two implementations, there is one with a table of providers.
+That is why httpx is enough and the project still drags in no SDK.
 
-**Anthropic no esta aqui a proposito.** Su API tiene otra forma —`/v1/messages`,
-otras cabeceras, el system fuera de `messages`, `input_tokens`/`output_tokens` en
-lugar de `prompt_tokens`/`completion_tokens`— y su documentacion pide usar el SDK
-oficial en lugar de hablar HTTP a mano. Eso es una dependencia nueva y una segunda
-implementacion de verdad, no una fila en una tabla; se queda para F9.1, cuando
-haya una razon para pagar por un modelo premium.
+**Anthropic is deliberately not here.** Its API has another shape —`/v1/messages`,
+different headers, the system prompt outside `messages`,
+`input_tokens`/`output_tokens` instead of `prompt_tokens`/`completion_tokens`— and
+its documentation asks you to use the official SDK rather than speak HTTP by
+hand. That is a new dependency and a genuine second implementation, not a row in
+a table; it is left for F9.1, when there is a reason to pay for a premium model.
 
-El modulo asume lo peor del modelo y lo tolera:
+The module assumes the worst of the model and tolerates it:
 
-  * Los modelos de razonamiento (deepseek-r1, nemotron) escriben su cadena de
-    pensamiento en `<think>...</think>` antes del JSON.
-  * Casi cualquier modelo envuelve el JSON en ```json ... ``` alguna vez.
-  * `response_format` no lo soportan todos los modelos, asi que se intenta y se
-    desactiva para el resto de la sesion si el servidor lo rechaza.
-  * La capa gratuita devuelve 429 con frecuencia: reintentos con espera
-    exponencial, respetando `Retry-After` cuando viene.
+  * Reasoning models (deepseek-r1, nemotron) write their chain of thought in
+    `<think>...</think>` before the JSON.
+  * Almost any model wraps the JSON in ```json ... ``` at some point.
+  * `response_format` is not supported by every model, so it is attempted and
+    switched off for the rest of the session if the server rejects it.
+  * The free tier returns 429 often: retries with exponential backoff, honouring
+    `Retry-After` when it comes.
 """
 
 from __future__ import annotations
@@ -49,10 +48,10 @@ class LLMError(RuntimeError):
 
 @dataclass(frozen=True)
 class Provider:
-    """Lo que distingue a un proveedor de otro. Nada mas."""
+    """What tells one provider from another. Nothing more."""
 
     name: str
-    label: str            # para los mensajes de error, que los lee una persona
+    label: str            # for the error messages, which a person reads
     default_base_url: str
 
 
@@ -63,9 +62,9 @@ PROVIDERS: dict[str, Provider] = {
     "openai": Provider("openai", "OpenAI", "https://api.openai.com/v1"),
 }
 
-# Proveedores que la columna `agent_settings.llm_provider` admite pero que
-# todavia no estan implementados. Se nombran para que el fallo diga "aun no",
-# que es la verdad, en lugar de "proveedor desconocido", que confunde.
+# Providers the `agent_settings.llm_provider` column admits but that are not
+# implemented yet. They are named so the failure says "not yet", which is the
+# truth, instead of "unknown provider", which confuses.
 PLANNED_PROVIDERS = {
     "anthropic": (
         "El proveedor 'anthropic' no esta implementado todavia (queda en F9.1). "
@@ -77,7 +76,7 @@ PLANNED_PROVIDERS = {
 
 
 def resolve_provider(name: str) -> Provider:
-    """Devuelve el proveedor, o falla con un mensaje que distingue los casos."""
+    """Returns the provider, or fails with a message that tells the cases apart."""
     key = (name or "nvidia").strip().lower()
     provider = PROVIDERS.get(key)
     if provider is not None:
@@ -113,8 +112,8 @@ class LLMClient:
         timeout: float = 120.0,
         max_retries: int = 3,
     ) -> None:
-        """`base_url` vacio = la del proveedor. Se puede fijar para apuntar a un
-        proxy o a un despliegue propio compatible con OpenAI."""
+        """An empty `base_url` = the provider's. It can be set to point at a proxy
+        or at an OpenAI-compatible deployment of your own."""
         self.provider = resolve_provider(provider)
         self.model = model
         self.temperature = temperature
@@ -154,10 +153,10 @@ class LLMClient:
         user: str,
         max_tokens: int = 1600,
     ) -> LLMResponse:
-        """Pide una respuesta y exige que contenga un objeto JSON.
+        """Asks for a response and demands that it contain a JSON object.
 
-        Lanza `LLMError` si tras los reintentos no se obtiene JSON parseable:
-        preferimos saltarnos el simbolo antes que operar sobre una adivinanza.
+        Raises `LLMError` if no parsable JSON is obtained after the retries: we
+        would rather skip the symbol than trade on a guess.
         """
         response = self._post_chat(system=system, user=user, max_tokens=max_tokens)
         if response.parsed is None:
@@ -198,8 +197,8 @@ class LLMClient:
             latency_ms = int((time.monotonic() - started) * 1000)
 
             if http_response.status_code in (400, 422) and self._supports_json_mode:
-                # Probablemente el modelo no acepta response_format: lo quitamos
-                # y reintentamos inmediatamente sin gastar un intento.
+                # The model probably does not accept response_format: it is
+                # dropped and retried at once without spending an attempt.
                 log.info(
                     "El modelo %s rechazo response_format (%d); se desactiva el modo JSON.",
                     self.model, http_response.status_code,
@@ -278,13 +277,13 @@ def _extract_message_content(data: dict[str, Any]) -> str:
             if isinstance(block, dict) and block.get("type") in (None, "text")
         ]
         return "".join(parts)
-    # Ultimo recurso: los modelos de razonamiento a veces solo llenan reasoning_content.
+    # Last resort: reasoning models sometimes only fill reasoning_content.
     return str(message.get("reasoning_content") or "")
 
 
 def strip_reasoning(text: str) -> str:
-    """Elimina los bloques <think>, incluido el caso de bloque sin cerrar
-    (ocurre cuando la respuesta se corta por max_tokens)."""
+    """Strips the <think> blocks, including the unclosed case (which happens when
+    the response is cut off by max_tokens)."""
     cleaned = _THINK_BLOCK.sub("", text)
     if "<think>" in cleaned.lower():
         cleaned = _UNCLOSED_THINK.sub("", cleaned)
@@ -292,10 +291,10 @@ def strip_reasoning(text: str) -> str:
 
 
 def extract_json_object(text: str) -> dict[str, Any] | None:
-    """Saca el primer objeto JSON de una respuesta que puede venir sucia.
+    """Pulls the first JSON object out of a response that may arrive dirty.
 
-    Estrategia en cascada: texto limpio -> bloque de codigo -> primer objeto
-    con llaves balanceadas. Devuelve None si nada parsea.
+    A cascading strategy: clean text -> code block -> first object with balanced
+    braces. Returns None if nothing parses.
     """
     if not text:
         return None
@@ -325,8 +324,8 @@ def extract_json_object(text: str) -> dict[str, Any] | None:
 
 
 def _first_balanced_object(text: str) -> str | None:
-    """Primer `{...}` con llaves balanceadas, ignorando las que van dentro de
-    cadenas JSON (y respetando escapes)."""
+    """First `{...}` with balanced braces, ignoring the ones inside JSON strings
+    (and honouring escapes)."""
     start = text.find("{")
     if start == -1:
         return None

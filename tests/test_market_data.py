@@ -1,9 +1,9 @@
-"""Tests de la construccion del snapshot de mercado.
+"""Tests of how the market snapshot is built.
 
-No tocan la red: se prueba `build_snapshot`, que es donde vive la decision que
-mas importa — separar la barra con la que se decide de la barra con la que se
-ejecuta. Si eso se rompe, el agente empieza a operar con informacion del futuro
-y los resultados dejan de significar nada.
+They do not touch the network: what is tested is `build_snapshot`, which is where
+the decision that matters most lives — separating the bar the decision is made on
+from the bar execution happens on. If that breaks, the agent starts trading with
+information from the future and the results stop meaning anything.
 """
 
 from __future__ import annotations
@@ -17,8 +17,8 @@ from src.market_data import MIN_BARS, build_snapshot
 
 
 def make_bars(count: int, *, start_price: float = 100.0, step: float = 0.5):
-    """Serie ascendente con apertura por debajo del cierre anterior, para que la
-    apertura y el cierre nunca coincidan y los tests puedan distinguirlos."""
+    """An ascending series with the open below the previous close, so the open
+    and the close never coincide and the tests can tell them apart."""
     start = datetime(2026, 1, 1, tzinfo=timezone.utc)
     bars = []
     for index in range(count):
@@ -43,7 +43,7 @@ def test_decision_price_is_the_last_complete_close():
 
     snapshot = build_snapshot("AAPL", bars)
 
-    # La ultima barra se reserva para ejecutar: se decide con la penultima.
+    # The last bar is reserved for execution: the decision uses the one before.
     assert snapshot.price == pytest.approx(bars[-2].close)
 
 
@@ -57,8 +57,8 @@ def test_fill_price_is_the_next_session_open():
 
 
 def test_decision_and_fill_prices_are_different():
-    """Es la propiedad que evita el sesgo de anticipacion. Si alguien 'simplifica'
-    el codigo y los iguala, este test falla."""
+    """It is the property that avoids look-ahead bias. If somebody 'simplifies'
+    the code and makes them equal, this test fails."""
     snapshot = build_snapshot("AAPL", make_bars(80))
 
     assert snapshot.price != snapshot.fill_price
@@ -90,8 +90,8 @@ def test_session_is_the_execution_bar_date():
 # -- Indicadores -------------------------------------------------------------
 
 def test_indicators_ignore_the_execution_bar():
-    """La ultima barra puede estar a medias si el mercado sigue abierto: no debe
-    entrar en el calculo de los indicadores."""
+    """The last bar may be half-formed if the market is still open: it must not
+    enter the indicators' computation."""
     bars = make_bars(80)
 
     snapshot = build_snapshot("AAPL", bars)
@@ -116,7 +116,7 @@ def test_too_few_bars_yields_none_instead_of_a_degraded_snapshot():
 
 
 def test_exactly_enough_bars_is_accepted():
-    """Hacen falta MIN_BARS de decision mas una de ejecucion."""
+    """MIN_BARS decision bars plus one execution bar are needed."""
     assert build_snapshot("AAPL", make_bars(MIN_BARS + 1)) is not None
 
 
@@ -128,10 +128,10 @@ def test_no_bars_yields_none():
     assert build_snapshot("AAPL", []) is None
 
 
-# -- Extraccion desde el DataFrame de yfinance -------------------------------
+# -- Extraction from yfinance's DataFrame ------------------------------------
 
 def test_yahoo_extraction_drops_rows_without_prices():
-    """Los festivos y las sesiones previas a la salida a bolsa llegan como NaN."""
+    """Holidays and sessions before the IPO arrive as NaN."""
     pandas = pytest.importorskip("pandas")
     from src.market_data import YahooMarketData
 

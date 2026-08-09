@@ -1,24 +1,24 @@
-"""Configuracion: que es infraestructura y que es del experimento.
+"""Configuration: what is infrastructure and what belongs to the experiment.
 
-Desde F6.4 hay dos cosas distintas y conviene no confundirlas:
+Since F6.4 there are two different things and they are worth not confusing:
 
-  * **`Infra`** son las variables de entorno que quedan: donde esta la base de
-    datos, la clave del modelo y el nivel de log. Cosas de la maquina, no del
-    experimento. Es lo unico que sigue viniendo del `.env`.
-  * **`Settings`** son los parametros con los que corre un ciclo. Ya **no** se
-    leen del entorno: salen de `agent_settings`, la tabla del perfil, via
-    [profile_settings.py](profile_settings.py). `Settings` sigue existiendo
-    porque es el contrato que consumen `cycle.py`, `market_data.py` y el
-    analista; lo que ha cambiado es de donde se rellena.
+  * **`Infra`** are the environment variables that remain: where the database
+    is, the model's key and the log level. Things belonging to the machine, not
+    to the experiment. It is the only part still coming from the `.env`.
+  * **`Settings`** are the parameters a cycle runs with. They are **no longer**
+    read from the environment: they come from `agent_settings`, the profile's
+    table, via [profile_settings.py](profile_settings.py). `Settings` still
+    exists because it is the contract `cycle.py`, `market_data.py` and the
+    analyst consume; what changed is where it gets filled from.
 
-`Settings.load()` y los `from_env()` que la acompanan sobreviven con un unico
-proposito: **importar un `.env` existente a un perfil** (`run.py import-profile`)
-y dar diagnostico en `run.py check` cuando todavia no hay ningun perfil. No los
-use el ciclo.
+`Settings.load()` and the `from_env()` helpers around it survive for one single
+purpose: **importing an existing `.env` into a profile**
+(`run.py import-profile`) and giving diagnostics in `run.py check` when there is
+no profile yet. The cycle does not use them.
 
-En los dos caminos la validacion es estricta y temprana: preferimos fallar al
-arrancar con un mensaje claro antes que descubrir una clave vacia a mitad de un
-ciclo con ordenes ya enviadas.
+On both paths validation is strict and early: we would rather fail at startup
+with a clear message than discover an empty key halfway through a cycle with
+orders already sent.
 """
 
 from __future__ import annotations
@@ -87,10 +87,10 @@ def _get_int(key: str, default: int, *, minimum: int | None = None,
 
 @dataclass(frozen=True)
 class RiskLimits:
-    """Limites que el Risk Manager aplica de forma determinista.
+    """Limits the Risk Manager applies deterministically.
 
-    Ninguno de estos valores lo decide el LLM: son la barrera que convierte una
-    propuesta absurda del modelo en una orden rechazada.
+    None of these values is decided by the LLM: they are the barrier that turns
+    an absurd proposal from the model into a rejected order.
     """
 
     risk_per_trade_pct: float = 1.0
@@ -110,8 +110,8 @@ class RiskLimits:
                 "mas de lo que la posicion puede llegar a valer."
             )
         if self.max_position_pct * self.max_open_positions < self.max_total_exposure_pct:
-            # No es un error: solo significa que el limite de exposicion total
-            # nunca se alcanzara porque los otros dos limites atan antes.
+            # This is not an error: it only means the total exposure limit will
+            # never be reached because the other two bind first.
             pass
 
     @classmethod
@@ -131,23 +131,23 @@ class RiskLimits:
 
 @dataclass(frozen=True)
 class Infra:
-    """Lo unico que sigue viniendo del entorno: rutas, clave del modelo, logs.
+    """The only part still coming from the environment: paths, model key, logs.
 
-    No lleva ningun parametro de estrategia. Si alguna vez hace falta anadir uno
-    aqui, es senal de que su sitio era `agent_settings`.
+    It carries no strategy parameter. If one ever needs adding here, that is the
+    sign its place was `agent_settings`.
 
-    `load()` no exige nada: se puede construir en una maquina sin credenciales
-    para mirar el historico. Los comandos que si necesitan la clave del modelo
-    llaman a `require_model_key()`, que falla con un mensaje concreto en lugar de
-    dejar que el fallo aparezca dentro de la primera llamada al LLM.
+    `load()` demands nothing: it can be built on a machine without credentials to
+    look at the history. The commands that do need the model key call
+    `require_model_key()`, which fails with a concrete message instead of letting
+    the failure surface inside the first call to the LLM.
     """
 
     db_path: str = "data/trading.db"
     log_level: str = "INFO"
     model_api_key: str = ""
     model_base_url: str = "https://integrate.api.nvidia.com/v1"
-    # Perfil que se usa cuando no se pasa `--profile`. Vacio = si hay un solo
-    # perfil activo, ese.
+    # The profile used when `--profile` is not passed. Empty = if there is a
+    # single active profile, that one.
     default_profile: str = ""
 
     @classmethod
@@ -175,11 +175,11 @@ class Infra:
 
 @dataclass(frozen=True)
 class DashboardSettings:
-    """Configuracion de los comandos que solo leen (`report`, `serve`).
+    """Configuration for the read-only commands (`report`, `serve`).
 
-    Existe por separado a proposito: mirar el historico no debe requerir la clave
-    del modelo. Asi se puede revisar la operativa desde una maquina sin
-    credenciales, y un `.env` a medio rellenar no impide ver datos.
+    It exists separately on purpose: looking at the history must not require the
+    model key. That way the trading can be reviewed from a machine without
+    credentials, and a half-filled `.env` does not stop the data being seen.
     """
 
     db_path: str
@@ -196,9 +196,9 @@ class DashboardSettings:
 
 @dataclass(frozen=True)
 class ScreenerSettings:
-    """Configuracion del embudo universo -> candidatos.
+    """Configuration of the universe -> candidates funnel.
 
-    Si `universe_file` esta vacio, no hay embudo: se analiza la watchlist tal cual.
+    If `universe_file` is empty there is no funnel: the watchlist is analysed as-is.
     """
 
     universe_file: str = ""
@@ -232,11 +232,11 @@ class ScreenerSettings:
 
 @dataclass(frozen=True)
 class Settings:
-    """Los parametros efectivos de un ciclo.
+    """The effective parameters of a cycle.
 
-    Se rellena desde `agent_settings` (ver
-    [profile_settings.py](profile_settings.py)); `load()` es solo el camino de
-    importacion desde un `.env` heredado.
+    It is filled from `agent_settings` (see
+    [profile_settings.py](profile_settings.py)); `load()` is only the import path
+    from an inherited `.env`.
     """
 
     sim_slippage_bps: float
@@ -261,48 +261,48 @@ class Settings:
     # nvidia (por defecto) u openai. Ver [llm.py](llm.py).
     llm_provider: str = "nvidia"
 
-    # Bolsa contra la que opera el perfil: 'us' o 'eu'. Fija horario, festivos y
-    # divisa. Ver [market_calendar.py](market_calendar.py). Entra en `snapshot()`
-    # a proposito: un historico sin el mercado no se puede interpretar, porque
-    # las mismas horas significan cosas distintas segun cual fuera.
+    # The exchange the profile trades against: 'us' or 'eu'. It fixes hours,
+    # holidays and currency. See [market_calendar.py](market_calendar.py). It goes
+    # into `snapshot()` on purpose: a history without the market cannot be
+    # interpreted, because the same hours mean different things depending on it.
     market: str = "us"
 
     # 1d = barras diarias. 1h = barras horarias, para acumular operaciones
     # cerradas en semanas en lugar de meses.
     bar_interval: str = "1d"
-    # Si es cierto, un ciclo con el mercado cerrado no analiza nada y termina.
+    # If true, a cycle with the market closed analyses nothing and ends.
     skip_when_market_closed: bool = True
 
     risk: RiskLimits = field(default_factory=RiskLimits)
     screener: ScreenerSettings = field(default_factory=ScreenerSettings)
 
-    # Perfil del que salieron estos parametros. None cuando vienen de un `.env`.
+    # The profile these parameters came from. None when they come from a `.env`.
     profile_id: str | None = None
-    # Texto de F6.5 con lo que implican los deslizadores, o None si los limites
-    # se fijaron a mano en el `.env`.
+    # The F6.5 text with what the sliders imply, or None when the limits were set
+    # by hand in the `.env`.
     risk_summary: str | None = None
 
     @property
     def mode(self) -> str:
-        """Siempre paper: la unica implementacion de broker es el simulador.
+        """Always paper: the only broker implementation is the simulator.
 
-        Se conserva la propiedad porque `portfolios.mode` distingue paper de live
-        y el dia que haya un broker real vuelve a tener dos valores.
+        The property is kept because `portfolios.mode` tells paper from live and
+        the day there is a real broker it has two values again.
         """
         return "paper"
 
-    # -- Registro de lo que corrio ----------------------------------------
+    # -- Record of what ran ------------------------------------------------
 
     def snapshot(self) -> dict:
-        """Los parametros efectivos, sin secretos, para `cycles.settings_json`.
+        """The effective parameters, without secrets, for `cycles.settings_json`.
 
-        Es lo que hace interpretable un experimento cuyos ajustes se editan a
-        mitad (F6.3): sin esta copia no se sabria que configuracion produjo cada
-        decision, solo la que hay ahora.
+        It is what makes an experiment whose settings are edited midway
+        interpretable (F6.3): without this copy there would be no way to know
+        which configuration produced each decision, only the one in force now.
 
-        Se excluye la clave del modelo. No es paranoia mal puesta: el historico se
-        exporta, se comparte para pedir opinion y se abre con DB Browser, y una
-        clave dentro de una columna JSON no se ve venir.
+        The model key is excluded. That is not misplaced paranoia: the history
+        gets exported, shared to ask for an opinion and opened with DB Browser,
+        and a key inside a JSON column is not something you see coming.
         """
         data = asdict(self)
         for secret in ("model_api_key", "db_path"):
@@ -315,14 +315,15 @@ class Settings:
 
     @classmethod
     def load(cls, *, env_file: str | None = None) -> Settings:
-        """Lee un `.env` completo. **Solo para `import-profile` y `check`.**
+        """Reads a complete `.env`. **Only for `import-profile` and `check`.**
 
-        El ciclo no pasa por aqui desde F6.4: sus parametros salen del perfil.
+        The cycle has not come through here since F6.4: its parameters come from
+        the profile.
         """
         load_dotenv(dotenv_path=env_file, override=False)
 
-        # Diagnostico del caso mas comun: no hay .env todavia. Sin esto el primer
-        # error seria "WATCHLIST esta vacia", que no orienta a nada.
+        # Diagnosing the most common case: there is no .env yet. Without this the
+        # first error would be "WATCHLIST is empty", which points nowhere.
         if not os.getenv("NVIDIA_API_KEY"):
             expected = Path(env_file) if env_file else Path.cwd() / ".env"
             if not expected.exists():
@@ -341,7 +342,7 @@ class Settings:
         watchlist = tuple(
             sorted({s.strip().upper() for s in watchlist_raw.split(",") if s.strip()})
         )
-        # Con embudo, la watchlist es opcional: el universo la sustituye.
+        # With the funnel, the watchlist is optional: the universe replaces it.
         if not watchlist and not screener.enabled:
             raise ConfigError(
                 "WATCHLIST esta vacia y no hay UNIVERSE_FILE: no hay nada que analizar."
@@ -385,7 +386,7 @@ class Settings:
         )
 
     def describe(self) -> str:
-        """Resumen legible para el log de arranque, sin filtrar secretos."""
+        """Readable summary for the startup log, with no secrets leaked."""
         suffix = "  [DRY_RUN]" if self.dry_run else ""
         if self.screener.enabled:
             universe = (
@@ -395,9 +396,9 @@ class Settings:
         else:
             universe = f"watchlist={len(self.watchlist)}"
         origin = f"perfil={self.portfolio_name}" if self.profile_id else ".env"
-        # El simbolo de moneda sale del mercado: un presupuesto europeo escrito
-        # con '$' invita a compararlo con el de otro perfil como si fuera la
-        # misma unidad, y no lo es.
+        # The currency symbol comes from the market: a European budget written
+        # with '$' invites comparing it against another profile's as if it were
+        # the same unit, and it is not.
         from .market_calendar import get_market
 
         money = get_market(self.market).currency_symbol

@@ -1,44 +1,43 @@
-"""La conexion de escritura de la API, limitada a las tablas de configuracion.
+"""The API's write connection, fenced to the configuration tables.
 
-Este modulo existe para pagar la deuda que D5 dejo apuntada. Hasta F3, el
-dashboard abria SQLite en **solo lectura**, y eso no era una promesa: era una
-imposibilidad. La interfaz no podia corromper el historico ni con un error de
-programacion, porque el motor no se lo permitia.
+This module exists to pay the debt D5 wrote down. Until F3, the dashboard opened
+SQLite **read-only**, and that was not a promise: it was an impossibility. The
+interface could not corrupt the history even through a programming error, because
+the engine would not allow it.
 
-Con perfiles editables desde la UI (F3.3) esa puerta hay que abrirla. La
-tentacion es abrirla del todo y confiar en que los endpoints solo hagan lo que
-deben; el problema de esa version es que la garantia pasa a depender de que
-nadie escriba nunca un `UPDATE` de mas, y eso no es una garantia, es una
-costumbre. Un `where` mal puesto en un endpoint de configuracion podria borrar
-posiciones, y el sintoma —un historico corrupto— aparece semanas despues,
-cuando ya no hay forma de saber que lo hizo.
+With profiles editable from the UI (F3.3) that door has to be opened. The
+temptation is to open it fully and trust the endpoints to do only what they
+should; the problem with that version is that the guarantee comes to depend on
+nobody ever writing one `UPDATE` too many, and that is not a guarantee, it is a
+habit. A misplaced `where` in a configuration endpoint could delete positions,
+and the symptom —a corrupt history— shows up weeks later, when there is no way
+left to know what did it.
 
-Asi que la puerta se abre solo para las tablas que la interfaz tiene que
-escribir, y quien lo impide vuelve a ser el motor: SQLite tiene un
-**autorizador** (`sqlite3.Connection.set_authorizer`) que se consulta al
-compilar cada sentencia. Un `insert into decisions` no falla por convencion,
-falla con "not authorized" antes de ejecutarse.
+So the door is opened only for the tables the interface has to write, and what
+stops it is again the engine: SQLite has an **authorizer**
+(`sqlite3.Connection.set_authorizer`) that is consulted while each statement is
+compiled. An `insert into decisions` does not fail by convention, it fails with
+"not authorized" before it runs.
 
-Dos detalles que costaron pensarlo:
+Two details that took some thinking:
 
-  * **El autorizador tambien se dispara en los borrados en cascada.** Comprobado:
-    al borrar un perfil, SQLite pide permiso para cada `delete` que la cascada
-    provoca en `cycles`, `decisions`, `positions`… Con la lista de tablas a
-    secas, `DELETE /api/profiles` fallaria. De ahi `_cascading`: una ventana que
-    abre **un solo metodo** (`delete_profile`) para **una sola sentencia**, y que
-    se cierra en un `finally`. Borrar un perfil arrastra su historico a
-    proposito; lo que no se admite es llegar a ese historico por cualquier otra
-    via.
+  * **The authorizer also fires on cascading deletes.** Verified: when deleting a
+    profile, SQLite asks permission for every `delete` the cascade causes in
+    `cycles`, `decisions`, `positions`… With the plain table list,
+    `DELETE /api/profiles` would fail. Hence `_cascading`: a window opened by
+    **one single method** (`delete_profile`) for **one single statement**, and
+    closed in a `finally`. Deleting a profile drags its history along on purpose;
+    what is not admitted is reaching that history by any other route.
 
-  * **`portfolios` se puede insertar y borrar, pero no actualizar.** Crear un
-    perfil crea su cartera y borrarlo la borra, pero nada tiene por que
-    *modificarla*: la unica columna interesante es `initial_budget`, y cambiarla
-    con la curva de capital ya empezada reescribiria en silencio la referencia
-    contra la que se mide todo el experimento.
+  * **`portfolios` can be inserted and deleted, but not updated.** Creating a
+    profile creates its book and deleting it deletes the book, but nothing has
+    any business *modifying* it: the only interesting column is
+    `initial_budget`, and changing it once the equity curve has started would
+    silently rewrite the reference the whole experiment is measured against.
 
-Lo que este modulo **no** es: seguridad frente a un atacante. La API escucha en
-loopback y sin autenticacion (F3.8); quien llegue al proceso llega al fichero.
-Es seguridad frente a nuestros propios errores, que es de lo que trata R5.
+What this module is **not**: security against an attacker. The API listens on
+loopback and without authentication (F3.8); whoever reaches the process reaches
+the file. It is security against our own mistakes, which is what R5 is about.
 """
 
 from __future__ import annotations
@@ -55,34 +54,34 @@ log = logging.getLogger(__name__)
 
 
 class HistoryIsReadOnly(DatabaseError):
-    """Se ha intentado escribir en una tabla que la API no puede tocar."""
+    """An attempt was made to write to a table the API cannot touch."""
 
 
-#: Que puede hacer la API en cada tabla. Lo que no aparece aqui es de solo
-#: lectura para ella: `cycles`, `decisions`, `orders`, `positions`,
-#: `risk_events`, `equity_snapshots`, `market_snapshots`, las tablas del broker
-#: simulado, `bars_1m`, `quotes_live`, `bar_cache` e `ingest_runs`.
+#: What the API may do to each table. Anything not listed here is read-only for
+#: it: `cycles`, `decisions`, `orders`, `positions`, `risk_events`,
+#: `equity_snapshots`, `market_snapshots`, the simulated broker's tables,
+#: `bars_1m`, `quotes_live`, `bar_cache` and `ingest_runs`.
 #:
-#: Esas las escriben el ciclo y el ingestor, cada uno en su proceso y con su
-#: propia conexion sin autorizador. La API nunca es quien opera.
+#: Those are written by the cycle and the ingestor, each in its own process and
+#: with its own connection without an authorizer. The API is never the one trading.
 WRITABLE: MappingProxyType[str, frozenset[str]] = MappingProxyType({
     "profiles": frozenset({"insert", "update", "delete"}),
     "agent_settings": frozenset({"insert", "update", "delete"}),
-    # El historial de parametros se añade y se borra en cascada, nunca se
-    # reescribe: una fila que se pudiera editar dejaria de ser un historial.
+    # The settings history is appended to and cascade-deleted, never rewritten: a
+    # row that could be edited would stop being a history.
     "agent_settings_history": frozenset({"insert", "delete"}),
-    # El universo de un perfil se reemplaza entero (`set_profile_universe`
-    # borra y vuelve a insertar), asi que no hace falta update.
+    # A profile's universe is replaced wholesale (`set_profile_universe` deletes
+    # and re-inserts), so no update is needed.
     "profile_universe": frozenset({"insert", "delete"}),
-    # Ver la cabecera: se crea con el perfil y se borra con el perfil.
+    # See the header: created with the profile and deleted with the profile.
     "portfolios": frozenset({"insert", "delete"}),
 })
 
-#: Pragmas que la capa de datos necesita. `table_info` lo usa
-#: `Database._columns` para validar los nombres de campo que llegan de fuera
-#: antes de interpolarlos en el SQL, asi que sin el no hay `update_settings`.
-#: El resto los fija `Database.__init__`. Es lista blanca y no negra porque
-#: `pragma writable_schema = on` deja sin efecto todo lo demas de este modulo.
+#: Pragmas the data layer needs. `table_info` is used by `Database._columns` to
+#: validate the field names arriving from outside before interpolating them into
+#: the SQL, so without it there is no `update_settings`. The rest are set by
+#: `Database.__init__`. It is an allow list and not a deny list because
+#: `pragma writable_schema = on` would void everything else in this module.
 ALLOWED_PRAGMAS = frozenset({
     "table_info", "table_xinfo", "busy_timeout", "foreign_keys",
     "journal_mode", "database_list", "index_list", "index_info",
@@ -95,8 +94,8 @@ _ACTION_VERBS = {
     sqlite3.SQLITE_DELETE: "delete",
 }
 
-#: Acciones que no escriben nada y por tanto no hace falta filtrar. Leer el
-#: historico entero esta permitido: lo que se acota es cambiarlo.
+#: Actions that write nothing and therefore need no filtering. Reading the whole
+#: history is allowed: what is fenced is changing it.
 _HARMLESS = frozenset({
     sqlite3.SQLITE_SELECT,
     sqlite3.SQLITE_READ,
@@ -108,24 +107,25 @@ _HARMLESS = frozenset({
 
 
 class ConfigDatabase(Database):
-    """`Database` que solo puede escribir en las tablas de `WRITABLE`.
+    """A `Database` that can only write to the tables in `WRITABLE`.
 
-    Se usa exactamente igual que la de siempre —hereda todos sus metodos— pero
-    cualquier escritura fuera de la lista muere con `HistoryIsReadOnly` antes de
-    tocar el fichero.
+    It is used exactly like the usual one —it inherits every method— but any
+    write outside the list dies with `HistoryIsReadOnly` before touching the
+    file.
     """
 
     def __init__(self, *, path: str) -> None:
-        # Los dos atributos van **antes** de `super().__init__`: al aplicar el
-        # esquema, la clase base llama a `_execute`, que aqui esta sobrescrito y
-        # los consulta si algo falla. Sin esto, un fallo al abrir la base daria
-        # un AttributeError en lugar del error de verdad.
+        # Both attributes go **before** `super().__init__`: while applying the
+        # schema the base class calls `_execute`, which is overridden here and
+        # consults them if something fails. Without this, a failure to open the
+        # database would give an AttributeError instead of the real error.
         self._cascading = False
         self._last_denial: tuple[str, str] | None = None
-        # El esquema se aplica en `super().__init__`, o sea antes de instalar el
-        # autorizador. Tiene que ser asi: `schema.sql` crea tablas y vistas, y
-        # con el autorizador puesto no podria. Es una ventana de un solo uso, al
-        # abrir la conexion, con SQL que sale del repositorio y no de nadie mas.
+        # The schema is applied in `super().__init__`, that is, before the
+        # authorizer is installed. It has to be that way: `schema.sql` creates
+        # tables and views, and it could not with the authorizer in place. It is a
+        # single-use window, on opening the connection, with SQL that comes from
+        # the repository and from nobody else.
         super().__init__(path=path, read_only=False)
         self._conn.set_authorizer(self._authorize)
 
@@ -147,8 +147,9 @@ class ConfigDatabase(Database):
 
         verb = _ACTION_VERBS.get(action)
         if verb is None:
-            # CREATE, DROP, ALTER, ATTACH, REINDEX... La API no hace nada de eso:
-            # el esquema lo gobierna `schema.sql` y lo aplica quien abre la base.
+            # CREATE, DROP, ALTER, ATTACH, REINDEX... The API does none of that:
+            # the schema is governed by `schema.sql` and applied by whoever opens
+            # the database.
             return self._deny("esquema", arg1 or f"accion {action}")
 
         table = arg1 or ""
@@ -157,8 +158,8 @@ class ConfigDatabase(Database):
         return self._deny(verb, table)
 
     def _deny(self, verb: str, target: str) -> int:
-        # Se recuerda para poder dar un mensaje util: SQLite solo dice "not
-        # authorized", sin decir a que tabla ni con que verbo.
+        # Remembered so a useful message can be given: SQLite only says "not
+        # authorized", without saying which table or with which verb.
         self._last_denial = (verb, target)
         return sqlite3.SQLITE_DENY
 
@@ -199,11 +200,11 @@ class ConfigDatabase(Database):
 
     @contextmanager
     def _cascade(self) -> Iterator[None]:
-        """Deja pasar el borrado en cascada de un perfil.
+        """Lets a profile's cascading delete through.
 
-        Es privado y lo abre un solo metodo. El `finally` no es adorno: si una
-        excepcion dejara la ventana abierta, la conexion seguiria sirviendo
-        peticiones sin ninguna restriccion durante el resto de su vida.
+        It is private and one single method opens it. The `finally` is not
+        decoration: if an exception left the window open, the connection would go
+        on serving requests with no restriction at all for the rest of its life.
         """
         self._cascading = True
         try:
@@ -212,11 +213,11 @@ class ConfigDatabase(Database):
             self._cascading = False
 
     def delete_profile(self, profile_id: str) -> None:
-        """Borra el perfil y, con el, su cartera y todo su historico.
+        """Deletes the profile and, with it, its book and all of its history.
 
-        Es destructivo a proposito y es el unico camino por el que la API llega
-        al historico. Quien lo llama tiene que haber confirmado antes: la API
-        exige que el cuerpo repita el nombre del perfil (F5.4).
+        It is destructive on purpose and it is the only path by which the API
+        reaches the history. The caller must have confirmed beforehand: the API
+        demands that the body repeat the profile's name (F5.4).
         """
         with self._cascade():
             super().delete_profile(profile_id)
@@ -225,12 +226,12 @@ class ConfigDatabase(Database):
     # -- Puertas que no se usan -------------------------------------------
 
     def execute(self, sql: str, params: tuple = ()) -> int:
-        """SQL libre: no, ni siquiera acotado por el autorizador.
+        """Free-form SQL: no, not even fenced by the authorizer.
 
-        `Database.execute` esta para las herramientas de `tools/`. Que la API
-        pudiera construir SQL a mano convertiria el autorizador en la unica
-        barrera; con esto, para tocar la base hay que pasar por un metodo con
-        nombre, que es donde se ve lo que hace.
+        `Database.execute` is there for the tools in `tools/`. Letting the API
+        build SQL by hand would make the authorizer the only barrier; with this,
+        touching the database means going through a named method, which is where
+        what it does can be seen.
         """
         raise HistoryIsReadOnly(
             "La API no ejecuta SQL libre. Usa los metodos con nombre de Database."
@@ -238,15 +239,15 @@ class ConfigDatabase(Database):
 
 
 def open_config_db(path: str) -> ConfigDatabase:
-    """Abre la conexion de escritura acotada. Falla igual que `Database`."""
+    """Opens the fenced write connection. It fails just like `Database`."""
     return ConfigDatabase(path=path)
 
 
 def history_tables(db: Database) -> list[str]:
-    """Tablas reales que la API **no** puede escribir.
+    """Real tables the API **cannot** write.
 
-    La usa el test de F3.3 para no depender de una lista escrita a mano: si
-    manana alguien añade una tabla al esquema, entra sola en la comprobacion.
+    The F3.3 test uses it so as not to depend on a hand-written list: if someone
+    adds a table to the schema tomorrow, it enters the check on its own.
     """
     rows = db.query(
         "select name from sqlite_master where type = 'table' "

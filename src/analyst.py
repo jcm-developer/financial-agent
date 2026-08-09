@@ -1,11 +1,11 @@
-"""El analista: la unica capa donde interviene el LLM.
+"""The analyst: the only layer where the LLM takes part.
 
-Produce `Proposal`, nunca ordenes. El prompt es explicito sobre esa frontera
-porque los modelos tienden a escribir "compra 500 acciones" si no se les dice
-que el dimensionado no es asunto suyo.
+It produces `Proposal`, never orders. The prompt is explicit about that boundary
+because models tend to write "buy 500 shares" unless they are told that sizing is
+none of their business.
 
-Toda salida del modelo se valida y se recorta a rangos legales antes de salir
-de este modulo: `risk.py` puede asumir que recibe un `Proposal` bien formado.
+Every output of the model is validated and clamped to legal ranges before it
+leaves this module: `risk.py` can assume it receives a well-formed `Proposal`.
 """
 
 from __future__ import annotations
@@ -87,8 +87,8 @@ Responde UNICAMENTE con un objeto JSON, sin texto antes ni despues:
 """
 
 
-# Como se nombra el intervalo en los prompts. Decirle "sesiones" cuando en
-# realidad son horas haria que el modelo razonara sobre un horizonte equivocado.
+# How the interval is named in the prompts. Saying "sessions" when they are
+# really hours would make the model reason about the wrong horizon.
 INTERVAL_LABELS = {
     "1d": ("barras diarias", "SESIONES"),
     "1h": ("barras horarias", "HORAS DE COTIZACION"),
@@ -96,21 +96,21 @@ INTERVAL_LABELS = {
 
 
 class Analyst:
-    """Un analista por ciclo: los contadores son de esa ejecucion, no globales.
+    """One analyst per cycle: the counters belong to that run, not to the process.
 
-    `calls` y `failures` existen porque tragarse los `LLMError` (ver
-    `evaluate_entry`) hace que un ciclo sin modelo se parezca demasiado a un
-    ciclo sin oportunidades. Quien decide que hacer con la diferencia es
-    `TradingCycle._grade_analyst`; aqui solo se cuenta (F6.9).
+    `calls` and `failures` exist because swallowing the `LLMError`s (see
+    `evaluate_entry`) makes a cycle with no model look far too much like a cycle
+    with no opportunities. What to do with the difference is decided by
+    `TradingCycle._grade_analyst`; here it is only counted (F6.9).
     """
 
     def __init__(self, llm: LLMClient, *, interval: str = "1d") -> None:
         self.llm = llm
         self.interval = interval
         self.labels = INTERVAL_LABELS.get(interval, INTERVAL_LABELS["1d"])
-        #: Veces que se ha preguntado al modelo, contando las que fallaron.
+        #: Times the model has been asked, including the calls that failed.
         self.calls = 0
-        #: De esas, cuantas se quedaron sin respuesta utilizable.
+        #: Of those, how many got no usable answer.
         self.failures = 0
 
     # -- Entradas ----------------------------------------------------------
@@ -118,8 +118,8 @@ class Analyst:
     def evaluate_entry(
         self, snapshot: MarketSnapshot, account: AccountState
     ) -> Proposal | None:
-        """Analiza un candidato. Devuelve None si el modelo falla: un simbolo
-        sin analisis se salta, no se opera a ciegas."""
+        """Analyses one candidate. Returns None if the model fails: a symbol with
+        no analysis is skipped, not traded blind."""
         user_prompt = _render_entry_prompt(snapshot, account, self.labels)
         self.calls += 1
         try:
@@ -316,11 +316,11 @@ def _truncate(text: str, limit: int) -> str:
 
 
 # ----------------------------------------------------------------------
-# Coercion de la salida del modelo
+# Coercing the model's output
 # ----------------------------------------------------------------------
 
 def _coerce_action(value: Any, *, allowed: set[str]) -> str:
-    """Cualquier cosa que no sea una accion permitida se degrada a 'hold'."""
+    """Anything that is not an allowed action is degraded to 'hold'."""
     if isinstance(value, str):
         candidate = value.strip().lower()
         if candidate in allowed:
@@ -330,8 +330,8 @@ def _coerce_action(value: Any, *, allowed: set[str]) -> str:
 
 
 def _coerce_conviction(value: Any) -> int:
-    """Fuera de rango o no numerico se interpreta como conviccion nula, que el
-    Risk Manager rechazara por no alcanzar el minimo."""
+    """Out of range or non-numeric is read as zero conviction, which the Risk
+    Manager will reject for not reaching the minimum."""
     try:
         number = int(round(float(value)))
     except (TypeError, ValueError):
@@ -366,8 +366,8 @@ def _coerce_text(value: Any, *, limit: int) -> str:
 
 
 def _audit_payload(raw_content: str, parsed: dict[str, Any]) -> dict[str, Any]:
-    """Lo que se guarda en `decisions.raw_response`. Incluimos el texto crudo
-    recortado: si el modelo alucina, queremos poder verlo despues."""
+    """What gets stored in `decisions.raw_response`. The trimmed raw text is
+    included: if the model hallucinates, we want to be able to see it later."""
     return {
         "parsed": parsed,
         "raw_text": raw_content[:8000],

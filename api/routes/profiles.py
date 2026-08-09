@@ -1,14 +1,14 @@
-"""Perfiles de experimento: lectura (F3.2) y escritura (F3.3).
+"""Experiment profiles: reading (F3.2) and writing (F3.3).
 
-Es el unico router que escribe, y lo hace contra `ConfigDb`, la conexion con
-autorizador de `guard.py`. Esa eleccion no es decorativa: es lo que convierte
-"la API solo toca la configuracion" de una intencion en una propiedad del
-sistema. Un `where` mal puesto en cualquiera de estos endpoints no puede borrar
-una posicion, porque SQLite no le deja.
+This is the only router that writes, and it does so against `ConfigDb`, the
+connection with the authorizer from `guard.py`. That choice is not decorative:
+it is what turns "the API only touches the configuration" from an intention into
+a property of the system. A misplaced `where` in any of these endpoints cannot
+delete a position, because SQLite will not let it.
 
-La excepcion es `DELETE /api/profiles/{id}`, que arrastra el historico del
-experimento a proposito. Por eso pide confirmar repitiendo el nombre: es la
-unica operacion irreversible de toda la API.
+The exception is `DELETE /api/profiles/{id}`, which drags the experiment's
+history along on purpose. That is why it asks for confirmation by repeating the
+name: it is the only irreversible operation in the whole API.
 """
 
 from __future__ import annotations
@@ -64,10 +64,10 @@ def get_profile(db: ReadDb, profile_ref: str):
 
 @router.get("/{profile_ref}/settings")
 def get_settings(db: ReadDb, profile_ref: str) -> dict:
-    """Los parametros crudos mas los limites que implican.
+    """The raw settings plus the limits they imply.
 
-    Van juntos porque el formulario de F6.8 los necesita a la vez: enseña el
-    deslizador y, al lado, lo que ese deslizador significa en numeros.
+    They travel together because the F6.8 form needs both at once: it shows the
+    slider and, beside it, what that slider means in numbers.
     """
     profile = find_profile(db, profile_ref)
     settings = db.get_settings(profile["id"])
@@ -99,7 +99,7 @@ def get_settings_history(
 
 @router.get("/{profile_ref}/limits", response_model=DerivedLimits)
 def get_limits(db: ReadDb, profile_ref: str):
-    """Los nueve limites efectivos, para pintarlos en vivo mientras se edita."""
+    """The nine effective limits, to paint them live while editing."""
     profile = find_profile(db, profile_ref)
     return queries.derived_limits(db.get_settings(profile["id"]))
 
@@ -110,13 +110,13 @@ def get_limits(db: ReadDb, profile_ref: str):
 
 @router.post("", response_model=ProfileDetail, status_code=status.HTTP_201_CREATED)
 def create_profile(db: ConfigDb, body: ProfileCreate):
-    """Crea un perfil para un mercado, con su universo y su cartera.
+    """Creates a profile for a market, with its universe and its book.
 
-    Comparte implementacion con `run.py new-profile`
-    (`profile_settings.create_market_profile`): dos copias divergirian, y la
-    primera regla en hacerlo seria la de FE.11 —el suelo de liquidez sale del
-    mercado—, con el sintoma de que un perfil creado desde aqui descartaria en
-    silencio 15 valores que el creado desde la consola si analiza.
+    It shares the implementation with `run.py new-profile`
+    (`profile_settings.create_market_profile`): two copies would diverge, and the
+    first rule to do so would be FE.11's —the liquidity floor comes from the
+    market— with the symptom that a profile created here would silently discard
+    15 stocks that one created from the console does analyse.
     """
     try:
         created = create_market_profile(
@@ -130,8 +130,8 @@ def create_profile(db: ConfigDb, body: ProfileCreate):
     except ConfigError as exc:
         raise HTTPException(UNPROCESSABLE, str(exc)) from exc
     except UniverseError as exc:
-        # El fichero de universo del repositorio no sirve. No es culpa de quien
-        # hace la peticion, asi que no es un 4xx.
+        # The repository's universe file is no good. That is not the caller's
+        # fault, so it is not a 4xx.
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
     except DatabaseError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
@@ -145,11 +145,11 @@ def create_profile(db: ConfigDb, body: ProfileCreate):
     status_code=status.HTTP_201_CREATED,
 )
 def duplicate(db: ConfigDb, profile_ref: str, body: ProfileDuplicate):
-    """Clona parametros y universo, no el historico.
+    """Clones settings and universe, not the history.
 
-    Es el gesto central del experimento (F5.4): con la copia se cambia **un**
-    parametro y se comparan las dos curvas. Heredar el historico del original
-    haria justamente que no se pudieran comparar.
+    It is the experiment's central gesture (F5.4): with the copy you change
+    **one** parameter and compare the two curves. Inheriting the original's
+    history would be exactly what makes them incomparable.
     """
     source = find_profile(db, profile_ref)
     try:
@@ -165,7 +165,7 @@ def duplicate(db: ConfigDb, profile_ref: str, body: ProfileDuplicate):
 
 @router.patch("/{profile_ref}", response_model=ProfileDetail)
 def patch_profile(db: ConfigDb, profile_ref: str, body: ProfilePatch):
-    """Nombre, descripcion y estado. Los parametros van por otro endpoint."""
+    """Name, description and status. The settings go through another endpoint."""
     profile = find_profile(db, profile_ref)
     changes = body.model_dump(exclude_unset=True)
     if not changes:
@@ -178,10 +178,10 @@ def patch_profile(db: ConfigDb, profile_ref: str, body: ProfilePatch):
             raise HTTPException(UNPROCESSABLE, str(exc)) from exc
 
     if changes:
-        # `name` es unique en el esquema y ademas es como el ciclo encuentra la
-        # cartera (`portfolio_name`), asi que renombrar un perfil con historico
-        # lo desconectaria de su cartera. Se deja renombrar solo lo que todavia
-        # no ha operado.
+        # `name` is unique in the schema and is also how the cycle finds the
+        # book (`portfolio_name`), so renaming a profile that has history would
+        # disconnect it from its book. Renaming is allowed only for what has not
+        # traded yet.
         if "name" in changes and changes["name"] != profile["name"]:
             _refuse_rename_with_history(db, profile)
         try:
@@ -219,11 +219,11 @@ def delete_profile(
         "", description="Repite el nombre exacto del perfil para confirmar."
     ),
 ):
-    """Borra el perfil **y todo su historico**. No se deshace.
+    """Deletes the profile **and all of its history**. It cannot be undone.
 
-    La confirmacion por nombre no es ceremonia: es la unica llamada de la API
-    que destruye datos que costo semanas generar, y un `DELETE` a la URL
-    equivocada es un gesto de un segundo.
+    Confirming by name is not ceremony: it is the only API call that destroys
+    data that took weeks to generate, and a `DELETE` to the wrong URL is a
+    one-second gesture.
     """
     profile = find_profile(db, profile_ref)
     if confirm != profile["name"]:
@@ -238,18 +238,18 @@ def delete_profile(
 
 @router.patch("/{profile_ref}/settings", response_model=SettingsApplied)
 def patch_settings(db: ConfigDb, profile_ref: str, body: SettingsUpdate):
-    """Actualiza parametros del agente y devuelve lo que cambio de verdad.
+    """Updates the agent's settings and returns what actually changed.
 
-    `exclude_unset` es lo que permite distinguir "no toques este campo" de
-    "ponlo a NULL". En los limites duros esa diferencia es el interruptor de
-    F6.5: NULL significa "vuelve a derivarlo de los deslizadores".
+    `exclude_unset` is what makes it possible to tell "do not touch this field"
+    from "set it to NULL". On the hard limits that difference is the switch of
+    F6.5: NULL means "derive it from the sliders again".
     """
     profile = find_profile(db, profile_ref)
     changes = body.model_dump(exclude_unset=True)
 
-    # Los booleanos van a columnas INTEGER. Se convierten aqui para que el
-    # historial de `agent_settings_history` guarde "1" y no "True", que es lo que
-    # ya escriben la CLI y el ciclo.
+    # Booleans go into INTEGER columns. They are converted here so the history in
+    # `agent_settings_history` stores "1" and not "True", which is what the CLI
+    # and the cycle already write.
     for field, value in list(changes.items()):
         if isinstance(value, bool):
             changes[field] = int(value)
@@ -271,21 +271,22 @@ def patch_settings(db: ConfigDb, profile_ref: str, body: SettingsUpdate):
 
 @router.put("/{profile_ref}/universe", response_model=ActionResult)
 def put_universe(db: ConfigDb, profile_ref: str, body: UniverseUpdate):
-    """Reemplaza los simbolos que el ingestor sigue minuto a minuto.
+    """Replaces the symbols the ingestor follows minute by minute.
 
-    Ojo con la trampa de FE.7: esto **no** es el universo del screener, que sale
-    de `universe_file`. Son dos cosas distintas y la interfaz tiene que decirlo.
+    Mind the trap of FE.7: this is **not** the screener's universe, which comes
+    from `universe_file`. They are two different things and the interface has to
+    say so.
     """
     profile = find_profile(db, profile_ref)
     settings = db.get_settings(profile["id"])
     symbols = sorted({s.strip().upper() for s in body.symbols if s.strip()})
 
-    mercado = get_market(settings["market"])
-    foreign = mercado.foreign_symbols(symbols)
+    market = get_market(settings["market"])
+    foreign = market.foreign_symbols(symbols)
     if foreign:
         raise HTTPException(
             UNPROCESSABLE,
-            _foreign_message(profile["name"], mercado, foreign),
+            _foreign_message(profile["name"], market, foreign),
         )
 
     db.set_profile_universe(profile["id"], symbols)
@@ -298,30 +299,30 @@ def put_universe(db: ConfigDb, profile_ref: str, body: UniverseUpdate):
 # ----------------------------------------------------------------------
 
 def _check_universe_matches_market(db: ConfigDb, profile: dict, changes: dict) -> None:
-    """Impide dejar el perfil con un universo de otra bolsa.
+    """Stops the profile being left with a universe from another exchange.
 
-    Es la regla de FE.5, aplicada al editar en lugar de al arrancar el ciclo. La
-    comprobacion existe alli porque el sintoma es silencioso y caro: el simbolo
-    forastero no revienta, se queda con el cierre del dia anterior y el analista
-    decide sobre datos rancios. Descubrirlo al guardar es mucho mas barato que
-    descubrirlo en el log de un ciclo de las once de la noche.
+    It is FE.5's rule, applied on edit instead of at cycle start. The check
+    exists there because the symptom is silent and expensive: the foreign symbol
+    does not blow up, it sits on the previous day's close and the analyst decides
+    on stale data. Finding out on save is far cheaper than finding out in the log
+    of an eleven-at-night cycle.
     """
     if "market" not in changes:
         return
-    mercado = get_market(str(changes["market"]))
+    market = get_market(str(changes["market"]))
     symbols = db.get_profile_universe(profile["id"])
-    foreign = mercado.foreign_symbols(symbols)
+    foreign = market.foreign_symbols(symbols)
     if foreign:
         raise HTTPException(
             UNPROCESSABLE,
-            _foreign_message(profile["name"], mercado, foreign),
+            _foreign_message(profile["name"], market, foreign),
         )
 
 
-def _foreign_message(name: str, mercado, foreign: list[str]) -> str:
+def _foreign_message(name: str, market, foreign: list[str]) -> str:
     muestra = ", ".join(foreign[:8]) + ("..." if len(foreign) > 8 else "")
     return (
-        f"El perfil {name!r} quedaria en {mercado.code} ({mercado.label}) con "
+        f"El perfil {name!r} quedaria en {market.code} ({market.label}) con "
         f"{len(foreign)} simbolo(s) de otra bolsa: {muestra}\n"
         "  Un perfil cubre un solo mercado: de ahi salen el horario, el calendario "
         "y la divisa, y el proyecto no convierte divisa en ningun sitio."

@@ -1,7 +1,7 @@
-"""Tests de la capa de persistencia y de la reconciliacion con el broker.
+"""Tests of the persistence layer and of the reconciliation with the broker.
 
-Al ser SQLite, se prueba contra una base real en un fichero temporal: no hacen
-falta dobles y se valida tambien el propio schema.sql.
+Being SQLite, it is tested against a real database in a temporary file: no
+doubles are needed and schema.sql itself gets validated too.
 """
 
 from __future__ import annotations
@@ -219,7 +219,7 @@ def test_reconcile_adopts_orphan_broker_positions(db, portfolio):
 
     assert [symbol for symbol, _ in report.adopted_orphans] == ["MSFT"]
     row = db.get_open_positions(portfolio)["MSFT"]
-    # Se adopta sin stop: el ciclo le asigna uno por ATR a continuacion.
+    # Adopted with no stop: the cycle assigns one by ATR right afterwards.
     assert row["stop_price"] is None
 
 

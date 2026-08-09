@@ -12,11 +12,11 @@ export interface ActionResult {
 }
 
 /**
- * Las cinco series de las graficas (F4.6), en un solo viaje.
+ * The five chart series (F4.6), in a single trip.
  *
- * Juntas y no en cinco endpoints porque son una sola pantalla: cinco peticiones
- * darian cinco estados de carga y cinco formas de fallar a medias para leer
- * cinco agregados del mismo fichero local.
+ * Together and not in five endpoints because they are one single screen: five
+ * requests would give five loading states and five ways of half-failing in
+ * order to read five aggregates of the same local file.
  */
 export interface Analytics {
   equity_curve?: Array<EquityPoint>;
@@ -27,10 +27,10 @@ export interface Analytics {
 }
 
 /**
- * Una barra del grafico que decide el experimento.
+ * One bar of the chart that decides the experiment.
  *
- * Si el `win_rate_pct` no crece con el `conviction_bucket`, la conviccion que
- * declara el modelo no informa de nada y se esta operando con ruido caro.
+ * If `win_rate_pct` does not grow with `conviction_bucket`, the conviction the
+ * model declares informs nothing and we are trading on expensive noise.
  */
 export interface CalibrationBucket {
   conviction_bucket: number;
@@ -48,10 +48,10 @@ export interface ConvictionBucket {
 }
 
 /**
- * Estado del ciclo lanzado desde la interfaz.
+ * State of the cycle launched from the interface.
  *
- * `enabled=False` significa que los controles estan apagados: la API sirve
- * igual, pero sin boton de disparar nada (F3.8).
+ * `enabled=False` means the controls are switched off: the API still serves,
+ * but with no button to fire anything (F3.8).
  */
 export interface CycleControl {
   enabled: boolean;
@@ -140,10 +140,10 @@ export interface DecisionRow {
 }
 
 /**
- * Los nueve limites efectivos y de donde sale cada uno.
+ * The nine effective limits and where each one comes from.
  *
- * `derived_fields` es lo que la interfaz pinta en gris: los limites que salen
- * de los deslizadores y no de un numero escrito a mano (F6.8).
+ * `derived_fields` is what the interface paints in grey: the limits that come
+ * from the sliders and not from a number written by hand (F6.8).
  */
 export interface DerivedLimits {
   risk_per_trade_pct: number;
@@ -188,11 +188,11 @@ export interface IngestRun {
 }
 
 /**
- * Salud del ingestor.
+ * Ingestor health.
  *
- * Las medias se calculan **solo sobre los ticks**: un relleno de huecos
- * descarga varios dias de golpe, asi que una sola de sus filas desplazaria
- * cualquier media de latencia y este panel pasaria a medir otra cosa (F2.10).
+ * The averages are computed **over the ticks only**: a gap backfill downloads
+ * several days at once, so a single one of its rows would shift any latency
+ * average and this panel would start measuring something else (F2.10).
  */
 export interface IngestStatus {
   healthy: boolean;
@@ -211,12 +211,12 @@ export interface IngestStatus {
 }
 
 /**
- * Una bolsa del registro de `src/market_calendar.py`.
+ * One exchange from the registry in `src/market_calendar.py`.
  *
- * La interfaz la necesita para el alta de perfil (F5.3) y para no escribir '$'
- * en un perfil europeo. Nada de esto se deduce en el frontend: la divisa, el
- * horario y el suelo de liquidez son propiedades del mercado y viven en un
- * solo sitio.
+ * The interface needs it for the profile creation form (F5.3) and so as not to
+ * write '$' in a European profile. None of this is inferred in the frontend:
+ * the currency, the hours and the liquidity floor are properties of the market
+ * and live in a single place.
  */
 export interface MarketInfo {
   code: string;
@@ -363,7 +363,7 @@ export interface ProfileDuplicate {
 }
 
 /**
- * Las cifras de la tarjeta de perfil (F5.2).
+ * The figures on the profile card (F5.2).
  */
 export interface ProfileMetrics {
   equity?: number | null;
@@ -439,11 +439,11 @@ export interface RiskEventRow {
 }
 
 /**
- * Que cambio de verdad. Vacio significa que el cuerpo no cambiaba nada.
+ * What actually changed. Empty means the body changed nothing.
  *
- * Se devuelve la lista y no un simple `ok` porque `update_settings` ignora los
- * campos que llegan con el valor que ya tenian: sin esto, la interfaz no podria
- * distinguir "guardado" de "guardado y ademas cambio algo".
+ * The list is returned instead of a plain `ok` because `update_settings`
+ * ignores fields arriving with the value they already had: without this, the
+ * interface could not tell "saved" from "saved and something changed too".
  */
 export interface SettingsApplied {
   applied: Array<string>;
@@ -460,12 +460,12 @@ export interface SettingsHistoryRow {
 }
 
 /**
- * Un parche sobre `agent_settings`.
+ * A patch over `agent_settings`.
  *
- * Solo se aplican los campos presentes en el cuerpo (`exclude_unset`), lo que
- * permite distinguir "no lo toques" de "ponlo a NULL". La diferencia no es
- * teorica: en los limites duros, NULL significa "vuelve a derivarlo de los
- * deslizadores" (F6.5).
+ * Only the fields present in the body are applied (`exclude_unset`), which
+ * makes it possible to tell "do not touch it" from "set it to NULL". The
+ * difference is not theoretical: on the hard limits, NULL means "derive it from
+ * the sliders again" (F6.5).
  */
 export interface SettingsUpdate {
   llm_provider?: "nvidia" | "openai" | "anthropic" | null;

@@ -1,10 +1,10 @@
-"""Tests del broker simulado.
+"""Tests of the simulated broker.
 
-El simulador es el que sustituye a la cuenta de broker, asi que si es optimista
-todo el experimento queda invalidado. Lo que mas se prueba aqui es precisamente
-eso: que no se pueda gastar dinero que no hay, que el deslizamiento vaya siempre
-en contra, y que se ejecute a la apertura siguiente y no al cierre con el que se
-decidio.
+The simulator is what replaces the broker account, so if it is optimistic the
+whole experiment is invalidated. What gets tested most here is exactly that: that
+money that is not there cannot be spent, that slippage always works against you,
+and that execution happens at the following open and not at the close the
+decision was made on.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def portfolio(db):
 
 @pytest.fixture
 def broker(db, portfolio):
-    """Sin deslizamiento ni comision: los tests que los miden los activan."""
+    """No slippage and no commission: the tests that measure them switch them on."""
     return SimBroker(
         database=db, portfolio_id=portfolio, initial_cash=10_000.0,
         slippage_bps=0.0, commission_per_order=0.0,
@@ -66,7 +66,7 @@ def test_reopening_the_account_keeps_its_state(db, portfolio):
     first.set_quotes({"AAPL": quote(100.0)})
     first.buy_market("AAPL", 10)
 
-    # Un ciclo posterior construye el broker de nuevo: el estado vive en SQLite.
+    # A later cycle builds the broker again: the state lives in SQLite.
     second = SimBroker(database=db, portfolio_id=portfolio, initial_cash=10_000.0,
                        slippage_bps=0.0)
     second.set_quotes({"AAPL": quote(100.0)})
@@ -80,8 +80,8 @@ def test_reopening_the_account_keeps_its_state(db, portfolio):
 # -- Compras -----------------------------------------------------------------
 
 def test_buy_fills_at_the_next_open_not_at_the_decision_close(broker):
-    """El punto central de la simulacion: se decide con el cierre (105) y se
-    ejecuta con la apertura siguiente (100). Ejecutar a 105 regalaria el hueco."""
+    """The core point of the simulation: it decides on the close (105) and
+    executes at the following open (100). Executing at 105 would hand over the gap."""
     broker.set_quotes({"AAPL": Quote(fill_price=100.0, mark_price=105.0)})
 
     order = broker.buy_market("AAPL", 10)
@@ -91,7 +91,7 @@ def test_buy_fills_at_the_next_open_not_at_the_decision_close(broker):
 
 
 def test_buy_slippage_works_against_the_buyer(db, portfolio):
-    """50 pb sobre 100 son 100.50: al comprar se paga mas, nunca menos."""
+    """50 bp over 100 is 100.50: buying pays more, never less."""
     broker = SimBroker(database=db, portfolio_id=portfolio, initial_cash=10_000.0,
                        slippage_bps=50.0)
     broker.set_quotes({"AAPL": quote(100.0)})
@@ -122,7 +122,7 @@ def test_cannot_spend_more_cash_than_available(broker):
 
 
 def test_buying_without_a_price_is_refused(broker):
-    """Sin precio de ejecucion no se inventa uno."""
+    """With no execution price, none is invented."""
     broker.set_quotes({})
 
     with pytest.raises(BrokerError, match="No hay precio"):
@@ -197,7 +197,7 @@ def test_realized_pnl_is_recorded_on_the_fill(db, portfolio, broker):
 
 
 def test_no_short_selling(broker):
-    """Vender lo que no se tiene abriria un corto, que el simulador no modela."""
+    """Selling what you do not hold would open a short, which the simulator does not model."""
     broker.set_quotes({"AAPL": quote(100.0)})
 
     with pytest.raises(BrokerError, match="No hay posicion abierta"):
@@ -247,8 +247,8 @@ def test_positions_are_valued_at_the_mark_price(broker):
 
 
 def test_a_position_without_a_price_falls_back_to_its_entry(broker):
-    """Sin cotizacion se vale al precio de entrada: no se inventa una valoracion
-    ni se cuenta como cero, que seria peor."""
+    """With no quote it is valued at the entry price: no valuation is invented
+    and it is not counted as zero, which would be worse."""
     broker.set_quotes({"AAPL": quote(100.0)})
     broker.buy_market("AAPL", 10)
 
@@ -266,7 +266,7 @@ def test_day_pnl_is_measured_against_the_previous_session_close(broker):
     broker.roll_session("2026-08-06")
     broker.buy_market("AAPL", 10)
 
-    # Sesion nueva: la referencia se fija con el equity de cierre anterior.
+    # A new session: the reference is pinned to the previous closing equity.
     broker.set_quotes({"AAPL": Quote(fill_price=110.0, mark_price=110.0)})
     broker.roll_session("2026-08-07")
     account = broker.get_account_state()
@@ -276,8 +276,8 @@ def test_day_pnl_is_measured_against_the_previous_session_close(broker):
 
 
 def test_rolling_the_same_session_twice_does_not_move_the_reference(broker):
-    """Si la referencia se reiniciase en cada ciclo del mismo dia, el kill switch
-    de perdida diaria nunca llegaria a dispararse."""
+    """If the reference reset on every cycle of the same day, the daily-loss kill
+    switch would never get to fire."""
     broker.set_quotes({"AAPL": quote(100.0)})
     broker.roll_session("2026-08-07")
     broker.buy_market("AAPL", 10)
@@ -315,11 +315,11 @@ def test_held_symbols_reports_open_positions(broker):
     assert broker.held_symbols() == {"AAPL", "MSFT"}
 
 
-def test_sim_broker_cumple_el_protocolo_de_broker():
-    """`cycle.py` solo conoce el protocolo de `broker.py`.
+def test_sim_broker_satisfies_the_broker_protocol():
+    """`cycle.py` only knows the protocol in `broker.py`.
 
-    Si el simulador se desvia de el, el dia que se anada un broker real el ciclo
-    dejaria de funcionar con uno de los dos y el test que lo dice es este.
+    If the simulator drifts away from it, the day a real broker is added the cycle
+    would stop working with one of the two, and this is the test that says so.
     """
     from src.broker import Broker
 

@@ -1,7 +1,7 @@
-"""Tests del Risk Manager.
+"""Tests of the Risk Manager.
 
-Es la capa que decide cuanto dinero se arriesga, asi que es la que mas test
-merece. Todos los casos son deterministas: sin red, sin LLM, sin broker.
+It is the layer that decides how much money is put at risk, so it is the one that
+most deserves testing. Every case is deterministic: no network, no LLM, no broker.
 """
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ from src.config import RiskLimits
 from src.models import AccountState, BrokerPosition, Proposal
 from src.risk import RiskManager
 
-# Con equity 100k, riesgo 1% y ATR 2.0 x2 = stop a 4.0 de distancia:
-#   riesgo por accion = 4.0  ->  1000 / 4 = 250 acciones
+# With 100k equity, 1% risk and ATR 2.0 x2 = a stop 4.0 away:
+#   risk per share = 4.0  ->  1000 / 4 = 250 shares
 LIMITS = RiskLimits(
     risk_per_trade_pct=1.0,
     max_position_pct=20.0,
@@ -70,10 +70,10 @@ def manager():
 # -- Dimensionado ------------------------------------------------------------
 
 def test_position_size_comes_from_risk_budget_not_from_the_model(manager):
-    """250 acciones = (100k * 1%) / (20 - 16). El modelo no interviene.
+    """250 shares = (100k * 1%) / (20 - 16). The model plays no part.
 
-    Precio 20 para que el tope de max_position_pct no muerda y se vea aislado
-    el efecto del presupuesto de riesgo.
+    Price 20 so the max_position_pct cap does not bite and the risk budget's
+    effect can be seen in isolation.
     """
     verdict = manager.evaluate_entry(proposal(reference_price=20.0), account(), atr=2.0)
 
@@ -85,23 +85,23 @@ def test_position_size_comes_from_risk_budget_not_from_the_model(manager):
 
 
 def test_position_cap_binds_before_the_risk_budget_on_typical_stocks(manager):
-    """Interaccion importante de los valores por defecto: un stop de 2xATR
-    ronda el 4% del precio, asi que arriesgar el 1% del equity implicaria una
-    posicion del 25%. El tope del 20% recorta antes, y eso es lo que se quiere:
-    manda la diversificacion, no el presupuesto de riesgo."""
+    """An important interaction between the defaults: a 2xATR stop is around 4%
+    of the price, so risking 1% of equity would imply a 25% position. The 20% cap
+    trims it first, and that is what is wanted: diversification wins, not the
+    risk budget."""
     verdict = manager.evaluate_entry(proposal(reference_price=100.0), account(), atr=2.0)
 
     assert verdict.approved
     assert verdict.rule == "max_position_pct"
     assert verdict.qty == 200
     assert verdict.details["pct_of_equity"] == pytest.approx(20.0)
-    # Al recortar el tamano tambien se arriesga menos de lo presupuestado.
+    # Trimming the size also risks less than what was budgeted.
     assert verdict.details["risk_amount"] < verdict.details["risk_budget"]
 
 
 def test_higher_volatility_yields_a_smaller_position(manager):
-    """Mismo capital y misma conviccion: el ATR es lo que cambia el tamano, y
-    el importe arriesgado se mantiene constante."""
+    """Same capital and same conviction: the ATR is what changes the size, and
+    the amount risked stays constant."""
     calm = manager.evaluate_entry(proposal(reference_price=20.0), account(), atr=1.0)
     volatile = manager.evaluate_entry(proposal(reference_price=20.0), account(), atr=5.0)
 
@@ -111,8 +111,8 @@ def test_higher_volatility_yields_a_smaller_position(manager):
 
 
 def test_max_position_pct_caps_the_size(manager):
-    """Con ATR minusculo el riesgo permitiria una posicion enorme; el tope de
-    20% del equity la recorta a 200 acciones."""
+    """With a tiny ATR the risk would allow an enormous position; the 20%-of-
+    equity cap trims it to 200 shares."""
     verdict = manager.evaluate_entry(proposal(), account(), atr=0.05)
 
     assert verdict.approved
@@ -131,7 +131,7 @@ def test_cash_limits_the_size(manager):
 
 
 def test_total_exposure_limit_is_enforced(manager):
-    """Con 78k ya invertidos y tope del 80%, solo quedan 2k de margen."""
+    """With 78k already invested and an 80% cap, only 2k of room is left."""
     held = position(symbol="MSFT", qty=780.0, entry=100.0, price=100.0)
     verdict = manager.evaluate_entry(
         proposal(), account(equity=100_000.0, cash=50_000.0, positions=[held]), atr=2.0
@@ -160,7 +160,7 @@ def test_hold_is_not_an_order(manager):
 
 
 def test_missing_atr_is_rejected_not_guessed(manager):
-    """Sin volatilidad no hay forma honesta de dimensionar: se rechaza."""
+    """With no volatility there is no honest way to size: it is refused."""
     verdict = manager.evaluate_entry(proposal(), account(), atr=None)
 
     assert not verdict.approved
@@ -215,7 +215,7 @@ def test_insufficient_cash_for_one_share_is_rejected(manager):
 # -- El stop del modelo ------------------------------------------------------
 
 def test_model_may_widen_the_stop(manager):
-    """Un stop mas holgado que el del ATR se acepta: implica menos acciones."""
+    """A stop wider than the ATR's is accepted: it implies fewer shares."""
     verdict = manager.evaluate_entry(
         proposal(reference_price=20.0, suggested_stop=10.0, suggested_target=40.0),
         account(), atr=2.0,
@@ -224,12 +224,12 @@ def test_model_may_widen_the_stop(manager):
     assert verdict.approved
     assert verdict.stop_price == pytest.approx(10.0)
     assert verdict.details["stop_source"] == "llm_wider"
-    assert verdict.qty == 100  # 1000 / 10, frente a las 250 del stop por ATR
+    assert verdict.qty == 100  # 1000 / 10, against the 250 of the ATR stop
 
 
 def test_model_cannot_tighten_the_stop_to_inflate_the_position(manager):
-    """Este es el ataque a evitar: un stop pegado al precio permitiria comprar
-    una posicion gigantesca. El ATR manda y el tamano no se mueve."""
+    """This is the attack to avoid: a stop hugging the price would allow buying
+    an enormous position. The ATR wins and the size does not move."""
     baseline = manager.evaluate_entry(proposal(reference_price=20.0), account(), atr=2.0)
     attacked = manager.evaluate_entry(
         proposal(reference_price=20.0, suggested_stop=19.99), account(), atr=2.0
@@ -313,16 +313,16 @@ def test_price_between_levels_produces_no_exit(manager):
 
 
 def test_position_without_levels_is_left_alone(manager):
-    """Una huerfana sin stop no se liquida por sorpresa; el ciclo le asigna
-    niveles y a partir de ahi queda vigilada."""
+    """An orphan with no stop is not liquidated by surprise; the cycle assigns it
+    levels and from then on it is under watch."""
     positions = {"AAPL": position(price=50.0)}
 
     assert manager.mandatory_exits(positions, {"AAPL": {}}) == []
 
 
 def test_stop_takes_precedence_over_target(manager):
-    """Un dia con mucho rango puede tocar ambos niveles; con datos diarios no
-    sabemos el orden, asi que se asume el peor caso."""
+    """A day with a wide range can touch both levels; with daily data we do not
+    know the order, so the worst case is assumed."""
     positions = {"AAPL": position(price=95.0)}
     levels = {"AAPL": {"stop_price": 96.0, "target_price": 94.0}}
 

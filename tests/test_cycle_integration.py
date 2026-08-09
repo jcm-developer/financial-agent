@@ -1,9 +1,9 @@
-"""Ciclo completo de punta a punta, sin red.
+"""A whole cycle end to end, without network.
 
-Se sustituyen solo las dos fronteras externas — el modelo y la descarga de barras
-— y se deja correr todo lo demas de verdad: analista, Risk Manager, broker
-simulado y base de datos. Es la prueba de que las piezas encajan, que es
-justamente lo que los tests unitarios no cubren.
+Only the two external boundaries are replaced — the model and the bar download —
+and everything else is left to run for real: analyst, Risk Manager, simulated
+broker and database. It is the proof that the pieces fit together, which is
+exactly what the unit tests do not cover.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ def test_a_full_cycle_opens_positions_and_records_everything(db):
     assert report.approved == 2
     assert report.orders_submitted == 2
 
-    # Se registro en las dos contabilidades: la del broker y la del bot.
+    # Recorded in both sets of books: the broker's and the bot's.
     assert len(db.query("select * from sim_positions")) == 2
     assert len(db.get_open_positions(report.cycle_id and _portfolio(db))) == 2
     # Y quedo rastro de decisiones, veredictos, ordenes y curva de capital.
@@ -54,8 +54,8 @@ def test_a_full_cycle_opens_positions_and_records_everything(db):
 
 
 def test_execution_happens_at_the_next_open_not_the_decision_close(db):
-    """La comprobacion que sostiene todo el experimento: la orden se llena al
-    precio de apertura siguiente, que es inferior al cierre con el que se decidio."""
+    """The check that holds the whole experiment up: the order fills at the
+    following open, which is below the close the decision was made on."""
     settings = make_settings(watchlist=("AAPL",))
     market = StubMarketData({"AAPL": rising()})
     make_cycle(db, settings, StubLLM(entry=BUY, exit_=HOLD_EXIT), market).run()
@@ -76,7 +76,7 @@ def test_position_size_never_exceeds_the_configured_cash(db):
     account_row = db.query("select cash from sim_accounts")[0]
     assert account_row["cash"] >= 0
     equity = db.query("select equity from equity_snapshots order by id desc limit 1")[0]
-    # Sin apalancamiento, el equity no puede crecer solo por comprar.
+    # With no leverage, equity cannot grow just by buying.
     assert equity["equity"] == pytest.approx(10_000.0, abs=60.0)
 
 
@@ -114,17 +114,17 @@ def test_dry_run_analyses_but_sends_nothing(db):
     assert report.approved == 2
     assert report.orders_submitted == 0
     assert db.query("select * from sim_positions") == []
-    # La orden queda registrada como no enviada, con su motivo.
+    # The order is recorded as not sent, with its reason.
     orders = db.query("select status from orders")
     assert {o["status"] for o in orders} == {"dry_run"}
 
 
 def test_a_crash_triggers_the_stop_without_consulting_the_model(db):
-    """Primer ciclo compra; despues el precio se hunde por debajo del stop y el
-    cierre se ejecuta sin preguntar al analista.
+    """The first cycle buys; then the price sinks below the stop and the close
+    executes without asking the analyst.
 
-    El desplome se anade DOS veces: la primera barra nueva es la sesion de
-    decision (donde el agente ve la caida) y la segunda es la de ejecucion.
+    The crash is added TWICE: the first new bar is the decision session (where the
+    agent sees the fall) and the second is the execution one.
     """
     settings = make_settings(watchlist=("AAPL",))
     llm = StubLLM(entry=BUY, exit_=HOLD_EXIT)
@@ -146,16 +146,16 @@ def test_a_crash_triggers_the_stop_without_consulting_the_model(db):
 
 
 def test_a_crash_in_the_execution_bar_is_not_visible_yet(db):
-    """Contrapartida del anterior, y propiedad central del diseno: una caida que
-    solo aparece en la barra de ejecucion todavia no la ha visto el agente, asi
-    que el stop no puede saltar. Reaccionar antes seria operar con informacion
-    del futuro, que es exactamente lo que invalida un backtest."""
+    """Counterpart of the previous one, and a central property of the design: a
+    fall that only appears in the execution bar has not been seen by the agent
+    yet, so the stop cannot fire. Reacting earlier would be trading with
+    information from the future, which is exactly what invalidates a backtest."""
     settings = make_settings(watchlist=("AAPL",))
     llm = StubLLM(entry=BUY, exit_=HOLD_EXIT)
 
     make_cycle(db, settings, llm, StubMarketData({"AAPL": rising()})).run()
 
-    # Una sola barra nueva: es la de ejecucion, no la de decision.
+    # A single new bar: it is the execution one, not the decision one.
     crashed = rising() + [rising()[-1] * 0.7]
     report = make_cycle(db, settings, llm, StubMarketData({"AAPL": crashed})).run()
 
@@ -180,9 +180,9 @@ def test_the_analyst_can_close_a_position_on_a_degraded_thesis(db):
 
 
 def test_the_kill_switch_stops_new_entries_after_a_daily_loss(db):
-    """La referencia del P&L diario se eleva a mano para simular una sesion que
-    ya va muy perdida. Se repite la MISMA sesion a proposito: si cambiara,
-    `roll_session` recalibraria la referencia y la perdida desapareceria."""
+    """The daily P&L reference is raised by hand to simulate a session already
+    deep in the red. The SAME session is repeated on purpose: if it changed,
+    `roll_session` would recalibrate the reference and the loss would vanish."""
     settings = make_settings(
         watchlist=("AAPL", "MSFT"),
         risk=RiskLimits(min_conviction=65, max_daily_loss_pct=3.0),
@@ -204,8 +204,8 @@ def test_the_kill_switch_stops_new_entries_after_a_daily_loss(db):
 
 
 def test_a_new_session_resets_the_daily_loss_reference(db):
-    """Complemento del anterior: el kill switch es diario, no acumulado. Al
-    empezar sesion nueva la referencia se mueve y el agente vuelve a operar."""
+    """Complement of the previous one: the kill switch is daily, not cumulative.
+    On a new session the reference moves and the agent trades again."""
     settings = make_settings(
         watchlist=("AAPL",), risk=RiskLimits(min_conviction=65, max_daily_loss_pct=3.0),
     )
@@ -255,7 +255,7 @@ def test_symbols_without_data_are_skipped_not_guessed(db):
 
 
 def test_the_dashboard_payload_reflects_a_real_cycle(db):
-    """Cierra el circulo: lo que el ciclo escribe es lo que el dashboard lee."""
+    """It closes the circle: what the cycle writes is what the dashboard reads."""
     from src.dashboard import build_dashboard
 
     settings = make_settings()

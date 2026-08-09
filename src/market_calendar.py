@@ -1,38 +1,38 @@
-"""Calendarios de mercado. Un registro, no un mercado cableado.
+"""Market calendars. A registry, not a hardcoded exchange.
 
-Hace falta desde el momento en que el agente decide durante la sesion: sin esto
-el planificador ejecutaria ciclos a las 3 de la manana sobre datos rancios, y los
-fines de semana gastaria cuota del modelo analizando barras identicas a las del
-viernes.
+It is needed from the moment the agent decides during the session: without it the
+scheduler would run cycles at 3 in the morning over stale data, and at weekends
+it would burn model quota analysing bars identical to Friday's.
 
-Hasta la version anterior este modulo *era* NYSE: la zona horaria, el horario y
-la tabla de festivos estaban en constantes de modulo. Ahora hay un registro de
-mercados (`MARKETS`) y cada perfil elige el suyo en `agent_settings.market`, que
-es lo coherente con F6: todo lo que define un experimento vive en el perfil.
+Until the previous version this module *was* NYSE: the time zone, the hours and
+the holiday table were module constants. Now there is a registry of markets
+(`MARKETS`) and each profile picks its own in `agent_settings.market`, which is
+what is coherent with F6: everything that defines an experiment lives in the
+profile.
 
-Tres decisiones que conviene entender:
+Three decisions worth understanding:
 
-  * **El mercado es un argumento de palabra clave con `us` por defecto.** No es
-    pereza: el codigo de produccion lo pasa siempre explicito (el ciclo y el
-    ingestor lo sacan del perfil), y el valor por defecto existe para que los
-    tests del calendario americano —que son los que fijan la semantica de
-    `should_run`— sigan leyendose sin ruido.
-  * **La tabla europea solo lleva los cierres comunes a todas sus bolsas.**
-    Xetra cierra el Lunes de Pentecostes y Milan la Epifania, pero las demas
-    abren. Marcar esos dias como "sin sesion" costaria una sesion entera a los
-    otros 60 simbolos; dejarlos como dia de mercado hace que esos valores
-    aparezcan sin datos ese dia, que es exactamente lo que el ingestor ya sabe
-    tratar (`resultado.vacios`). Se prefiere el fallo visible y acotado.
-  * **La divisa vive aqui.** No hay conversion en ninguna parte del proyecto:
-    una cartera esta en la moneda de su mercado y punto. Por eso el universo
-    europeo es solo de la zona euro —mezclar Londres, que cotiza en peniques,
-    haria que `min_order_notional` significara cosas distintas segun el simbolo
-    sin que nada avisara.
+  * **The market is a keyword argument defaulting to `us`.** That is not
+    laziness: production code always passes it explicitly (the cycle and the
+    ingestor take it from the profile), and the default exists so the American
+    calendar's tests —which are the ones that fix `should_run`'s semantics— still
+    read without noise.
+  * **The European table only carries the closures common to all its exchanges.**
+    Xetra closes on Whit Monday and Milan on Epiphany, but the rest open. Marking
+    those days as "no session" would cost the other 60 symbols a whole session;
+    leaving them as a market day makes those stocks turn up with no data that
+    day, which is exactly what the ingestor already knows how to handle
+    (`result.empty`). The visible, bounded failure is preferred.
+  * **The currency lives here.** There is no conversion anywhere in the project:
+    a book is in its market's currency and that is that. That is why the European
+    universe is euro-zone only —mixing in London, which quotes in pence, would
+    make `min_order_notional` mean different things per symbol with nothing
+    warning about it.
 
-Sin dependencias: los festivos van en una tabla porque `pandas_market_calendars`
-arrastraria media libreria para lo que aqui son treinta lineas. El precio es que
-la tabla hay que mantenerla; `last_covered_year` marca hasta donde llega, y las
-funciones avisan en lugar de mentir cuando se pasa esa fecha.
+No dependencies: the holidays go in a table because `pandas_market_calendars`
+would drag in half a library for what here is thirty lines. The price is that the
+table has to be maintained; `last_covered_year` marks how far it reaches, and the
+functions warn instead of lying once that date is passed.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ from zoneinfo import ZoneInfo
 
 log = logging.getLogger(__name__)
 
-#: Fecha cualquiera para hacer aritmetica con horas sueltas. No se usa su valor.
+#: An arbitrary date for doing arithmetic with bare times. Its value is unused.
 _ANY_DAY = date(2000, 1, 1)
 
 
@@ -55,12 +55,12 @@ def _minutes_between(start: time, end: time) -> int:
 
 
 def _shift(moment: time, minutes: int) -> time:
-    """Suma minutos a una hora del dia.
+    """Adds minutes to a time of day.
 
-    Se apoya en `datetime` en lugar de sumar a mano porque `time` no soporta
-    aritmetica. Una ventana que cruzara la medianoche daria la vuelta en
-    silencio; ninguno de los mercados del registro se acerca, y `_check_markets`
-    lo comprueba al importar el modulo.
+    It leans on `datetime` instead of adding by hand because `time` supports no
+    arithmetic. A window crossing midnight would wrap around silently; none of
+    the registry's markets comes close, and `_check_markets` verifies it when the
+    module is imported.
     """
     if not minutes:
         return moment
@@ -69,7 +69,7 @@ def _shift(moment: time, minutes: int) -> time:
 
 @dataclass(frozen=True)
 class Market:
-    """Un mercado: cuando abre, cuando cierra y en que moneda cotiza."""
+    """A market: when it opens, when it closes and which currency it quotes in."""
 
     code: str
     label: str
@@ -78,48 +78,48 @@ class Market:
     close_time: time
     currency: str
     currency_symbol: str
-    #: Indice de referencia por defecto para el perfil (`agent_settings.benchmark`).
+    #: Default benchmark index for the profile (`agent_settings.benchmark`).
     benchmark: str
-    #: Fichero de universo que se propone para este mercado.
+    #: Universe file proposed for this market.
     universe_file: str
-    #: Suelo de liquidez del screener (`agent_settings.screener_min_dollar_volume`)
-    #: para un perfil de este mercado, **en la divisa del mercado**: el screener
-    #: multiplica precio por volumen y no convierte nada. Vive aqui porque el
-    #: numero no es una preferencia del usuario sino una propiedad del universo:
-    #: 20 M valen para el S&P 500 y dejan fuera 15 de los 89 europeos.
+    #: Screener liquidity floor (`agent_settings.screener_min_dollar_volume`) for
+    #: a profile of this market, **in the market's currency**: the screener
+    #: multiplies price by volume and converts nothing. It lives here because the
+    #: number is not a user preference but a property of the universe: 20 M works
+    #: for the S&P 500 and leaves out 15 of the 89 European ones.
     min_turnover: float
-    #: Sufijos de bolsa que Yahoo usa para este mercado. Vacio = simbolos sin
-    #: sufijo (Estados Unidos). Es lo que permite detectar un perfil con
-    #: simbolos del mercado equivocado antes de que empiece a operar.
+    #: Exchange suffixes Yahoo uses for this market. Empty = symbols with no
+    #: suffix (United States). It is what allows detecting a profile with symbols
+    #: from the wrong market before it starts trading.
     symbol_suffixes: frozenset[str]
     holidays: frozenset[date]
-    #: Dias con cierre anticipado y su hora. Vacio si el mercado no los tiene.
+    #: Days with an early close and their time. Empty if the market has none.
     early_closes: Mapping[date, time]
     last_covered_year: int
-    #: Minutos DESPUES de la apertura en que el sistema empieza a trabajar. Los
-    #: primeros minutos de sesion son la subasta de apertura y los huecos: las
-    #: barras mas ruidosas del dia y las peores para decidir sobre ellas.
+    #: Minutes AFTER the open at which the system starts working. The first
+    #: minutes of a session are the opening auction and the gaps: the noisiest
+    #: bars of the day and the worst to decide on.
     warmup_minutes: int = 0
-    #: Minutos DESPUES del cierre en que el sistema sigue trabajando. La ultima
-    #: barra de la sesion no llega en el instante del cierre, y si el feed viene
-    #: con retraso (R1) puede tardar bastante mas.
+    #: Minutes AFTER the close during which the system keeps working. The
+    #: session's last bar does not arrive at the instant of the close, and if the
+    #: feed comes delayed (R1) it can take considerably longer.
     drain_minutes: int = 0
 
     def close_time_for(self, day: date) -> time:
         return self.early_closes.get(day, self.close_time)
 
-    # -- Ventana operativa -------------------------------------------------
+    # -- Operating window --------------------------------------------------
     #
-    # NO es la sesion, y la diferencia importa: `is_session_open` responde "esta
-    # la bolsa abierta" y tiene que seguir diciendo la verdad —lo consulta el
-    # dashboard y se guarda en `cycles.market_open`—, mientras que `is_operating`
-    # responde "trabaja el sistema ahora". Con la zona euro son 09:15-17:45
-    # frente a una sesion de 09:00-17:30.
+    # It is NOT the session, and the difference matters: `is_session_open` answers
+    # "is the exchange open" and has to keep telling the truth —the dashboard
+    # consults it and it is stored in `cycles.market_open`—, while `is_operating`
+    # answers "is the system working now". For the euro zone that is 09:15-17:45
+    # against a session of 09:00-17:30.
     #
-    # Se guardan como desplazamientos y no como horas absolutas para que una
-    # media sesion arrastre su ventana: con horas fijas, el 24 de diciembre en
-    # Nueva York el sistema seguiria esperando barras hasta las 16:00 de una
-    # sesion que cerro a las 13:00.
+    # They are stored as offsets and not as absolute times so a half session
+    # drags its window along: with fixed times, on 24 December in New York the
+    # system would go on waiting for bars until 16:00 of a session that closed at
+    # 13:00.
 
     @property
     def operating_open(self) -> time:
@@ -130,17 +130,18 @@ class Market:
 
     @property
     def operating_close(self) -> time:
-        """Cierre de la ventana en un dia normal, para enseñarlo."""
+        """Close of the window on a normal day, for display."""
         return _shift(self.close_time, self.drain_minutes)
 
     def owns_symbol(self, symbol: str) -> bool:
-        """True si el simbolo pertenece a este mercado, por su sufijo.
+        """True if the symbol belongs to this market, by its suffix.
 
-        Yahoo distingue la bolsa con un sufijo (`SAN.MC`) y deja los americanos
-        sin el (`AAPL`, y `BRK-B` con guion donde el indice pone punto). No es
-        una validacion cosmetica: un perfil europeo con `AAPL` dentro pediria ese
-        simbolo durante la sesion europea, cuando Nueva York lleva horas cerrada,
-        y se limitaria a devolver la barra rancia del dia anterior.
+        Yahoo tells the exchange apart with a suffix (`SAN.MC`) and leaves the
+        American ones without one (`AAPL`, and `BRK-B` with a hyphen where the
+        index puts a dot). This is not a cosmetic validation: a European profile
+        with `AAPL` inside would request that symbol during the European session,
+        when New York has been closed for hours, and would merely return the stale
+        bar from the previous day.
         """
         clean = symbol.strip().upper()
         if not self.symbol_suffixes:
@@ -148,22 +149,22 @@ class Market:
         return any(clean.endswith(suffix) for suffix in self.symbol_suffixes)
 
     def foreign_symbols(self, symbols) -> list[str]:
-        """Los que NO son de este mercado, en orden, para poder nombrarlos."""
+        """The ones that are NOT of this market, in order, so they can be named."""
         return [s for s in symbols if not self.owns_symbol(s)]
 
     @property
     def session_minutes(self) -> int:
-        """Minutos de sesion regular. Lo usa el ingestor para dimensionar."""
+        """Minutes of regular session. The ingestor uses it for sizing."""
         return _minutes_between(self.open_time, self.close_time)
 
     @property
     def operating_minutes(self) -> int:
-        """Minutos de ventana operativa en un dia normal.
+        """Minutes of operating window on a normal day.
 
-        Coincide con `session_minutes` cuando calentamiento y cola son iguales,
-        que es el caso de los dos mercados de hoy. Se calcula igualmente porque
-        depender de esa coincidencia haria que cambiar uno de los dos numeros
-        rompiera algo lejos y en silencio.
+        It coincides with `session_minutes` when warm-up and drain are equal,
+        which is the case for today's two markets. It is computed anyway because
+        depending on that coincidence would make changing either of the two
+        numbers break something far away and in silence.
         """
         return _minutes_between(self.operating_open, self.operating_close)
 
@@ -172,9 +173,9 @@ class Market:
 # Estados Unidos: NYSE / Nasdaq
 # ----------------------------------------------------------------------
 
-# Festivos con mercado cerrado. Cuando caen en fin de semana, NYSE los traslada
-# al viernes anterior o al lunes siguiente; las fechas de abajo ya son las
-# observadas, no las nominales.
+# Holidays with the market closed. When they fall at a weekend, NYSE moves them
+# to the preceding Friday or the following Monday; the dates below are already the
+# observed ones, not the nominal ones.
 _US_HOLIDAYS = frozenset({
     # 2025
     date(2025, 1, 1), date(2025, 1, 9), date(2025, 1, 20), date(2025, 2, 17),
@@ -212,18 +213,18 @@ US = Market(
     currency_symbol="$",
     benchmark="SPY",
     universe_file="universe/sp500.txt",
-    # 20 M USD/dia: es el default historico del esquema y de donde salio la
-    # cifra. Con el S&P 500 no descarta practicamente nada.
+    # 20 M USD/day: it is the schema's historical default and where the figure
+    # came from. With the S&P 500 it discards practically nothing.
     min_turnover=20_000_000.0,
     symbol_suffixes=frozenset(),
     holidays=_US_HOLIDAYS,
     early_closes=_US_EARLY_CLOSES,
     last_covered_year=2027,
-    # Sin calentamiento ni cola: la ventana operativa coincide con la sesion.
-    # Es a proposito —nadie ha pedido cambiar el comportamiento americano, y
-    # hacerlo de rebote alteraria un experimento en marcha—. El motivo de la
-    # cola europea, ademas, es el retraso del feed de Yahoo en Europa (R1), que
-    # aqui no aplica.
+    # No warm-up and no drain: the operating window coincides with the session.
+    # That is deliberate —nobody has asked to change the American behaviour, and
+    # doing it as a side effect would alter an experiment in flight—. The reason
+    # for the European drain, besides, is the lag of Yahoo's feed in Europe (R1),
+    # which does not apply here.
     warmup_minutes=0,
     drain_minutes=0,
 )
@@ -233,15 +234,15 @@ US = Market(
 # Zona euro: Xetra, Euronext, BME, Borsa Italiana, Nasdaq Helsinki
 # ----------------------------------------------------------------------
 
-# Las cinco bolsas del universo europeo comparten horario continuo 09:00-17:30
-# CET/CEST, asi que un solo calendario las cubre. Solo estan los cierres que
-# comparten TODAS; los propios de una bolsa (Pentecostes en Xetra, Epifania en
-# Milan, Dia de la Independencia en Helsinki) se dejan fuera a proposito: ver la
-# segunda decision del docstring.
+# The five exchanges of the European universe share a continuous 09:00-17:30
+# CET/CEST schedule, so a single calendar covers them. Only the closures ALL of
+# them share are here; the ones specific to one exchange (Whit Monday on Xetra,
+# Epiphany in Milan, Independence Day in Helsinki) are deliberately left out: see
+# the second decision in the docstring.
 #
-# A diferencia de NYSE, aqui los festivos NO se trasladan cuando caen en fin de
-# semana: simplemente no hay cierre extra. Por eso faltan fechas que uno
-# esperaria (el 1 de mayo de 2027 es sabado, el 26 de diciembre de 2026 tambien).
+# Unlike NYSE, holidays here are NOT moved when they fall at a weekend: there is
+# simply no extra closure. That is why dates one would expect are missing (1 May
+# 2027 is a Saturday, and so is 26 December 2026).
 _EU_HOLIDAYS = frozenset({
     # 2025 — Pascua el 20 de abril
     date(2025, 1, 1),    # Ano Nuevo
@@ -268,11 +269,11 @@ _EU_HOLIDAYS = frozenset({
     date(2027, 12, 31),
 })
 
-# Nochebuena y Nochevieja se tratan como cierre completo, no como media sesion.
-# No es exacto —Xetra, BME y Borsa Italiana cierran, pero Euronext hace subasta
-# hasta las 14:05— y es deliberado: media sesion con liquidez de festivo produce
-# barras que distorsionan los indicadores mas de lo que aportan. Por eso las dos
-# fechas estan arriba, en HOLIDAYS, y este mapa queda vacio.
+# Christmas Eve and New Year's Eve are treated as full closures, not as half
+# sessions. It is not exact —Xetra, BME and Borsa Italiana close, but Euronext
+# runs an auction until 14:05— and it is deliberate: a half session with holiday
+# liquidity produces bars that distort the indicators more than they contribute.
+# That is why both dates are up in HOLIDAYS, and this map stays empty.
 _EU_EARLY_CLOSES: Mapping[date, time] = MappingProxyType({})
 
 EU = Market(
@@ -283,30 +284,30 @@ EU = Market(
     close_time=time(17, 30),
     currency="EUR",
     currency_symbol="€",
-    # El ETF de iShares sobre el EURO STOXX 50, que es el equivalente natural de
-    # SPY aqui: cotiza en Xetra, en euros y con el mismo horario que el universo.
+    # The iShares ETF on the EURO STOXX 50, which is the natural equivalent of
+    # SPY here: it trades on Xetra, in euros and on the universe's own schedule.
     benchmark="EXW1.DE",
     universe_file="universe/eurostoxx50_ibex35.txt",
-    # 5 M EUR/dia. Medido el 2026-08-08 sobre las ultimas 20 sesiones: con el
-    # default de 20 M se caen 15 de los 89 —ANE.MC, LOG.MC, COL.MC, PUIG.MC,
-    # FDR.MC, ROVI.MC, SCYR.MC, MAP.MC...—, que son precisamente las medianas
-    # espanolas por las que se anadio el IBEX. Con 5 M pasan los 89: el menos
-    # liquido negocia 5,4 M EUR/dia, asi que el umbral sigue filtrando de verdad
-    # en lugar de estar puesto por debajo de todo.
+    # 5 M EUR/day. Measured on 2026-08-08 over the last 20 sessions: with the
+    # 20 M default, 15 of the 89 drop out —ANE.MC, LOG.MC, COL.MC, PUIG.MC,
+    # FDR.MC, ROVI.MC, SCYR.MC, MAP.MC...—, which are precisely the Spanish
+    # mid-caps the IBEX was added for. With 5 M all 89 pass: the least liquid
+    # trades 5.4 M EUR/day, so the threshold still filters for real instead of
+    # sitting below everything.
     min_turnover=5_000_000.0,
-    # Las seis bolsas del universo. Faltan a proposito las que no cotizan en
-    # euros: .L (Londres, en peniques), .SW (Zurich), .ST (Estocolmo), .CO, .OL.
+    # The universe's six exchanges. The ones not quoting in euros are absent on
+    # purpose: .L (London, in pence), .SW (Zurich), .ST (Stockholm), .CO, .OL.
     symbol_suffixes=frozenset({".MC", ".PA", ".DE", ".AS", ".MI", ".BR", ".HE"}),
     holidays=_EU_HOLIDAYS,
     early_closes=_EU_EARLY_CLOSES,
     last_covered_year=2027,
-    # Ventana operativa 09:15-17:45, pedida explicitamente.
-    #   * Los 15 primeros minutos se dejan pasar: son la resaca de la subasta de
-    #     apertura y los huecos de la noche, las barras mas ruidosas del dia.
-    #   * Los 15 ultimos se ganan: la subasta de cierre se cruza sobre las 17:35
-    #     y la barra de las 17:29 no aparece en el instante del cierre. Si se
-    #     confirma el retraso del feed europeo (R1 / F2.1c), parar a las 17:30
-    #     perderia el ultimo cuarto de hora de CADA sesion.
+    # Operating window 09:15-17:45, explicitly requested.
+    #   * The first 15 minutes are let go: they are the hangover of the opening
+    #     auction and the overnight gaps, the noisiest bars of the day.
+    #   * The last 15 are gained: the closing auction crosses around 17:35 and the
+    #     17:29 bar does not appear at the instant of the close. If the European
+    #     feed's lag is confirmed (R1 / F2.1c), stopping at 17:30 would lose the
+    #     last quarter of an hour of EVERY session.
     warmup_minutes=15,
     drain_minutes=15,
 )
@@ -321,23 +322,22 @@ DEFAULT_MARKET = US.code
 
 
 def _check_markets(markets=None) -> None:
-    """Invariantes del registro, comprobadas al importar.
+    """The registry's invariants, checked on import.
 
-    Son errores que se cometen editando la tabla a mano y que despues no dan
-    sintoma: una ventana operativa vacia o que cruza la medianoche no revienta,
-    solo hace que el sistema trabaje —o deje de hacerlo— en horas que nadie
-    eligio.
+    They are mistakes made while editing the table by hand that afterwards give
+    no symptom: an empty operating window, or one crossing midnight, does not blow
+    up, it merely makes the system work —or stop working— at hours nobody chose.
 
-    Acepta una lista para poder probarla sobre un mercado inventado: `MARKETS`
-    es de solo lectura a proposito y no se deja parchear.
+    It accepts a list so it can be tested against a made-up market: `MARKETS` is
+    read-only on purpose and does not let itself be patched.
     """
     for mkt in (MARKETS.values() if markets is None else markets):
         if mkt.open_time >= mkt.close_time:
             raise ValueError(f"{mkt.code}: la sesion cierra antes de abrir.")
         if mkt.min_turnover <= 0:
-            # Un 0 no revienta: apaga el filtro de liquidez del screener sin
-            # decirlo, y el agente empieza a analizar valores que no se pueden
-            # comprar al tamano de la cartera.
+            # A 0 does not blow up: it switches the screener's liquidity filter
+            # off without saying so, and the agent starts analysing stocks that
+            # cannot be bought at the book's size.
             raise ValueError(f"{mkt.code}: min_turnover tiene que ser positivo.")
         if mkt.warmup_minutes < 0 or mkt.drain_minutes < 0:
             raise ValueError(f"{mkt.code}: los desplazamientos van hacia adelante.")
@@ -347,7 +347,7 @@ def _check_markets(markets=None) -> None:
                 f"({mkt.operating_open:%H:%M}-{mkt.operating_close:%H:%M}) esta "
                 "vacia o cruza la medianoche."
             )
-        # El calentamiento no puede comerse la sesion entera, ni en media sesion.
+        # The warm-up cannot eat the whole session, not even a half one.
         for day, early in mkt.early_closes.items():
             if _shift(early, mkt.drain_minutes) <= mkt.operating_open:
                 raise ValueError(
@@ -360,11 +360,11 @@ _check_markets()
 
 
 class UnknownMarket(ValueError):
-    """El codigo de mercado no esta en el registro."""
+    """The market code is not in the registry."""
 
 
 def get_market(market: str | Market | None = None) -> Market:
-    """Resuelve un codigo a su `Market`. Acepta ya un `Market` para comodidad."""
+    """Resolves a code to its `Market`. Accepts a `Market` already, for convenience."""
     if isinstance(market, Market):
         return market
     code = (market or DEFAULT_MARKET).strip().lower()
@@ -377,9 +377,9 @@ def get_market(market: str | Market | None = None) -> Market:
         ) from exc
 
 
-# Alias del mercado americano. Existen porque el resto del proyecto y sus tests
-# los usaban como constantes de modulo antes de que hubiera registro; se
-# conservan para no reescribir cuarenta asserts que siguen siendo correctos.
+# Aliases of the American market. They exist because the rest of the project and
+# its tests used them as module constants before there was a registry; they are
+# kept so as not to rewrite forty asserts that are still correct.
 EASTERN = US.tz
 OPEN_TIME = US.open_time
 CLOSE_TIME = US.close_time
@@ -407,8 +407,8 @@ def _localize(moment: datetime | None, mkt: Market) -> datetime:
     if moment is None:
         return datetime.now(mkt.tz)
     if moment.tzinfo is None:
-        # Un datetime sin zona se interpreta como hora local del mercado, no como
-        # UTC: asumir UTC desplazaria las sesiones varias horas sin avisar.
+        # A datetime with no zone is read as the market's local time, not as UTC:
+        # assuming UTC would shift the sessions by several hours without warning.
         return moment.replace(tzinfo=mkt.tz)
     return moment.astimezone(mkt.tz)
 
@@ -424,7 +424,7 @@ def _warn_if_uncovered(day: date, mkt: Market) -> None:
 
 
 def is_trading_day(day: date, *, market: str | Market | None = None) -> bool:
-    """True si hay sesion ese dia (ni fin de semana ni festivo)."""
+    """True if there is a session that day (neither weekend nor holiday)."""
     mkt = get_market(market)
     _warn_if_uncovered(day, mkt)
     if day.weekday() >= 5:
@@ -439,7 +439,7 @@ def close_time_for(day: date, *, market: str | Market | None = None) -> time:
 def is_session_open(
     moment: datetime | None = None, *, market: str | Market | None = None
 ) -> bool:
-    """True si el mercado esta abierto en ese instante."""
+    """True if the market is open at that instant."""
     mkt = get_market(market)
     local = _localize(moment, mkt)
     if not is_trading_day(local.date(), market=mkt):
@@ -450,12 +450,13 @@ def is_session_open(
 def is_operating(
     moment: datetime | None = None, *, market: str | Market | None = None
 ) -> bool:
-    """True si el sistema debe estar trabajando en ese instante.
+    """True if the system should be working at that instant.
 
-    Distinta de `is_session_open` a proposito: aquella dice si la bolsa esta
-    abierta —dato de mercado, que se guarda en el historico y se enseña en el
-    dashboard— y esta dice si nos toca capturar precios y analizar. Con la zona
-    euro, la sesion es 09:00-17:30 y la ventana 09:15-17:45.
+    Deliberately different from `is_session_open`: that one says whether the
+    exchange is open —a market datum, stored in the history and shown in the
+    dashboard— and this one says whether it is our turn to capture prices and
+    analyse. For the euro zone, the session is 09:00-17:30 and the window
+    09:15-17:45.
     """
     mkt = get_market(market)
     local = _localize(moment, mkt)
@@ -467,11 +468,11 @@ def is_operating(
 def next_operating_open(
     moment: datetime | None = None, *, market: str | Market | None = None
 ) -> datetime:
-    """Proximo arranque de la ventana operativa.
+    """Next start of the operating window.
 
-    Es lo que el ingestor usa para dormir. Con `next_session_open` se despertaria
-    15 minutos antes de tener nada que hacer y se pasaria ese rato pidiendo
-    barras de la subasta.
+    It is what the ingestor uses to sleep. With `next_session_open` it would wake
+    up 15 minutes before having anything to do and spend that time asking for
+    auction bars.
     """
     mkt = get_market(market)
     local = _localize(moment, mkt)
@@ -490,7 +491,7 @@ def next_operating_open(
 def operating_bounds(
     day: date, *, market: str | Market | None = None
 ) -> tuple[datetime, datetime] | None:
-    """Inicio y fin de la ventana operativa de ese dia, o None si no hay sesion."""
+    """Start and end of that day's operating window, or None if there is no session."""
     mkt = get_market(market)
     if not is_trading_day(day, market=mkt):
         return None
@@ -503,7 +504,7 @@ def operating_bounds(
 def session_bounds(
     day: date, *, market: str | Market | None = None
 ) -> tuple[datetime, datetime] | None:
-    """Apertura y cierre de la sesion de ese dia, o None si no hay sesion."""
+    """That day's session open and close, or None if there is no session."""
     mkt = get_market(market)
     if not is_trading_day(day, market=mkt):
         return None
@@ -516,7 +517,7 @@ def session_bounds(
 def last_trading_day(
     moment: datetime | None = None, *, market: str | Market | None = None
 ) -> date:
-    """Ultimo dia con sesion, contando hoy si ya ha abierto."""
+    """Last day with a session, counting today if it has already opened."""
     mkt = get_market(market)
     local = _localize(moment, mkt)
     day = local.date()
@@ -527,7 +528,7 @@ def last_trading_day(
         if is_trading_day(day, market=mkt):
             return day
         day -= timedelta(days=1)
-    # Diez dias seguidos sin sesion no ocurre; si ocurre, la tabla esta mal.
+    # Ten days in a row with no session does not happen; if it does, the table is wrong.
     raise RuntimeError(
         f"No se encontro ningun dia de mercado de {mkt.code} en los ultimos 10 dias."
     )
@@ -557,22 +558,23 @@ def should_run(
     *,
     market: str | Market | None = None,
 ) -> tuple[bool, str]:
-    """Decide si merece la pena gastar un ciclo. Devuelve (ejecutar, motivo).
+    """Decides whether a cycle is worth spending. Returns (run, reason).
 
-    La pregunta no es "esta el mercado abierto" sino **"hay datos nuevos que
-    analizar"**, y la respuesta depende del intervalo:
+    The question is not "is the market open" but **"is there new data to
+    analyse"**, and the answer depends on the interval:
 
-      * Con barras diarias, el momento natural es justo DESPUES del cierre, cuando
-        la sesion ya esta completa. Exigir mercado abierto dejaria fuera
-        precisamente el mejor momento del dia. Solo se salta si no hay sesion:
-        fines de semana y festivos, donde las barras son identicas a las del
-        ciclo anterior.
-      * Con barras horarias hace falta la sesion viva: una barra nueva cada hora
-        es justamente lo que se quiere aprovechar, y fuera de sesion no llegan.
+      * With daily bars, the natural moment is right AFTER the close, when the
+        session is already complete. Demanding an open market would leave out
+        precisely the best moment of the day. It only skips when there is no
+        session: weekends and holidays, where the bars are identical to the
+        previous cycle's.
+      * With hourly bars a live session is needed: a new bar every hour is
+        exactly what is to be taken advantage of, and outside the session none
+        arrive.
 
-    "Sesion viva" significa aqui **ventana operativa**, no sesion de mercado: en
-    los 15 primeros minutos europeos no se decide a proposito, y en los 15
-    ultimos si, porque es cuando terminan de llegar las barras del cierre.
+    "Live session" here means **operating window**, not market session: in the
+    first 15 European minutes nothing is decided on purpose, and in the last 15 it
+    is, because that is when the closing bars finish arriving.
     """
     mkt = get_market(market)
     local = _localize(moment, mkt)
@@ -581,7 +583,7 @@ def should_run(
         return False, f"sin sesion: {describe(local, market=mkt)}"
 
     if interval == "1d":
-        # Dia de mercado: hay barra nueva, este abierto o ya cerrado.
+        # A market day: there is a new bar, whether it is open or already closed.
         return True, f"dia de mercado ({local:%a %d %b}), {describe(local, market=mkt)}"
 
     if is_operating(local, market=mkt):
@@ -595,7 +597,7 @@ def should_run(
 def describe(
     moment: datetime | None = None, *, market: str | Market | None = None
 ) -> str:
-    """Frase para el log de arranque del ciclo."""
+    """A sentence for the cycle's startup log."""
     mkt = get_market(market)
     local = _localize(moment, mkt)
     zone = local.strftime("%Z") or mkt.code.upper()
@@ -605,8 +607,8 @@ def describe(
         early = " (media sesion)" if local.date() in mkt.early_closes else ""
         espera = ""
         if not is_operating(local, market=mkt):
-            # Sesion abierta pero todavia en el calentamiento. Sin esta frase, el
-            # log diria "mercado abierto" mientras el ciclo se salta a si mismo.
+            # Session open but still in the warm-up. Without this sentence, the
+            # log would say "market open" while the cycle skips itself.
             espera = f", ventana operativa desde las {mkt.operating_open:%H:%M}"
         return (
             f"mercado abierto{early}, cierra en {remaining:.0f} min "
@@ -614,7 +616,7 @@ def describe(
         )
 
     if is_operating(local, market=mkt):
-        # Cerrado pero dentro de la cola: es cuando llegan las ultimas barras.
+        # Closed but inside the drain: this is when the last bars arrive.
         _, fin = operating_bounds(local.date(), market=mkt)
         restante = (fin - local).total_seconds() / 60
         return (

@@ -1,23 +1,23 @@
-"""Modelos de peticion y respuesta de la API (F3.6).
+"""The API's request and response models (F3.6).
 
-Son la fuente de la que sale el OpenAPI que FastAPI publica solo, y de ahi los
-tipos de TypeScript del frontend (`tools/gen_api_types.py`). Por eso importa que
-esten aqui y no repartidos por los endpoints: si el frontend repitiera las
-definiciones a mano, la primera columna que cambiara dejaria la interfaz
-mintiendo sin que nada fallara.
+They are the source the OpenAPI document FastAPI publishes comes from, and from
+there the frontend's TypeScript types (`tools/gen_api_types.py`). That is why it
+matters that they live here and not scattered across the endpoints: if the
+frontend repeated the definitions by hand, the first column to change would leave
+the interface lying without anything failing.
 
-La decision que conviene entender: **`SettingsUpdate` enumera las columnas de
-`agent_settings` una a una**, con sus rangos. Es largo y es a proposito: es el
-formulario de F6.8, y un `dict[str, Any]` daria un `Record<string, unknown>` en
-TypeScript, o sea ninguna ayuda justo en la pantalla con cuarenta campos. Un
-test compara esta lista con las columnas reales de la tabla, asi que no puede
-quedarse atras.
+The decision worth understanding: **`SettingsUpdate` enumerates the columns of
+`agent_settings` one by one**, with their ranges. It is long and it is deliberate:
+it is the form of F6.8, and a `dict[str, Any]` would give a
+`Record<string, unknown>` in TypeScript, that is, no help at all on the screen
+with forty fields. A test compares this list against the table's real columns, so
+it cannot fall behind.
 
-Aqui habia una segunda decision, y F4.11 la ha dejado sin objeto: `/api/dashboard`
-era el unico endpoint sin modelo Pydantic —devolvia el ensamblado de doce
-consultas de `build_dashboard` tal cual— y se retiro con `web/`. Desde entonces
-**todos los endpoints tienen modelo**, que es lo que hace que un cambio del
-backend rompa el build del frontend en vez de romper la pantalla en caliente.
+There used to be a second decision here, and F4.11 left it moot:
+`/api/dashboard` was the only endpoint without a Pydantic model —it returned the
+assembly of twelve `build_dashboard` queries as-is— and it was retired along with
+`web/`. Since then **every endpoint has a model**, which is what makes a backend
+change break the frontend's build instead of breaking the screen at runtime.
 """
 
 from __future__ import annotations
@@ -33,10 +33,10 @@ ProfileStatus = Literal["draft", "active", "paused", "archived"]
 
 
 class Page(BaseModel, Generic[T]):
-    """Envoltorio de las listas paginadas.
+    """Wrapper for the paginated lists.
 
-    Lleva `total` ademas de las filas porque sin el la interfaz no puede pintar
-    "23 de 480" ni saber si merece la pena ofrecer la pagina siguiente.
+    It carries `total` besides the rows because without it the interface cannot
+    paint "23 de 480" nor know whether offering the next page is worthwhile.
     """
 
     items: list[T]
@@ -50,12 +50,12 @@ class Page(BaseModel, Generic[T]):
 # ----------------------------------------------------------------------
 
 class MarketInfo(BaseModel):
-    """Una bolsa del registro de `src/market_calendar.py`.
+    """One exchange from the registry in `src/market_calendar.py`.
 
-    La interfaz la necesita para el alta de perfil (F5.3) y para no escribir '$'
-    en un perfil europeo. Nada de esto se deduce en el frontend: la divisa, el
-    horario y el suelo de liquidez son propiedades del mercado y viven en un
-    solo sitio.
+    The interface needs it for the profile creation form (F5.3) and so as not to
+    write '$' in a European profile. None of this is inferred in the frontend:
+    the currency, the hours and the liquidity floor are properties of the market
+    and live in a single place.
     """
 
     code: str
@@ -85,7 +85,7 @@ class MarketInfo(BaseModel):
 # ----------------------------------------------------------------------
 
 class ProfileMetrics(BaseModel):
-    """Las cifras de la tarjeta de perfil (F5.2)."""
+    """The figures on the profile card (F5.2)."""
 
     equity: float | None = None
     initial_budget: float | None = None
@@ -116,13 +116,13 @@ class ProfileSummary(BaseModel):
 
     llm_provider: str
     llm_model: str
-    #: Enmascarada (`nvapi-...7f3a`). La clave entera no sale de la base nunca:
-    #: la pantalla se comparte y se graba mas de lo que uno cree (F6.7).
+    #: Masked (`nvapi-...7f3a`). The whole key never leaves the database: the
+    #: screen gets shared and recorded more than one thinks (F6.7).
     llm_api_key_masked: str
 
     universe_file: str | None = None
-    #: Simbolos que el ingestor sigue minuto a minuto. Es distinto del universo
-    #: del screener y confundirlos es la trampa de FE.7.
+    #: Symbols the ingestor follows minute by minute. This differs from the
+    #: screener's universe, and confusing the two is the trap of FE.7.
     watched_symbols: int = 0
     #: El texto de F6.5: "riesgo 5/10, diversificacion 5/10: max. 12 posiciones…"
     risk_summary: str
@@ -130,10 +130,10 @@ class ProfileSummary(BaseModel):
 
 
 class DerivedLimits(BaseModel):
-    """Los nueve limites efectivos y de donde sale cada uno.
+    """The nine effective limits and where each one comes from.
 
-    `derived_fields` es lo que la interfaz pinta en gris: los limites que salen
-    de los deslizadores y no de un numero escrito a mano (F6.8).
+    `derived_fields` is what the interface paints in grey: the limits that come
+    from the sliders and not from a number written by hand (F6.8).
     """
 
     risk_per_trade_pct: float
@@ -177,9 +177,9 @@ class ProfileCreate(BaseModel):
     market: MarketCode = "eu"
     description: str = ""
     budget: float = Field(default=10_000.0, gt=0)
-    #: Cuantos simbolos del universo seguir en vivo. 0 = todos, y se rechaza si
-    #: el universo pasa de `MAX_LIVE_SYMBOLS`: son peticiones por minuto a Yahoo
-    #: desde una IP domestica (R2).
+    #: How many symbols of the universe to follow live. 0 = all of them, and it is
+    #: refused if the universe exceeds `MAX_LIVE_SYMBOLS`: these are requests per
+    #: minute to Yahoo from a domestic IP (R2).
     watch: int = Field(default=0, ge=0, le=500)
 
 
@@ -205,12 +205,12 @@ class UniverseUpdate(BaseModel):
 
 
 class SettingsUpdate(BaseModel):
-    """Un parche sobre `agent_settings`.
+    """A patch over `agent_settings`.
 
-    Solo se aplican los campos presentes en el cuerpo (`exclude_unset`), lo que
-    permite distinguir "no lo toques" de "ponlo a NULL". La diferencia no es
-    teorica: en los limites duros, NULL significa "vuelve a derivarlo de los
-    deslizadores" (F6.5).
+    Only the fields present in the body are applied (`exclude_unset`), which
+    makes it possible to tell "do not touch it" from "set it to NULL". The
+    difference is not theoretical: on the hard limits, NULL means "derive it from
+    the sliders again" (F6.5).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -267,11 +267,11 @@ class SettingsUpdate(BaseModel):
 
 
 class SettingsApplied(BaseModel):
-    """Que cambio de verdad. Vacio significa que el cuerpo no cambiaba nada.
+    """What actually changed. Empty means the body changed nothing.
 
-    Se devuelve la lista y no un simple `ok` porque `update_settings` ignora los
-    campos que llegan con el valor que ya tenian: sin esto, la interfaz no podria
-    distinguir "guardado" de "guardado y ademas cambio algo".
+    The list is returned instead of a plain `ok` because `update_settings`
+    ignores fields arriving with the value they already had: without this, the
+    interface could not tell "saved" from "saved and something changed too".
     """
 
     applied: list[str]
@@ -300,9 +300,9 @@ class PositionRow(BaseModel):
 
     last_price: float | None = None
     last_price_as_of: str | None = None
-    #: 'live' = cotizacion del ingestor; 'cycle' = el precio que vio el analista
-    #: en su ultimo ciclo; None = no hay ninguno. Se etiqueta porque mentir sobre
-    #: la frescura de un precio es peor que no darlo.
+    #: 'live' = the ingestor's quote; 'cycle' = the price the analyst saw on its
+    #: last cycle; None = there is neither. It is labelled because lying about a
+    #: price's freshness is worse than not giving it.
     price_source: Literal["live", "cycle"] | None = None
     market_value: float | None = None
     unrealized_pnl: float | None = None
@@ -387,18 +387,18 @@ class CycleRow(BaseModel):
     rejected: int = 0
     orders: int = 0
     symbols_scanned: list[str] = Field(default_factory=list)
-    #: Llamadas al modelo y cuantas se quedaron sin respuesta (F6.9). Con
-    #: `analyst_failures == analyst_calls` el ciclo esta en 'failed' y no analizo
-    #: nada; con un valor intermedio si analizo, pero le faltan simbolos. Sin este
-    #: par, "0 decisiones" no se puede leer.
+    #: Calls to the model and how many got no answer (F6.9). With
+    #: `analyst_failures == analyst_calls` the cycle is 'failed' and analysed
+    #: nothing; with a value in between it did analyse, but it is missing symbols.
+    #: Without this pair, "0 decisions" cannot be read.
     analyst_calls: int = 0
     analyst_failures: int = 0
 
 
 class CycleDetail(CycleRow):
-    #: Los parametros con los que corrio (F6.3). None en los ciclos anteriores a
-    #: esa tarea: es informacion que falta, no un cero, y la interfaz tiene que
-    #: poder decir "no se sabe con que ajustes corrio".
+    #: The settings it ran under (F6.3). None for cycles predating that task: it
+    #: is missing information, not a zero, and the interface has to be able to say
+    #: "we do not know which settings it ran with".
     settings: dict[str, Any] | None = None
 
 
@@ -413,19 +413,19 @@ class EquityPoint(BaseModel):
     positions_value: float | None = None
     open_positions: int = 0
     day_pnl_pct: float | None = None
-    #: Caida desde el maximo previo, en %. Negativo o cero, nunca positivo.
+    #: Drop from the previous peak, in %. Negative or zero, never positive.
     #:
-    #: Se calcula en el servidor a proposito: es la misma definicion que usa
-    #: `run.py report`, y tenerla tambien en TypeScript seria tenerla dos veces
-    #: y condenarlas a discrepar.
+    #: It is computed on the server on purpose: it is the same definition
+    #: `run.py report` uses, and having it in TypeScript too would be having it
+    #: twice and condemning the two to disagree.
     drawdown_pct: float = 0.0
 
 
 class CalibrationBucket(BaseModel):
-    """Una barra del grafico que decide el experimento.
+    """One bar of the chart that decides the experiment.
 
-    Si el `win_rate_pct` no crece con el `conviction_bucket`, la conviccion que
-    declara el modelo no informa de nada y se esta operando con ruido caro.
+    If `win_rate_pct` does not grow with `conviction_bucket`, the conviction the
+    model declares informs nothing and we are trading on expensive noise.
     """
 
     conviction_bucket: int
@@ -459,11 +459,11 @@ class ConvictionBucket(BaseModel):
 
 
 class Analytics(BaseModel):
-    """Las cinco series de las graficas (F4.6), en un solo viaje.
+    """The five chart series (F4.6), in a single trip.
 
-    Juntas y no en cinco endpoints porque son una sola pantalla: cinco peticiones
-    darian cinco estados de carga y cinco formas de fallar a medias para leer
-    cinco agregados del mismo fichero local.
+    Together and not in five endpoints because they are one single screen: five
+    requests would give five loading states and five ways of half-failing in
+    order to read five aggregates of the same local file.
     """
 
     equity_curve: list[EquityPoint] = Field(default_factory=list)
@@ -479,10 +479,10 @@ class QuoteRow(BaseModel):
     prev_close: float | None = None
     change_pct: float | None = None
     volume: float | None = None
-    #: Inicio de la barra segun el proveedor.
+    #: Start of the bar according to the provider.
     as_of: str
-    #: Cuando lo escribimos nosotros. La distancia entre los dos es el retraso
-    #: real del dato, que es la pregunta abierta de F2.1c en Europa.
+    #: When we wrote it. The gap between the two is the datum's real lag, which
+    #: is the open question of F2.1c in Europe.
     updated_at: str
     age_seconds: float | None = None
 
@@ -501,11 +501,11 @@ class IngestRun(BaseModel):
 
 
 class IngestStatus(BaseModel):
-    """Salud del ingestor.
+    """Ingestor health.
 
-    Las medias se calculan **solo sobre los ticks**: un relleno de huecos
-    descarga varios dias de golpe, asi que una sola de sus filas desplazaria
-    cualquier media de latencia y este panel pasaria a medir otra cosa (F2.10).
+    The averages are computed **over the ticks only**: a gap backfill downloads
+    several days at once, so a single one of its rows would shift any latency
+    average and this panel would start measuring something else (F2.10).
     """
 
     healthy: bool
@@ -520,7 +520,7 @@ class IngestStatus(BaseModel):
     quotes_stored: int = 0
     last_backfill_at: str | None = None
     recent: list[IngestRun] = Field(default_factory=list)
-    #: Por que decimos que esta sano o no, en una frase.
+    #: Why we say it is healthy or not, in one sentence.
     message: str
 
 
@@ -536,10 +536,10 @@ class CycleRunRequest(BaseModel):
 
 
 class CycleControl(BaseModel):
-    """Estado del ciclo lanzado desde la interfaz.
+    """State of the cycle launched from the interface.
 
-    `enabled=False` significa que los controles estan apagados: la API sirve
-    igual, pero sin boton de disparar nada (F3.8).
+    `enabled=False` means the controls are switched off: the API still serves,
+    but with no button to fire anything (F3.8).
     """
 
     enabled: bool

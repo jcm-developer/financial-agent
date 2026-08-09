@@ -1,14 +1,14 @@
-"""API REST del agente (F3).
+"""The agent's REST API (F3).
 
     uvicorn api.main:app --host 127.0.0.1 --port 8000
     python run.py api
 
-Reparto de responsabilidades dentro del paquete:
+How responsibilities are split inside the package:
 
-    deps.py     configuracion, dependencias de base de datos, resolucion de perfil
-    guard.py    la conexion de escritura acotada a las tablas de configuracion
-    queries.py  las lecturas paginadas
-    models.py   los modelos de request y response (y por tanto el OpenAPI)
-    runner.py   lanzar `run.py cycle` como subproceso
-    routes/     los endpoints
+    deps.py     configuration, database dependencies, profile resolution
+    guard.py    the write connection, fenced to the configuration tables
+    queries.py  the paginated reads
+    models.py   the request and response models (and therefore the OpenAPI)
+    runner.py   launching `run.py cycle` as a subprocess
+    routes/     the endpoints
 """

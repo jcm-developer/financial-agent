@@ -1,22 +1,22 @@
-"""Configuracion de la API y dependencias que comparten los endpoints.
+"""API configuration and the dependencies the endpoints share.
 
-La regla que gobierna este modulo: **cada peticion abre y cierra su propia
-conexion**. Es el mismo criterio que ya seguia el dashboard viejo, y por el mismo
-motivo: es un servidor de un solo usuario contra un fichero local, abrirlo cuesta
-menos de un milisegundo y asi no se sirven datos rancios mientras el ciclo o el
-ingestor escriben en paralelo. Una conexion viva de larga duracion tendria que
-preocuparse por las instantaneas de WAL; esta no.
+The rule that governs this module: **each request opens and closes its own
+connection**. It is the same criterion the old dashboard already followed, and
+for the same reason: it is a single-user server against a local file, opening it
+costs under a millisecond, and this way no stale data is served while the cycle
+or the ingestor write in parallel. A long-lived connection would have to worry
+about WAL snapshots; this one does not.
 
-Hay **dos** dependencias de base de datos y no una, y la diferencia es el
-contrato de D5:
+There are **two** database dependencies and not one, and the difference is the
+contract of D5:
 
-  * `read_db` abre SQLite en modo `ro`. No es una promesa, es una
-    imposibilidad: por ahi no se puede escribir aunque el codigo lo intente.
-  * `config_db` abre la conexion con autorizador de `guard.py`, que solo deja
-    escribir en las tablas de configuracion.
+  * `read_db` opens SQLite in `ro` mode. It is not a promise, it is an
+    impossibility: nothing can be written through it even if the code tries.
+  * `config_db` opens the connection with the authorizer from `guard.py`, which
+    only allows writing to the configuration tables.
 
-Ningun endpoint recibe una conexion de escritura sin acotar. La unica escritura
-sin limites del proyecto la hacen el ciclo y el ingestor, cada uno en su proceso.
+No endpoint receives an unfenced write connection. The project's only unfenced
+writes are made by the cycle and the ingestor, each in its own process.
 """
 
 from __future__ import annotations
@@ -38,15 +38,15 @@ from .guard import ConfigDatabase
 
 log = logging.getLogger(__name__)
 
-#: 422. Se escribe el numero y no `status.HTTP_422_...` porque Starlette ha
-#: renombrado esa constante (`..._UNPROCESSABLE_ENTITY` -> `..._CONTENT`) y usar
-#: cualquiera de los dos nombres ata el proyecto a un rango de versiones a
-#: cambio de nada: el codigo HTTP es el mismo desde 1999.
+#: 422. The number is written out and not `status.HTTP_422_...` because Starlette
+#: renamed that constant (`..._UNPROCESSABLE_ENTITY` -> `..._CONTENT`) and using
+#: either name ties the project to a version range in exchange for nothing: the
+#: HTTP code has been the same since 1999.
 UNPROCESSABLE = 422
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-#: Donde deja Vite el build del frontend (F4.1). Todavia no existe: `main.py`
-#: sirve un marcador mientras tanto.
+#: Where Vite leaves the frontend build (F4.1). It does not exist yet: `main.py`
+#: serves a placeholder in the meantime.
 APP_DIST = REPO_ROOT / "app" / "dist"
 
 
@@ -68,26 +68,26 @@ def _env_float(key: str, default: float) -> float:
 
 @dataclass(frozen=True)
 class ApiConfig:
-    """Lo que la API necesita saber del entorno. Nada de estrategia.
+    """What the API needs to know about its environment. No strategy.
 
-    Igual que `Infra`: si algun dia hiciera falta añadir aqui un parametro del
-    experimento, seria señal de que su sitio es `agent_settings` (F6.4).
+    Same as `Infra`: if one day a parameter of the experiment needed adding here,
+    that would be the sign its place is `agent_settings` (F6.4).
     """
 
     db_path: str
     host: str = "127.0.0.1"
     port: int = 8000
-    #: Si estan los endpoints que disparan ciclos. Ver `controls_enabled`.
+    #: Whether the cycle-firing endpoints exist. See `controls_enabled`.
     controls: bool = True
-    #: Cada cuanto mira el servidor si hay algo nuevo que empujar por SSE.
+    #: How often the server checks whether there is anything new to push over SSE.
     stream_interval: float = 2.0
-    #: Cuanto vive como mucho una conexion de SSE antes de cerrarse sola.
+    #: How long an SSE connection lives at most before closing itself.
     #:
-    #: No es una limitacion, es higiene: `EventSource` reconecta solo —esa es la
-    #: razon de elegir SSE en D6— asi que cortar cada cierto tiempo devuelve los
-    #: recursos del servidor sin que el cliente note nada. Y de paso obliga a
-    #: releer la lista de simbolos: un stream eterno seguiria sirviendo el
-    #: universo que tenia el perfil cuando alguien abrio la pestaña.
+    #: It is not a limitation, it is hygiene: `EventSource` reconnects by itself
+    #: —that is the reason for choosing SSE in D6— so cutting every so often
+    #: returns the server's resources without the client noticing a thing. And it
+    #: forces the symbol list to be re-read along the way: an eternal stream
+    #: would keep serving the universe the profile had when someone opened the tab.
     stream_max_seconds: float = 900.0
     app_dist: Path = APP_DIST
 
@@ -98,10 +98,10 @@ class ApiConfig:
             db_path=db_path or infra.db_path,
             host=(os.getenv("API_HOST") or "127.0.0.1").strip(),
             port=int((os.getenv("API_PORT") or "8000").strip()),
-            # Por defecto activos, y **no se deduce de `host`**: dentro de Docker
-            # hay que escuchar en 0.0.0.0 para que el mapeo de puertos funcione,
-            # asi que la direccion de escucha no dice nada sobre quien puede
-            # llegar. Quien publique esto de verdad en una red lo apaga a mano.
+            # On by default, and **not inferred from `host`**: inside Docker you
+            # have to listen on 0.0.0.0 for port mapping to work, so the listening
+            # address says nothing about who can reach it. Whoever really
+            # publishes this on a network switches it off by hand.
             controls=_env_bool("API_CONTROLS", True),
             stream_interval=max(0.5, _env_float("API_STREAM_INTERVAL", 2.0)),
             stream_max_seconds=max(
@@ -124,10 +124,11 @@ def is_loopback(host: str) -> bool:
 # ----------------------------------------------------------------------
 
 def get_config(request: Request) -> ApiConfig:
-    """La configuracion vive en `app.state`, no en un global.
+    """The configuration lives in `app.state`, not in a global.
 
-    Asi los tests pueden levantar varias aplicaciones contra bases distintas en
-    el mismo proceso, que es justo lo que hace `tests/test_api.py` con `tmp_path`.
+    That way the tests can bring up several applications against different
+    databases in the same process, which is exactly what `tests/test_api.py` does
+    with `tmp_path`.
     """
     return request.app.state.config
 
@@ -139,8 +140,8 @@ def read_db(config: Config) -> Iterator[Database]:
     try:
         db = Database(path=config.db_path, read_only=True)
     except DatabaseError as exc:
-        # 503 y no 500: la base todavia no existe o esta bloqueada. Es un estado
-        # del sistema, no un fallo del codigo, y la interfaz lo pinta distinto.
+        # 503 and not 500: the database does not exist yet or is locked. It is a
+        # state of the system, not a bug, and the interface paints it differently.
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         ) from exc
@@ -168,7 +169,7 @@ ConfigDb = Annotated[ConfigDatabase, Depends(config_db)]
 
 
 def get_runner(request: Request) -> Any:
-    """El `CycleRunner` de la aplicacion, o None si los controles estan apagados."""
+    """The application's `CycleRunner`, or None when the controls are off."""
     return request.app.state.runner
 
 
@@ -177,17 +178,17 @@ def get_runner(request: Request) -> Any:
 # ----------------------------------------------------------------------
 
 def find_profile(db: Database, reference: str) -> dict[str, Any]:
-    """Un perfil por id o por nombre.
+    """A profile by id or by name.
 
-    Acepta las dos cosas a proposito: los ids son UUID y los nombres son unicos,
-    asi que no hay ambiguedad posible, y `/api/positions?profile=europa-01` se
-    puede escribir a mano al depurar.
+    It accepts both on purpose: ids are UUIDs and names are unique, so no
+    ambiguity is possible, and `/api/positions?profile=europa-01` can be typed by
+    hand while debugging.
 
-    La interfaz manda **el nombre** (F4 tramo C): el perfil activo va en la URL
-    (`/p/europa-01/posiciones`) y con un UUID ahi nadie sabria que experimento
-    esta mirando, que era justo el motivo de sacarlo de la memoria de React. Un
-    enlace guardado se rompe si el perfil se renombra, y esta bien que se rompa:
-    el 404 de aqui abajo dice cuales hay.
+    The interface sends **the name** (F4, stretch C): the active profile travels
+    in the URL (`/p/europa-01/positions`) and with a UUID there nobody would know
+    which experiment they were looking at, which was precisely the reason for
+    taking it out of React's memory. A saved link breaks if the profile is
+    renamed, and it is right that it breaks: the 404 below says which ones exist.
     """
     reference = (reference or "").strip()
     if not reference:
@@ -211,11 +212,11 @@ def find_profile(db: Database, reference: str) -> dict[str, Any]:
 
 
 def portfolio_of(profile: dict[str, Any]) -> str:
-    """El id de cartera del perfil.
+    """The profile's book id.
 
-    Un perfil sin cartera no deberia existir —`create_profile` las crea juntas—
-    pero si aparece uno a medias, decirlo es mejor que devolver listas vacias
-    que se leerian como "todavia no ha operado".
+    A profile with no book should not exist —`create_profile` creates them
+    together— but if a half-made one turns up, saying so beats returning empty
+    lists that would read as "it has not traded yet".
     """
     portfolio_id = profile.get("portfolio_id")
     if not portfolio_id:
@@ -234,7 +235,7 @@ def resolve_portfolio(db: Database, reference: str) -> tuple[dict[str, Any], str
     return profile, portfolio_of(profile)
 
 
-#: Parametros de paginacion compartidos por todas las listas.
+#: Pagination parameters shared by every list.
 LimitQuery = Annotated[int, Query(ge=1, le=500, description="Filas por pagina.")]
 OffsetQuery = Annotated[int, Query(ge=0, description="Filas que saltar.")]
 ProfileQuery = Annotated[

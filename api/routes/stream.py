@@ -1,26 +1,27 @@
-"""Precios y estado del ciclo en vivo, por Server-Sent Events (F3.5 / D6).
+"""Live prices and cycle state, over Server-Sent Events (F3.5 / D6).
 
-**Lo que este endpoint hace de verdad, dicho sin adornos: sondea.** El ingestor
-corre en otro proceso (D1), asi que no hay forma de que avise a este de que
-acaba de escribir un tick; no hay bus de eventos ni se va a montar uno para tres
-procesos que comparten un fichero. Lo que hace SSE aqui es **mover el sondeo del
-navegador al servidor**: en lugar de N pestañas pidiendo `/api/quotes` cada dos
-segundos por HTTP, hay un bucle por conexion mirando un fichero SQLite local, y
-solo se manda algo cuando cambia. Esa es la ganancia real, y conviene tenerla
-escrita para no acabar creyendo que hay empuje de verdad.
+**What this endpoint really does, said without dressing it up: it polls.** The
+ingestor runs in another process (D1), so there is no way for it to tell this one
+that it has just written a tick; there is no event bus and none is going to be
+built for three processes sharing a file. What SSE does here is **move the
+polling from the browser to the server**: instead of N tabs asking for
+`/api/quotes` every two seconds over HTTP, there is one loop per connection
+looking at a local SQLite file, and something is only sent when it changes. That
+is the real gain, and it is worth writing down so nobody ends up believing there
+is real push.
 
-Se eligio SSE y no WebSocket por lo que dice D6: es unidireccional —que es todo
-lo que hace falta—, va sobre HTTP normal y **el navegador reconecta solo**. Un
-WebSocket obligaria a escribir a mano la reconexion, que es justo el trozo que
-siempre se hace mal.
+SSE was chosen over WebSocket for what D6 says: it is one-directional —which is
+all that is needed—, it travels over ordinary HTTP and **the browser reconnects
+by itself**. A WebSocket would force the reconnection to be written by hand,
+which is precisely the part that always gets done wrong.
 
-Tres tipos de evento, con nombre, para que el cliente se suscriba a lo que le
-interese sin parsear lo que no:
+Three kinds of event, named, so the client can subscribe to what it cares about
+without parsing what it does not:
 
-  * `quotes`  — cotizaciones nuevas. Solo cuando cambia `max(updated_at)`.
-  * `cycle`   — estado del ciclo en curso, con las lineas de log nuevas.
-  * `ingest`  — salud del ingestor, cuando cambia el veredicto.
-  * `ping`    — latido cada 15 s, para que un proxy no de la conexion por muerta.
+  * `quotes`  — new quotes. Only when `max(updated_at)` changes.
+  * `cycle`   — state of the running cycle, with the new log lines.
+  * `ingest`  — ingestor health, when the verdict changes.
+  * `ping`    — a heartbeat every 15 s, so a proxy does not call the connection dead.
 """
 
 from __future__ import annotations
@@ -49,7 +50,7 @@ router = APIRouter(prefix="/api", tags=["stream"])
 Runner = Annotated[Any, Depends(get_runner)]
 Config = Annotated[ApiConfig, Depends(get_config)]
 
-#: Cada cuanto se manda un latido aunque no haya novedades.
+#: How often a heartbeat is sent even when there is no news.
 PING_SECONDS = 15.0
 
 
@@ -59,12 +60,12 @@ def _event(name: str, payload: Any) -> str:
 
 
 def _read_state(db_path: str, symbols: list[str] | None) -> dict[str, Any]:
-    """Una foto de lo que puede haber cambiado. Bloquea: va a un hilo aparte.
+    """A snapshot of what may have changed. It blocks: it goes to its own thread.
 
-    Se abre y se cierra la conexion en cada pasada, igual que en el resto de la
-    API: una conexion viva durante horas dentro de un generador se quedaria con
-    una instantanea de WAL y acabaria sirviendo precios viejos, que es
-    exactamente lo contrario de lo que hace este endpoint.
+    The connection is opened and closed on each pass, as everywhere else in the
+    API: a connection left alive for hours inside a generator would hold on to a
+    WAL snapshot and end up serving stale prices, which is exactly the opposite
+    of what this endpoint is for.
     """
     with Database(path=db_path, read_only=True) as db:
         rows = queries.quotes(db, symbols=symbols)
@@ -95,9 +96,9 @@ async def stream(
     wanted = [s.strip().upper() for s in symbols.split(",") if s.strip()] or None
 
     async def emit() -> AsyncIterator[str]:
-        # Estado inicial completo: sin esto, un cliente que se conecta con el
-        # mercado parado no veria nada hasta el primer cambio, y no habria forma
-        # de distinguirlo de una conexion rota.
+        # Full initial state: without it, a client connecting while the market is
+        # stopped would see nothing until the first change, and there would be no
+        # way to tell that apart from a broken connection.
         marca = ""
         ingest_msg = None
         cursor = 0
@@ -124,9 +125,9 @@ async def stream(
             if await request.is_disconnected():
                 break
             if time.monotonic() >= vencimiento:
-                # Se cierra por edad, no por error. `EventSource` reconecta solo
-                # —es la razon de elegir SSE (D6)— asi que el cliente no se
-                # entera y el servidor recupera el hilo y la conexion.
+                # Closed by age, not by error. `EventSource` reconnects on its
+                # own —the reason for choosing SSE (D6)— so the client never
+                # notices and the server gets the thread and the connection back.
                 yield _event("bye", {"reason": "vencimiento", "reconnect": True})
                 break
 
@@ -134,8 +135,8 @@ async def stream(
             try:
                 estado = await run_in_threadpool(_read_state, config.db_path, wanted)
             except DatabaseError as exc:
-                # La base puede estar bloqueada un instante mientras el ingestor
-                # escribe. Es un tropiezo, no el fin de la conexion.
+                # The database can be locked for an instant while the ingestor
+                # writes. That is a stumble, not the end of the connection.
                 log.debug("Lectura del stream fallida: %s", exc)
                 estado = None
 
@@ -152,15 +153,15 @@ async def stream(
             if runner is not None:
                 total, nuevas = runner.lines_since(cursor)
                 estado_ciclo = runner.status()
-                # Se manda el estado si hay lineas nuevas o si el ciclo acaba de
-                # arrancar o de terminar; el resto del tiempo no cambia nada, y
-                # repetirlo cada dos segundos solo gasta ancho de banda.
+                # The state is sent when there are new lines or when the cycle
+                # has just started or finished; the rest of the time nothing
+                # changes, and repeating it every two seconds only burns bandwidth.
                 if nuevas or bool(estado_ciclo["running"]) != corriendo:
                     cursor = total
                     corriendo = bool(estado_ciclo["running"])
-                    # `lines` va con solo lo nuevo y `from` dice desde donde:
-                    # reenviar las 400 lineas del buffer cada dos segundos
-                    # convertiria el "en vivo" en un goteo de megabytes.
+                    # `lines` carries only what is new and `from` says where it
+                    # starts: resending the 400 lines of the buffer every two
+                    # seconds would turn "live" into a trickle of megabytes.
                     yield _event(
                         "cycle",
                         {**estado_ciclo, "lines": nuevas, "from": total - len(nuevas)},
@@ -177,8 +178,8 @@ async def stream(
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-store",
-            # Sin esto, un nginx delante bufferiza el flujo y el "en vivo" llega
-            # a rafagas de varios segundos.
+            # Without this, an nginx in front buffers the stream and "live"
+            # arrives in bursts several seconds apart.
             "X-Accel-Buffering": "no",
         },
     )

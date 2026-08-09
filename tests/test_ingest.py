@@ -1,8 +1,8 @@
-"""Ingesta de precios minuto a minuto.
+"""Minute-by-minute price ingestion.
 
-Se prueba contra un proveedor de mentira, sin red: lo que interesa comprobar no
-es que yfinance funcione, sino que la escritura sea idempotente, que un fallo no
-tumbe el bucle y que un hueco se recupere solo.
+It is tested against a fake provider, without network: what matters to check is
+not that yfinance works, but that the writing is idempotent, that a failure does
+not take the loop down and that a gap recovers by itself.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def barras(n: int, *, desde: datetime = BASE, precio: float = 100.0) -> list[Bar
 
 
 class ProveedorFalso:
-    """Devuelve lo que se le diga. Puede fallar a voluntad."""
+    """Returns whatever it is told to. It can fail on demand."""
 
     def __init__(self, datos: dict[str, list[Bar]] | None = None, error: Exception | None = None):
         self.datos = datos or {}
@@ -64,14 +64,14 @@ def perfil(db):
 # -- Seleccion de barras a escribir -----------------------------------------
 
 
-def test_sin_historico_se_escribe_todo():
+def test_with_no_history_everything_is_written():
     bars = barras(5)
     assert _bars_to_write(bars, None) == bars
 
 
-def test_se_reescribe_la_ultima_barra_conocida():
-    """La barra del minuto en curso sigue cambiando: si solo se escribieran las
-    posteriores, su cierre quedaria congelado en el primer valor visto."""
+def test_the_last_known_bar_is_rewritten():
+    """The current minute's bar keeps changing: if only the later ones were
+    written, its close would stay frozen at the first value seen."""
     bars = barras(5)
     ultima = bars[2].timestamp.isoformat()
 
@@ -81,7 +81,7 @@ def test_se_reescribe_la_ultima_barra_conocida():
     assert len(pendientes) == 3
 
 
-def test_sin_barras_nuevas_se_refresca_un_solape_corto():
+def test_with_no_new_bars_a_short_overlap_is_refreshed():
     bars = barras(10)
     futuro = (bars[-1].timestamp + timedelta(minutes=5)).isoformat()
 
@@ -97,18 +97,18 @@ def test_sin_barras_nuevas_se_refresca_un_solape_corto():
 @pytest.mark.parametrize("mensaje", [
     "429 Too Many Requests", "Rate limit exceeded", "HTTP Error 429",
 ])
-def test_se_reconoce_el_rate_limit(mensaje):
+def test_the_rate_limit_is_recognised(mensaje):
     assert _es_rate_limit(RuntimeError(mensaje))
 
 
-def test_un_error_normal_no_es_rate_limit():
+def test_an_ordinary_error_is_not_a_rate_limit():
     assert not _es_rate_limit(RuntimeError("connection reset by peer"))
 
 
 # -- Tick completo -----------------------------------------------------------
 
 
-def test_tick_escribe_barras_y_cotizacion(db, perfil):
+def test_a_tick_writes_bars_and_a_quote(db, perfil):
     proveedor = ProveedorFalso({"AAPL": barras(3)})
 
     resultado = ingest_once(db, proveedor, ["AAPL"])
@@ -124,7 +124,7 @@ def test_tick_escribe_barras_y_cotizacion(db, perfil):
 
 
 def test_tick_repetido_no_duplica(db, perfil):
-    """El mismo minuto entra una y otra vez: la clave primaria debe absorberlo."""
+    """The same minute arrives again and again: the primary key must absorb it."""
     proveedor = ProveedorFalso({"AAPL": barras(3)})
 
     ingest_once(db, proveedor, ["AAPL"])
@@ -134,7 +134,7 @@ def test_tick_repetido_no_duplica(db, perfil):
     assert db.query("select count(1) n from bars_1m")[0]["n"] == 3
 
 
-def test_la_barra_en_curso_se_actualiza(db, perfil):
+def test_the_bar_in_progress_is_updated(db, perfil):
     """Primero llega a medias, luego cerrada. Debe quedar la version final."""
     ingest_once(db, ProveedorFalso({"AAPL": barras(2)}), ["AAPL"])
 
@@ -145,25 +145,25 @@ def test_la_barra_en_curso_se_actualiza(db, perfil):
     )
     ingest_once(db, ProveedorFalso({"AAPL": cerradas}), ["AAPL"])
 
-    filas = db.query("select * from bars_1m order by ts")
-    assert len(filas) == 2
-    assert filas[-1]["close"] == 118
-    assert filas[-1]["volume"] == 99_999
+    rows = db.query("select * from bars_1m order by ts")
+    assert len(rows) == 2
+    assert rows[-1]["close"] == 118
+    assert rows[-1]["volume"] == 99_999
 
 
-def test_simbolo_sin_datos_se_anota_pero_no_rompe(db, perfil):
+def test_a_symbol_with_no_data_is_noted_but_does_not_break(db, perfil):
     proveedor = ProveedorFalso({"AAPL": barras(2)})
 
     resultado = ingest_once(db, proveedor, ["AAPL", "FANTASMA"])
 
     assert resultado.ok
-    assert resultado.vacios == ["FANTASMA"]
+    assert resultado.empty == ["FANTASMA"]
     assert db.ingest_health(limit=1)[0]["symbols_failed"] == 1
 
 
-def test_fallo_de_red_no_lanza_y_queda_registrado(db, perfil):
-    """El bucle que llama a esto debe seguir vivo: un minuto perdido es un hueco,
-    no una averia."""
+def test_a_network_failure_does_not_raise_and_is_recorded(db, perfil):
+    """The loop calling this must stay alive: a lost minute is a gap, not a
+    breakage."""
     proveedor = ProveedorFalso(error=RuntimeError("connection reset"))
 
     resultado = ingest_once(db, proveedor, ["AAPL"])
@@ -178,8 +178,8 @@ def test_fallo_de_red_no_lanza_y_queda_registrado(db, perfil):
 
 
 def test_rate_limit_queda_marcado_aparte(db, perfil):
-    """Distinguirlo importa: un 429 sostenido cambia la decision (bajar simbolos
-    o cambiar de fuente), un error de red puntual no."""
+    """Telling them apart matters: a sustained 429 changes the decision (fewer
+    symbols, or another source), a one-off network error does not."""
     proveedor = ProveedorFalso(error=RuntimeError("429 Too Many Requests"))
 
     resultado = ingest_once(db, proveedor, ["AAPL"])
@@ -188,7 +188,7 @@ def test_rate_limit_queda_marcado_aparte(db, perfil):
     assert db.ingest_health(limit=1)[0]["rate_limited"] == 1
 
 
-def test_lista_vacia_no_toca_la_base(db):
+def test_an_empty_list_does_not_touch_the_database(db):
     proveedor = ProveedorFalso()
 
     resultado = ingest_once(db, proveedor, [])
@@ -198,7 +198,7 @@ def test_lista_vacia_no_toca_la_base(db):
     assert db.query("select count(1) n from ingest_runs")[0]["n"] == 0
 
 
-def test_cada_tick_deja_una_fila_de_salud(db, perfil):
+def test_each_tick_leaves_a_health_row(db, perfil):
     proveedor = ProveedorFalso({"AAPL": barras(1)})
 
     for _ in range(3):
@@ -211,8 +211,8 @@ def test_cada_tick_deja_una_fila_de_salud(db, perfil):
 # -- Continuidad entre arranques --------------------------------------------
 
 
-def test_al_reiniciar_se_retoma_donde_se_dejo(db, perfil):
-    """Sin esto, cada arranque reescribiria la sesion entera cada minuto."""
+def test_on_restart_it_resumes_where_it_left_off(db, perfil):
+    """Without this, every startup would rewrite the whole session every minute."""
     ingest_once(db, ProveedorFalso({"AAPL": barras(5)}), ["AAPL"])
 
     recuperado = load_last_timestamps(db)
@@ -220,9 +220,9 @@ def test_al_reiniciar_se_retoma_donde_se_dejo(db, perfil):
     assert recuperado["AAPL"] == barras(5)[-1].timestamp.isoformat()
 
 
-def test_un_hueco_se_rellena_solo(db, perfil):
-    """El ingestor estuvo caido varios minutos: al volver debe traerse lo perdido,
-    no solo lo ultimo."""
+def test_a_gap_fills_itself_in(db, perfil):
+    """The ingestor was down for several minutes: on returning it must bring back
+    what was lost, not just the latest."""
     ingest_once(db, ProveedorFalso({"AAPL": barras(2)}), ["AAPL"])
     last_ts = load_last_timestamps(db)
 
@@ -234,9 +234,9 @@ def test_un_hueco_se_rellena_solo(db, perfil):
 # -- Referencia del porcentaje del dia --------------------------------------
 
 
-def test_sin_bar_cache_la_referencia_es_la_apertura(db, perfil):
-    """Degrada con gracia: en una base recien creada `bar_cache` esta vacio y aun
-    asi tiene que salir un porcentaje."""
+def test_with_no_bar_cache_the_reference_is_the_open(db, perfil):
+    """It degrades gracefully: on a freshly created database `bar_cache` is empty
+    and a percentage still has to come out."""
     ingest_once(db, ProveedorFalso({"AAPL": barras(3)}), ["AAPL"])
 
     cotizacion = db.latest_quotes()["AAPL"]
@@ -244,7 +244,7 @@ def test_sin_bar_cache_la_referencia_es_la_apertura(db, perfil):
     assert cotizacion["change_pct"] is not None
 
 
-def test_con_bar_cache_se_usa_el_cierre_anterior(db, perfil):
+def test_with_bar_cache_the_previous_close_is_used(db, perfil):
     db.execute(
         "insert into bar_cache (symbol, interval, ts, open, high, low, close, volume) "
         "values ('AAPL', '1d', '2026-08-06T00:00:00+00:00', 90, 95, 89, 90, 1000)"
@@ -258,8 +258,8 @@ def test_con_bar_cache_se_usa_el_cierre_anterior(db, perfil):
     assert cotizacion["change_pct"] == esperado
 
 
-def test_marcas_de_tiempo_siempre_en_utc(db, perfil):
-    """Mezclar husos en la base seria una fuente silenciosa de huecos y duplicados."""
+def test_timestamps_are_always_in_utc(db, perfil):
+    """Mixing zones in the database would be a silent source of gaps and duplicates."""
     ny = timezone(timedelta(hours=-4))
     bars = [Bar(timestamp=datetime(2026, 8, 7, 9, 30, tzinfo=ny),
                 open=1, high=2, low=1, close=1.5, volume=10)]
@@ -270,20 +270,20 @@ def test_marcas_de_tiempo_siempre_en_utc(db, perfil):
 
 
 def test_yahooquotes_requiere_yfinance():
-    """Si falta el paquete, el mensaje debe decir que instalar."""
+    """If the package is missing, the message has to say what to install."""
     from src.ingest import YahooQuotes
 
     try:
         YahooQuotes()
-    except IngestError as exc:  # pragma: no cover - solo si yfinance no esta
+    except IngestError as exc:  # pragma: no cover - only if yfinance is absent
         assert "pip install yfinance" in str(exc)
 
 
-# -- Relleno de huecos (F2.10) ----------------------------------------------
+# -- Gap backfill (F2.10) ---------------------------------------------------
 #
-# Las barras van referidas a `ahora` y no a BASE porque el relleno solo mira los
-# ultimos dias: con una fecha fija, la suite empezaria a fallar sola cuando pasara
-# el tiempo, y eso no es un fallo del codigo.
+# The bars are referred to `now` and not to BASE because the backfill only looks
+# at the last few days: with a fixed date, the suite would start failing on its
+# own as time passed, and that is not a failure of the code.
 
 
 def ahora_en_minutos() -> datetime:
@@ -295,13 +295,13 @@ def barras_recientes(n: int, *, dias_atras: int = 0, precio: float = 100.0) -> l
     return barras(n, desde=inicio, precio=precio)
 
 
-def test_backfill_recupera_una_sesion_perdida_entera(db, perfil):
-    """El caso que los ticks NO curan (F2.10). Un hueco dentro de la sesion se
-    rellena solo, porque cada tick pide el dia completo; pero si el proceso murio
-    el viernes por la tarde, ningun tick del lunes vuelve a mirar el viernes."""
+def test_backfill_recovers_a_whole_lost_session(db, perfil):
+    """The case the ticks do NOT heal (F2.10). A gap within the session fills
+    itself in, because each tick asks for the complete day; but if the process
+    died on Friday afternoon, no Monday tick ever looks back at Friday."""
     ayer = barras_recientes(5, dias_atras=2)
     hoy = barras_recientes(5)
-    # Solo se capturaron las dos primeras barras de la sesion de hace dos dias.
+    # Only the first two bars of the session two days ago were captured.
     ingest_once(db, ProveedorFalso({"AAPL": ayer[:2]}), ["AAPL"])
 
     resultado = backfill_gaps(
@@ -309,28 +309,28 @@ def test_backfill_recupera_una_sesion_perdida_entera(db, perfil):
     )
 
     assert resultado.ok
-    assert resultado.huecos == {"AAPL": 8}, "3 de la sesion perdida + las 5 de hoy"
+    assert resultado.gaps == {"AAPL": 8}, "3 de la sesion perdida + las 5 de hoy"
     assert db.query("select count(1) n from bars_1m")[0]["n"] == 10
 
 
-def test_backfill_no_reescribe_lo_que_ya_esta(db, perfil):
-    """Cinco dias del universo europeo son ~225.000 filas. Reescribirlas cada
-    tarde no fallaria: se notaria solo como una tarea que tarda cada vez mas."""
+def test_backfill_does_not_rewrite_what_is_already_there(db, perfil):
+    """Five days of the European universe are ~225,000 rows. Rewriting them every
+    afternoon would not fail: it would show up only as a task taking longer and longer."""
     bars = barras_recientes(10)
     ingest_once(db, ProveedorFalso({"AAPL": bars}), ["AAPL"])
 
     resultado = backfill_gaps(db, ProveedorFalso({"AAPL": bars}), ["AAPL"], days=5)
 
-    assert resultado.huecos == {}
-    # Solo la ultima, que se refresca a proposito (ver el test siguiente).
+    assert resultado.gaps == {}
+    # Only the last one, which is refreshed on purpose (see the next test).
     assert resultado.barras_escritas == 1
     assert db.query("select count(1) n from bars_1m")[0]["n"] == 10
 
 
-def test_backfill_refresca_la_ultima_barra_aunque_ya_estuviera(db, perfil):
-    """Por lo mismo que el tick reescribe la suya: la version guardada pudo
-    capturarse con el minuto a medias, y en Estados Unidos (drain=0) esa version
-    a medias es justo la del cierre de sesion."""
+def test_backfill_refreshes_the_last_bar_even_if_it_was_there(db, perfil):
+    """For the same reason the tick rewrites its own: the stored version may have
+    been captured with the minute half done, and in the United States (drain=0)
+    that half-done version is precisely the session close."""
     bars = barras_recientes(3)
     ingest_once(db, ProveedorFalso({"AAPL": bars}), ["AAPL"])
 
@@ -341,26 +341,26 @@ def test_backfill_refresca_la_ultima_barra_aunque_ya_estuviera(db, perfil):
     )
     backfill_gaps(db, ProveedorFalso({"AAPL": cerradas}), ["AAPL"], days=5)
 
-    filas = db.query("select * from bars_1m order by ts")
-    assert len(filas) == 3
-    assert filas[-1]["close"] == 128
-    assert filas[-1]["volume"] == 88_888
+    rows = db.query("select * from bars_1m order by ts")
+    assert len(rows) == 3
+    assert rows[-1]["close"] == 128
+    assert rows[-1]["volume"] == 88_888
 
 
-def test_backfill_no_cuenta_ese_refresco_como_hueco(db, perfil):
-    """Si contara, cada simbolo tendria 'un hueco' todas las tardes y la cifra
-    dejaria de servir para decidir si hubo una caida."""
+def test_backfill_does_not_count_that_refresh_as_a_gap(db, perfil):
+    """If it counted, every symbol would have 'one gap' every afternoon and the
+    figure would stop being useful for deciding whether there was an outage."""
     bars = barras_recientes(4)
     ingest_once(db, ProveedorFalso({"AAPL": bars}), ["AAPL"])
 
     resultado = backfill_gaps(db, ProveedorFalso({"AAPL": bars}), ["AAPL"], days=5)
 
-    assert "AAPL" not in resultado.huecos
+    assert "AAPL" not in resultado.gaps
 
 
-def test_backfill_ignora_lo_que_cae_fuera_de_la_ventana(db, perfil):
-    """Yahoo sirve 30 dias en 1m, pero el relleno solo compara contra lo que hay
-    desde su corte: escribir mas atras seria escribir a ciegas."""
+def test_backfill_ignores_what_falls_outside_the_window(db, perfil):
+    """Yahoo serves 30 days at 1m, but the backfill only compares against what is
+    there from its cut-off: writing further back would be writing blind."""
     viejas = barras_recientes(5, dias_atras=20)
 
     resultado = backfill_gaps(db, ProveedorFalso({"AAPL": viejas}), ["AAPL"], days=2)
@@ -369,9 +369,9 @@ def test_backfill_ignora_lo_que_cae_fuera_de_la_ventana(db, perfil):
     assert db.query("select count(1) n from bars_1m")[0]["n"] == 0
 
 
-def test_backfill_recorta_los_dias_al_maximo_de_yahoo(db, perfil):
-    """Pedir mas de 7 dias en 1m no da error: devuelve un marco vacio, que es la
-    peor forma de fallar."""
+def test_backfill_clamps_the_days_to_yahoos_maximum(db, perfil):
+    """Asking for more than 7 days at 1m does not error: it returns an empty
+    frame, which is the worst way to fail."""
     proveedor = ProveedorFalso({"AAPL": barras_recientes(2)})
 
     resultado = backfill_gaps(db, proveedor, ["AAPL"], days=30)
@@ -380,9 +380,9 @@ def test_backfill_recorta_los_dias_al_maximo_de_yahoo(db, perfil):
     assert resultado.dias == BACKFILL_DIAS_MAX
 
 
-def test_el_tick_sigue_pidiendo_un_solo_dia(db, perfil):
-    """`days` es lo unico que separa un tick de un relleno, asi que conviene
-    fijar que el tick no se lleve por delante la cuota de Yahoo."""
+def test_the_tick_still_asks_for_a_single_day(db, perfil):
+    """`days` is the only thing separating a tick from a backfill, so it is worth
+    pinning down that the tick does not eat Yahoo's quota."""
     proveedor = ProveedorFalso({"AAPL": barras(2)})
 
     ingest_once(db, proveedor, ["AAPL"])
@@ -390,9 +390,9 @@ def test_el_tick_sigue_pidiendo_un_solo_dia(db, perfil):
     assert proveedor.dias_pedidos == [1]
 
 
-def test_el_relleno_se_registra_aparte_de_los_ticks(db, perfil):
-    """Un backfill descarga varios dias de golpe: mezclado con los ticks, una
-    sola de sus filas desplaza cualquier media de latencia."""
+def test_the_backfill_is_recorded_apart_from_the_ticks(db, perfil):
+    """A backfill downloads several days at once: mixed in with the ticks, a
+    single one of its rows shifts any latency average."""
     ingest_once(db, ProveedorFalso({"AAPL": barras(2)}), ["AAPL"])
     backfill_gaps(db, ProveedorFalso({"AAPL": barras_recientes(2)}), ["AAPL"])
 
@@ -401,9 +401,9 @@ def test_el_relleno_se_registra_aparte_de_los_ticks(db, perfil):
     assert len(db.ingest_health(kind="backfill")) == 1
 
 
-def test_un_relleno_fallido_no_lanza_y_queda_registrado(db, perfil):
-    """Lo llama el bucle del ingestor justo antes de dormir: si lanzara, el
-    proceso moriria a la hora del cierre todos los dias."""
+def test_a_failed_backfill_does_not_raise_and_is_recorded(db, perfil):
+    """The ingestor's loop calls it right before sleeping: if it raised, the
+    process would die at closing time every single day."""
     resultado = backfill_gaps(
         db, ProveedorFalso(error=RuntimeError("429 Too Many Requests")), ["AAPL"]
     )
@@ -415,7 +415,7 @@ def test_un_relleno_fallido_no_lanza_y_queda_registrado(db, perfil):
     assert run["finished_at"] is not None
 
 
-def test_relleno_sin_simbolos_no_toca_la_base(db):
+def test_a_backfill_with_no_symbols_does_not_touch_the_database(db):
     proveedor = ProveedorFalso()
 
     resultado = backfill_gaps(db, proveedor, [])
@@ -425,8 +425,8 @@ def test_relleno_sin_simbolos_no_toca_la_base(db):
     assert db.query("select count(1) n from ingest_runs")[0]["n"] == 0
 
 
-def test_relleno_apagado_con_cero_dias(db, perfil):
-    """`INGEST_BACKFILL_DAYS=0` tiene que ser un apagado de verdad, no un dia."""
+def test_the_backfill_is_switched_off_with_zero_days(db, perfil):
+    """`INGEST_BACKFILL_DAYS=0` has to be a real off switch, not one day."""
     proveedor = ProveedorFalso({"AAPL": barras_recientes(3)})
 
     resultado = backfill_gaps(db, proveedor, ["AAPL"], days=0)
@@ -435,10 +435,10 @@ def test_relleno_apagado_con_cero_dias(db, perfil):
     assert resultado.barras_escritas == 0
 
 
-def test_el_relleno_se_puede_abandonar_entre_simbolos(db, perfil):
-    """Con 89 simbolos son ~4-5 minutos de descarga (medido el 2026-08-08). Sin
-    poder abandonar, un `docker stop` a la hora del mantenimiento esperaria todo
-    eso y acabaria en SIGKILL."""
+def test_the_backfill_can_be_abandoned_between_symbols(db, perfil):
+    """With 89 symbols that is ~4-5 minutes of downloading (measured 2026-08-08).
+    Without being able to abandon, a `docker stop` at maintenance time would wait
+    it all out and end in SIGKILL."""
     datos = {s: barras_recientes(4) for s in ("AAA", "BBB", "CCC")}
     llamadas = []
 
@@ -452,15 +452,15 @@ def test_el_relleno_se_puede_abandonar_entre_simbolos(db, perfil):
 
     assert resultado.interrumpido
     assert resultado.revisados == ["AAA"]
-    # Lo hecho se queda escrito: por eso las escrituras van por simbolo y no en
-    # un unico lote al final.
+    # What was done stays written: that is why the writes go symbol by symbol and
+    # not in a single batch at the end.
     assert db.query("select count(1) n from bars_1m")[0]["n"] == 4
     assert "interrumpido" in resultado.error
 
 
-def test_una_pasada_a_medias_no_se_registra_como_completa(db, perfil):
-    """Si `symbols_ok` contara lo que devolvio el proveedor, una pasada abandonada
-    quedaria en la base como si hubiera revisado la ventana entera."""
+def test_a_partial_pass_is_not_recorded_as_complete(db, perfil):
+    """If `symbols_ok` counted what the provider returned, an abandoned pass would
+    sit in the database as if it had reviewed the whole window."""
     datos = {s: barras_recientes(2) for s in ("AAA", "BBB", "CCC")}
 
     backfill_gaps(
@@ -473,7 +473,7 @@ def test_una_pasada_a_medias_no_se_registra_como_completa(db, perfil):
     assert "interrumpido" in run["error"]
 
 
-def test_sin_should_stop_se_revisan_todos(db, perfil):
+def test_without_should_stop_every_symbol_is_reviewed(db, perfil):
     datos = {s: barras_recientes(2) for s in ("AAA", "BBB", "CCC")}
 
     resultado = backfill_gaps(db, ProveedorFalso(datos), sorted(datos))
@@ -483,11 +483,11 @@ def test_sin_should_stop_se_revisan_todos(db, perfil):
     assert db.ingest_health(kind="backfill")[0]["symbols_ok"] == 3
 
 
-def test_kind_llega_a_una_base_que_ya_existia(tmp_path):
-    """Misma leccion que F6.4: `create table if not exists` no anade columnas a
-    una tabla que ya existe, asi que sin la migracion esto funcionaria en una base
-    nueva y faltaria en la que esta corriendo. Las filas de antes quedan como
-    'tick', que es lo que eran."""
+def test_kind_reaches_a_database_that_already_existed(tmp_path):
+    """The same lesson as F6.4: `create table if not exists` does not add columns
+    to a table that already exists, so without the migration this would work on a
+    new database and be missing from the one running. The earlier rows stay as
+    'tick', which is what they were."""
     import sqlite3
 
     from src.db import Database
@@ -505,31 +505,31 @@ def test_kind_llega_a_una_base_que_ya_existia(tmp_path):
         assert database.ingest_health()[0]["kind"] == "tick"
 
 
-def test_un_simbolo_sin_datos_no_cuenta_como_hueco(db, perfil):
+def test_a_symbol_with_no_data_does_not_count_as_a_gap(db, perfil):
     resultado = backfill_gaps(
         db, ProveedorFalso({"AAPL": barras_recientes(2)}), ["AAPL", "FANTASMA"]
     )
 
     assert resultado.con_datos == 1
-    assert "FANTASMA" not in resultado.huecos
+    assert "FANTASMA" not in resultado.gaps
     assert db.ingest_health(kind="backfill")[0]["symbols_failed"] == 1
 
 
 # -- Aviso de contencion (F2.9) ---------------------------------------------
 
 
-def test_carga_inicial_grande_no_dispara_el_aviso(db, perfil, caplog, monkeypatch):
-    """El primer tick escribe la sesion entera y tarda segundos sin que nadie lo
-    bloquee. Un aviso que salta ahi cria lobos y se acaba ignorando.
+def test_a_large_initial_load_does_not_fire_the_warning(db, perfil, caplog, monkeypatch):
+    """The first tick writes the whole session and takes seconds with nobody
+    blocking it. A warning that fires there cries wolf and ends up ignored.
 
-    El reloj es falso a proposito, igual que en el test de abajo. Antes se medi­a
-    el disco de verdad, y eso hacia que el test dijera la verdad solo en la
-    maquina donde se escribio: pasaba en el anfitrion (~1.1 ms/fila) y fallaba
-    dentro del contenedor (~3.9), que es justamente donde el codigo corre. Un test
-    que se rompe en el entorno de destino y pasa en el de desarrollo es el peor
-    reparto posible.
+    The clock is fake on purpose, as in the test below. The real disk used to be
+    measured, and that made the test tell the truth only on the machine it was
+    written on: it passed on the host (~1.1 ms/row) and failed inside the
+    container (~3.9), which is exactly where the code runs. A test that breaks in
+    the target environment and passes in the development one is the worst possible
+    split.
 
-    El 1.5 s para 400 filas no es inventado: es lo medido en el contenedor.
+    The 1.5 s for 400 rows is not invented: it is what was measured in the container.
     """
     import logging
 
@@ -544,8 +544,8 @@ def test_carga_inicial_grande_no_dispara_el_aviso(db, perfil, caplog, monkeypatc
     assert "contencion" not in caplog.text.lower()
 
 
-def test_escritura_lenta_para_pocas_filas_si_avisa(db, perfil, caplog, monkeypatch):
-    """Lo que delata una espera por busy_timeout: mucho tiempo, pocas filas."""
+def test_a_slow_write_for_few_rows_does_warn(db, perfil, caplog, monkeypatch):
+    """What gives away a wait on busy_timeout: a lot of time, few rows."""
     import logging
 
     import src.ingest as ingest_mod

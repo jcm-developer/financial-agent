@@ -74,10 +74,16 @@ un código en español acaba siendo código en dos idiomas con la frontera puest
 de una sentada, y traducirlo no le añadiría nada a nadie. Es una decisión distinta de la de
 arriba, no una excepción a ella.
 
-⚠️ **El frontend ya cumple la primera fila** desde F8.8: `pages/`, `Table`, `Button`,
-`pieces.tsx`, props, hooks y comentarios en inglés, con el texto de pantalla en español.
-**Lo que queda son los comentarios y docstrings de Python**, que siguen en español; los
-identificadores de Python ya estaban en inglés. Esa mitad sigue abierta en **F8.8**.
+El proyecto **cumple la tabla entera** desde F8.8 (2026-08-09): identificadores, nombres
+de fichero y de carpeta, comentarios, docstrings y nombres de test están en inglés en
+`app/`, `src/`, `api/`, `tools/`, `run.py` y `tests/`, y el texto de pantalla sigue en
+español.
+
+**La única excepción son los mensajes de log y de excepción, y es deliberada.** El log del
+ciclo se muestra tal cual en la pantalla de Ciclos, así que es texto de pantalla; y
+[api/runner.py](api/runner.py) deduce la etapa buscando cadenas dentro de él («Resumen del
+ciclo», «RECHAZADA»), de modo que traducirlos apagaría el indicador de progreso sin que
+ningún test lo notara. Si algún día se traducen, se tocan los dos sitios a la vez.
 
 ---
 

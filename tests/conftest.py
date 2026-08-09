@@ -1,8 +1,8 @@
-"""Fixtures compartidas y acceso a `tests/helpers.py`.
+"""Shared fixtures and access to `tests/helpers.py`.
 
-`tests/` no es un paquete a proposito (sin `__init__.py`), asi que se anade su
-directorio al path para que los modulos de test puedan importar `helpers` sin
-imports relativos, que rompen segun desde donde se invoque pytest.
+`tests/` is deliberately not a package (no `__init__.py`), so its directory is
+added to the path so the test modules can import `helpers` without relative
+imports, which break depending on where pytest is invoked from.
 """
 
 import sys
@@ -19,6 +19,6 @@ from src.db import Database  # noqa: E402
 
 @pytest.fixture
 def db(tmp_path):
-    """Base de datos limpia en fichero temporal, con el esquema ya aplicado."""
+    """A clean database in a temporary file, with the schema already applied."""
     with Database(path=tmp_path / "test.db") as database:
         yield database

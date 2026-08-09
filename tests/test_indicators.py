@@ -1,9 +1,9 @@
-"""Tests de los indicadores.
+"""Tests of the indicators.
 
-Los valores esperados se calculan a mano en los casos sencillos. Lo que mas
-importa aqui es el contrato de "None cuando no hay datos suficientes": si un
-indicador devolviera un valor degradado, el Risk Manager dimensionaria posiciones
-sobre una volatilidad inventada.
+The expected values are worked out by hand in the simple cases. What matters most
+here is the "None when there is not enough data" contract: if an indicator
+returned a degraded value, the Risk Manager would size positions over an invented
+volatility.
 """
 
 from __future__ import annotations
@@ -170,8 +170,8 @@ def test_annualized_volatility_grows_with_dispersion():
 # -- Snapshot completo -------------------------------------------------------
 
 def test_snapshot_has_stable_keys():
-    """Estas claves acaban en la base de datos y se consultan desde SQL: si
-    cambian, el historico deja de ser comparable."""
+    """These keys end up in the database and are queried from SQL: if they
+    change, the history stops being comparable."""
     snapshot = compute_snapshot(make_bars([100.0 + i * 0.5 for i in range(250)]))
 
     expected = {
@@ -195,7 +195,7 @@ def test_snapshot_marks_an_uptrend():
 
 
 def test_snapshot_reports_none_for_long_indicators_on_short_history():
-    """Con 80 barras no hay SMA200: debe ser None, no un valor aproximado."""
+    """With 80 bars there is no SMA200: it must be None, not an approximation."""
     snapshot = compute_snapshot(make_bars([100.0] * 80))
 
     assert snapshot["sma_200"] is None

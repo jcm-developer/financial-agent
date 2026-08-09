@@ -1,27 +1,27 @@
-"""Broker simulado: la contabilidad del experimento en SQLite.
+"""Simulated broker: the experiment's bookkeeping in SQLite.
 
-Existe para que el experimento no exija dar de alta una cuenta de broker: el
-objetivo es ver operar al agente y medir la calidad de sus decisiones, y para eso
-un libro contable propio sirve igual.
+It exists so the experiment does not demand opening a broker account: the goal is
+to watch the agent trade and measure the quality of its decisions, and a ledger
+of our own serves that just as well.
 
-Implementa el protocolo `Broker` de [broker.py](broker.py), que es lo unico que
-`cycle.py` conoce: el ciclo no sabe que esta hablando con un simulador.
+It implements the `Broker` protocol from [broker.py](broker.py), which is all
+`cycle.py` knows about: the cycle has no idea it is talking to a simulator.
 
-Honestidad de la simulacion, que es lo unico que la hace util:
+The honesty of the simulation, which is the only thing that makes it useful:
 
-  * **Se ejecuta a la apertura de la sesion siguiente**, no al cierre con el que
-    se decidio. Ejecutar al mismo precio que se usa para decidir regala el hueco
-    de la noche y convierte cualquier resultado en basura. `MarketSnapshot`
-    mantiene los dos precios separados justamente para esto.
-  * **Se aplica deslizamiento y comision.** Ambos configurables; por defecto 5
-    puntos basicos y cero comision (los brokers americanos no cobran por acciones).
-  * **No se puede comprar sin efectivo** ni vender lo que no se tiene.
-  * **No hay apalancamiento.** El poder de compra es el efectivo disponible.
+  * **Execution happens at the next session's open**, not at the close the
+    decision was made on. Executing at the same price used to decide hands over
+    the overnight gap and turns any result into rubbish. `MarketSnapshot` keeps
+    the two prices apart precisely for this.
+  * **Slippage and commission are applied.** Both configurable; by default 5
+    basis points and zero commission (US brokers do not charge for shares).
+  * **You cannot buy without cash** nor sell what you do not hold.
+  * **There is no leverage.** Buying power is the available cash.
 
-Lo que NO simula, y conviene saber: liquidez (una orden grande movería el precio
-real), huecos intradia, ordenes parciales, horarios de mercado, ni las reglas de
-patron day trader. A frecuencia diaria y en valores muy liquidos importa poco;
-en ilíquidos, los resultados serian optimistas.
+What it does NOT simulate, and is worth knowing: liquidity (a large order would
+move the real price), intraday gaps, partial fills, market hours, or the pattern
+day trader rules. At daily frequency and in very liquid names it matters little;
+in illiquid ones, the results would be optimistic.
 """
 
 from __future__ import annotations
@@ -44,9 +44,9 @@ def _now() -> str:
 
 @dataclass(frozen=True)
 class Quote:
-    """Precios de un simbolo para este ciclo."""
+    """A symbol's prices for this cycle."""
 
-    fill_price: float      # apertura de la sesion siguiente: donde se ejecuta
+    fill_price: float      # next session's open: where execution happens
     mark_price: float      # ultimo precio conocido: valoracion
     basis: str = "next_open"
 
@@ -102,28 +102,28 @@ class SimBroker:
         )
 
     def held_symbols(self) -> set[str]:
-        """Simbolos con posicion abierta. Quien vaya a llamar a `set_quotes`
-        necesita saber para que activos hay que traer precios."""
+        """Symbols with an open position. Whoever is going to call `set_quotes`
+        needs to know which assets prices have to be brought for."""
         return {str(row["symbol"]) for row in self._positions()}
 
     # -- Precios del ciclo -------------------------------------------------
 
     def set_quotes(self, quotes: dict[str, Quote]) -> None:
-        """El ciclo inyecta aqui los precios de esta pasada.
+        """The cycle injects this pass's prices here.
 
-        Sin esto el simulador no puede valorar ni ejecutar: no tiene fuente de
-        datos propia a proposito, para que use exactamente los mismos precios que
-        vio el analista.
+        Without this the simulator cannot value or execute: it has no data source
+        of its own, on purpose, so that it uses exactly the same prices the
+        analyst saw.
         """
         self._quotes = dict(quotes)
 
     def roll_session(self, session: str | None) -> None:
-        """Marca el comienzo de una sesion nueva.
+        """Marks the beginning of a new session.
 
-        Fija `last_equity` al equity con el que se cierra la sesion anterior, que
-        es la referencia del P&L diario y del kill switch. Si se ejecutan varios
-        ciclos el mismo dia, la referencia no se mueve: si no, el kill switch se
-        reiniciaria en cada pasada y dejaria de proteger.
+        It pins `last_equity` to the equity the previous session closed at, which
+        is the reference for the daily P&L and for the kill switch. If several
+        cycles run on the same day the reference does not move: otherwise the
+        kill switch would reset on every pass and stop protecting anything.
         """
         if not session:
             return
@@ -142,10 +142,10 @@ class SimBroker:
     # -- Lectura -----------------------------------------------------------
 
     def is_market_open(self) -> bool:
-        """El simulador ejecuta siempre que tenga precios.
+        """The simulator executes whenever it has prices.
 
-        No modela horarios: si hay una barra nueva, hay sesion que operar. Un
-        broker real consultaria aqui el reloj del mercado.
+        It models no hours: if there is a new bar, there is a session to trade.
+        A real broker would consult the market clock here.
         """
         return bool(self._quotes)
 
@@ -191,7 +191,7 @@ class SimBroker:
         return AccountState(
             equity=equity,
             cash=cash,
-            # Sin apalancamiento: el poder de compra es el efectivo.
+            # No leverage: buying power is the cash.
             buying_power=cash,
             last_equity=float(row["last_equity"]) or equity,
             positions=tuple(positions),
@@ -208,7 +208,7 @@ class SimBroker:
         if quote is None:
             raise BrokerError(f"No hay precio de ejecucion para {symbol}.")
 
-        # El deslizamiento va en contra: al comprar se paga un poco mas.
+        # Slippage works against you: buying pays a little more.
         price = quote.fill_price * (1 + self.slippage_bps / 10_000.0)
         cost = price * whole_qty + self.commission
 
@@ -225,8 +225,8 @@ class SimBroker:
             (self.account_id, symbol),
         )
         if existing:
-            # No deberia ocurrir: el Risk Manager rechaza ampliar posiciones. Se
-            # soporta de todos modos para que el libro contable nunca quede mal.
+            # Should not happen: the Risk Manager refuses to enlarge positions. It
+            # is supported anyway so the ledger never ends up wrong.
             old = existing[0]
             old_qty, old_price = float(old["qty"]), float(old["avg_entry_price"])
             new_qty = old_qty + whole_qty

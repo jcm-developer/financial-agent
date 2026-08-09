@@ -1,34 +1,34 @@
 #!/usr/bin/env python
-"""Spike F2.1: mide si Yahoo sirve para una ingesta cada minuto.
+"""Spike F2.1: measures whether Yahoo is good enough for minute-by-minute ingestion.
 
-Es un experimento de medicion, no codigo de produccion: no escribe en la base ni
-toca nada del ciclo. Su unico trabajo es responder a tres preguntas antes de que
-se construya el ingestor de verdad (F2.2):
+It is a measurement experiment, not production code: it does not write to the
+database nor touch anything of the cycle. Its only job is to answer three
+questions before the real ingestor is built (F2.2):
 
-  1. RETRASO. La mas importante. "Cada minuto" solo vale si el dato es de hace un
-     minuto. Yahoo no garantiza tiempo real, asi que hay que medirlo: si trae 15
-     minutos de desfase, el diseno del ingestor no cambia pero lo que se puede
-     concluir del experimento, si.
-  2. FIABILIDAD. Cuantos 429 aparecen manteniendo una peticion por minuto durante
-     una sesion entera, y cuantos simbolos vuelven vacios.
-  3. COSTE. Cuanto tarda la descarga en lote, para saber si cabe holgada dentro
-     del minuto.
+  1. LAG. The most important one. "Every minute" only holds if the datum is a
+     minute old. Yahoo guarantees no real time, so it has to be measured: if it
+     comes 15 minutes behind, the ingestor's design does not change but what can
+     be concluded from the experiment does.
+  2. RELIABILITY. How many 429s appear while keeping one request per minute for a
+     whole session, and how many symbols come back empty.
+  3. COST. How long the batch download takes, to know whether it fits comfortably
+     inside the minute.
 
-Uso:
+Usage:
 
-    python tools/spike_1m.py --once --force      # una pasada, aunque este cerrado
-    python tools/spike_1m.py --minutes 390       # una sesion entera
+    python tools/spike_1m.py --once --force      # one pass, even if closed
+    python tools/spike_1m.py --minutes 390       # a whole session
     python tools/spike_1m.py --symbols AAPL,MSFT --once --force
 
-Los resultados se van escribiendo en JSONL (--out) linea a linea, para que un
-corte a mitad no se lleve por delante lo medido hasta ese momento.
+The results are written to JSONL (--out) line by line, so a cut halfway does not
+take down what has been measured so far.
 
-Sobre el retraso: yfinance devuelve la marca de tiempo de **inicio** de cada
-barra. Una barra de las 15:30 cubre 15:30-15:31, asi que antes de las 15:31 no
-puede estar completa. Por eso se mide `lag_cierre` (= ahora - fin de la barra),
-que es el numero honesto: cuanto tarda un minuto ya cerrado en estar disponible.
-Un `lag_cierre` de segundos es excelente; uno de ~15 minutos significa que Yahoo
-esta sirviendo el feed retrasado.
+About the lag: yfinance returns the **start** timestamp of each bar. A 15:30 bar
+covers 15:30-15:31, so before 15:31 it cannot be complete. That is why
+`lag_cierre` (= now - end of the bar) is measured, which is the honest number:
+how long a minute that has already closed takes to become available. A
+`lag_cierre` of seconds is excellent; one of ~15 minutes means Yahoo is serving
+the feed delayed.
 """
 
 from __future__ import annotations
@@ -73,12 +73,13 @@ def one_pass(
     threads: bool = False,
     market: str | market_calendar.Market | None = None,
 ) -> dict:
-    """Una descarga del lote de simbolos. Devuelve las metricas, nunca lanza.
+    """One download of the symbol batch. Returns the metrics, never raises.
 
-    `threads` no es un detalle menor: yfinance pide **un endpoint por simbolo**,
-    no uno en lote, asi que con 50 simbolos son 50 peticiones a Yahoo. En serie
-    tarda ~8s y en paralelo ~1.5s, pero en paralelo tambien concentra las 50
-    peticiones en un instante, que es peor para el rate limit. Medir las dos.
+    `threads` is no minor detail: yfinance asks for **one endpoint per symbol**,
+    not one for the batch, so with 50 symbols that is 50 requests to Yahoo.
+    Serially it takes ~8s and in parallel ~1.5s, but in parallel it also
+    concentrates the 50 requests into an instant, which is worse for the rate
+    limit. Measure both.
     """
     import yfinance as yf
 
@@ -95,11 +96,11 @@ def one_pass(
             auto_adjust=False,
             progress=False,
             group_by="ticker",
-            # Por defecto False, como src/market_data.py: en paralelo la cache
-            # interna de yfinance ha dado "database is locked" en Windows,
-            # devolviendo simbolos vacios *sin avisar*. Es un fallo intermitente,
-            # asi que unas pocas pasadas en verde no lo descartan: por eso el
-            # spike cuenta simbolos vacios en cada pasada.
+            # False by default, as in src/market_data.py: in parallel, yfinance's
+            # internal cache has given "database is locked" on Windows, returning
+            # empty symbols *without warning*. It is an intermittent fault, so a
+            # few green passes do not rule it out: hence the spike counting empty
+            # symbols on every pass.
             threads=threads,
             actions=False,
         )
@@ -109,7 +110,7 @@ def one_pass(
     latency = time.monotonic() - started
 
     con_datos: list[str] = []
-    vacios: list[str] = []
+    empty: list[str] = []
     lags: list[float] = []
     ultima_barra: datetime | None = None
 
@@ -119,40 +120,40 @@ def one_pass(
                 frame, symbol, single=len(symbols) == 1
             )
             if not bars:
-                vacios.append(symbol)
+                empty.append(symbol)
                 continue
             con_datos.append(symbol)
             inicio = bars[-1].timestamp
             if inicio.tzinfo is None:
                 inicio = inicio.replace(tzinfo=timezone.utc)
-            # Fin de la barra: es cuando el minuto queda cerrado y el dato
-            # podria estar disponible.
+            # End of the bar: that is when the minute is closed and the datum
+            # could be available.
             fin = inicio + timedelta(seconds=BAR_SECONDS)
             lags.append((now - fin).total_seconds())
             if ultima_barra is None or inicio > ultima_barra:
-                # A UTC siempre: yfinance devuelve estas marcas en hora de Nueva
-                # York, y el resto del proyecto guarda todo en UTC (schema.sql).
+                # Always to UTC: yfinance returns these marks in New York time,
+                # and the rest of the project stores everything in UTC (schema.sql).
                 ultima_barra = inicio.astimezone(timezone.utc)
     else:
-        vacios = list(symbols)
+        empty = list(symbols)
 
     return {
         "ts": now.isoformat(),
-        # Del mercado que se esta midiendo, no del americano: de este campo
-        # depende que el retraso medido se declare valido al final (ver main).
+        # Of the market being measured, not the American one: whether the measured
+        # lag is declared valid at the end depends on this field (see main).
         "mercado_abierto": market_calendar.is_session_open(market=market),
         "threads": threads,
         "pedidos": len(symbols),
         "con_datos": len(con_datos),
-        "vacios": len(vacios),
-        "simbolos_vacios": vacios[:10],
+        "vacios": len(empty),
+        "simbolos_vacios": empty[:10],
         "latencia_s": round(latency, 2),
         "ultima_barra": ultima_barra.isoformat() if ultima_barra else None,
         "lag_cierre_min_s": round(min(lags), 1) if lags else None,
         "lag_cierre_mediana_s": round(statistics.median(lags), 1) if lags else None,
         "lag_cierre_max_s": round(max(lags), 1) if lags else None,
         "error": error,
-        # Se marca aparte porque es el fallo que obligaria a cambiar de fuente.
+        # Marked separately because it is the failure that would force a source change.
         "rate_limited": bool(error and ("429" in error or "Too Many Requests" in error)),
     }
 
@@ -172,7 +173,7 @@ def format_row(n: int, r: dict) -> str:
 
 
 def sleep_to_next_minute() -> None:
-    """Espera al inicio del siguiente minuto, que es cuando la barra cierra."""
+    """Waits for the start of the next minute, which is when the bar closes."""
     ahora = datetime.now(timezone.utc)
     objetivo = (ahora + timedelta(minutes=1)).replace(second=2, microsecond=0)
     espera = (objetivo - ahora).total_seconds()
@@ -204,22 +205,22 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        mercado = market_calendar.get_market(args.market)
+        market = market_calendar.get_market(args.market)
     except market_calendar.UnknownMarket as exc:
         raise SystemExit(f"  {exc}") from exc
 
     universe_file = (
-        Path(args.universe) if args.universe else APP_DIR / mercado.universe_file
+        Path(args.universe) if args.universe else APP_DIR / market.universe_file
     )
     symbols = load_symbols(args.symbols, args.count, universe_file)
-    # La ventana operativa y no la sesion: medir los 15 minutos posteriores al
-    # cierre es justamente donde se vera si la ultima barra llega tarde, que es
-    # la pregunta de F2.1c.
-    abierto = market_calendar.is_operating(market=mercado)
+    # The operating window and not the session: measuring the 15 minutes after the
+    # close is precisely where it will show whether the last bar arrives late,
+    # which is the question of F2.1c.
+    abierto = market_calendar.is_operating(market=market)
 
     print()
-    print(f"  Spike de ingesta 1m — {len(symbols)} simbolos de {mercado.label}")
-    print(f"  Mercado: {market_calendar.describe(market=mercado)}")
+    print(f"  Spike de ingesta 1m — {len(symbols)} simbolos de {market.label}")
+    print(f"  Mercado: {market_calendar.describe(market=market)}")
     print(f"  Resultados: {args.out}")
 
     if not abierto and not args.force:
@@ -227,10 +228,10 @@ def main() -> int:
         print("  El mercado esta cerrado. La medicion que importa (el retraso real")
         print("  del dato en vivo) solo tiene sentido en sesion.")
         print(f"  Proximo arranque de la ventana: "
-              f"{market_calendar.next_operating_open(market=mercado)}")
+              f"{market_calendar.next_operating_open(market=market)}")
         print()
         print("  Para validar solo el mecanismo contra la ultima sesion:")
-        print(f"      python tools/spike_1m.py --market {mercado.code} --once --force")
+        print(f"      python tools/spike_1m.py --market {market.code} --once --force")
         print()
         return 0
 
@@ -240,7 +241,7 @@ def main() -> int:
         print("  el retraso medido NO es representativo. Sirve para comprobar que la")
         print("  descarga funciona, cuanto tarda y cuantos simbolos vuelven vacios.")
 
-    pasadas = 1 if args.once else (args.minutes or mercado.operating_minutes)
+    pasadas = 1 if args.once else (args.minutes or market.operating_minutes)
     out = Path(args.out)
     resultados: list[dict] = []
 
@@ -249,7 +250,7 @@ def main() -> int:
 
     try:
         for n in range(1, pasadas + 1):
-            r = one_pass(symbols, threads=args.threads, market=mercado)
+            r = one_pass(symbols, threads=args.threads, market=market)
             resultados.append(r)
             with out.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(r, ensure_ascii=False) + "\n")
@@ -259,11 +260,11 @@ def main() -> int:
     except KeyboardInterrupt:
         print("\n  Interrumpido.")
 
-    resumen(resultados)
+    summary(resultados)
     return 0
 
 
-def resumen(resultados: list[dict]) -> None:
+def summary(resultados: list[dict]) -> None:
     if not resultados:
         return
 

@@ -1,8 +1,8 @@
-"""Tests del parseo defensivo de las respuestas del modelo.
+"""Tests of the defensive parsing of the model's responses.
 
-Cada caso de aqui es una forma real en la que un modelo de NIM devuelve JSON
-"casi" limpio. Sin esta capa, un ciclo entero se cae porque el modelo decidio
-explicarse antes de responder.
+Every case here is a real shape in which a NIM model returns "almost" clean JSON.
+Without this layer, a whole cycle falls over because the model decided to explain
+itself before answering.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ def test_reasoning_block_is_stripped():
 
 
 def test_unclosed_reasoning_block_is_stripped():
-    """Ocurre cuando la respuesta se corta por max_tokens."""
+    """Happens when the response is cut off by max_tokens."""
     assert strip_reasoning('{"a": 1}\n<think>me quede a medias') == '{"a": 1}'
 
 
@@ -69,8 +69,8 @@ def test_empty_text_returns_none():
 
 
 def test_an_object_wrapped_in_an_array_is_unwrapped():
-    """Algunos modelos envuelven la respuesta en una lista de un elemento. Se
-    extrae el objeto en lugar de fallar: el esquema esta dentro."""
+    """Some models wrap the response in a one-element list. The object is
+    extracted instead of failing: the schema is inside."""
     assert extract_json_object('[{"action": "buy"}]') == {"action": "buy"}
 
 
@@ -85,7 +85,7 @@ def test_action_is_case_and_space_insensitive():
 
 
 def test_unexpected_action_degrades_to_hold():
-    """Nunca se degrada a una operacion: siempre a no hacer nada."""
+    """It never degrades to a trade: always to doing nothing."""
     assert _coerce_action("SHORT", allowed={"buy", "hold"}) == "hold"
     assert _coerce_action(None, allowed={"buy", "hold"}) == "hold"
     assert _coerce_action(42, allowed={"buy", "hold"}) == "hold"
@@ -102,7 +102,7 @@ def test_conviction_is_clamped_to_its_range():
 
 
 def test_unparseable_conviction_becomes_zero():
-    """Cero garantiza el rechazo por min_conviction, que es el fallo seguro."""
+    """Zero guarantees rejection by min_conviction, which is the safe failure."""
     assert _coerce_conviction("muy alta") == 0
     assert _coerce_conviction(None) == 0
 

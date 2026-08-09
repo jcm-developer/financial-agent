@@ -1,19 +1,19 @@
-"""Obtencion de barras e indicadores. Dos proveedores intercambiables.
+"""Fetching bars and indicators. Two interchangeable providers.
 
-  * `UniverseMarketData` (recomendado para 500 activos) refresca la cache de
-    barras, pasa el universo por el screener y devuelve solo los mejores
-    candidatos. Es el embudo que hace viable un universo grande.
-  * `YahooMarketData` descarga la watchlist directamente. Sin cuenta ni clave.
+  * `UniverseMarketData` (recommended for 500 assets) refreshes the bar cache,
+    runs the universe through the screener and returns only the best candidates.
+    It is the funnel that makes a large universe viable.
+  * `YahooMarketData` downloads the watchlist directly. No account, no key.
 
-**Contrato comun:** `fetch_snapshots(must_include)` devuelve los snapshots de todo
-lo que hay que analizar. `must_include` son los simbolos obligatorios —las
-posiciones abiertas, que necesitan revision aunque el screener no las seleccione—
-y cada proveedor anade los suyos.
+**Shared contract:** `fetch_snapshots(must_include)` returns the snapshots of
+everything that has to be analysed. `must_include` are the mandatory symbols —the
+open positions, which need reviewing even when the screener does not select
+them— and each provider adds its own.
 
-La separacion de precios (decision / ejecucion / valoracion) esta explicada en
-`MarketSnapshot`. La regla, aqui y en la cache: **la ultima barra nunca se usa para
-decidir**, porque puede estar a medias si el mercado sigue abierto; se usa su
-apertura como precio de ejecucion.
+The separation of prices (decision / execution / valuation) is explained in
+`MarketSnapshot`. The rule, here and in the cache: **the last bar is never used to
+decide**, because it may be half-formed if the market is still open; its open is
+used as the execution price.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ from .models import MarketSnapshot
 
 log = logging.getLogger(__name__)
 
-# Barras minimas para que los indicadores largos (SMA200) tengan sentido. Por
-# debajo de esto seguimos analizando, pero el snapshot llevara claves en null.
+# Minimum bars for the long indicators (SMA200) to mean anything. Below this we
+# still analyse, but the snapshot will carry null keys.
 MIN_BARS = 60
 
 
@@ -48,11 +48,10 @@ class MarketDataProvider(Protocol):
 # ----------------------------------------------------------------------
 
 def build_snapshot(symbol: str, bars: list[Bar]) -> MarketSnapshot | None:
-    """Ensambla el snapshot separando la barra de decision de la de ejecucion.
+    """Assembles the snapshot, separating the decision bar from the execution one.
 
-    `bars` debe venir ordenado del mas antiguo al mas reciente. La ultima barra
-    se reserva para el precio de ejecucion; los indicadores se calculan sobre
-    todo lo anterior.
+    `bars` must arrive ordered oldest to newest. The last bar is reserved for the
+    execution price; the indicators are computed over everything before it.
     """
     if len(bars) < 2:
         log.warning("%s: hacen falta al menos 2 barras; se omite.", symbol)
@@ -85,8 +84,8 @@ def build_snapshot(symbol: str, bars: list[Bar]) -> MarketSnapshot | None:
 
 
 def _bar_to_dict(bar: Bar) -> dict[str, object]:
-    # Con barras horarias la fecha sola no distingue una barra de otra, asi que se
-    # incluye la hora. Con barras diarias sobraria ruido en el prompt.
+    # With hourly bars the date alone does not tell one bar from another, so the
+    # time is included. With daily bars it would be noise in the prompt.
     intraday = (bar.timestamp.hour, bar.timestamp.minute) != (0, 0)
     return {
         "date": bar.timestamp.strftime("%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"),
@@ -103,18 +102,18 @@ def _bar_to_dict(bar: Bar) -> dict[str, object]:
 # ----------------------------------------------------------------------
 
 class YahooMarketData:
-    """Barras diarias desde Yahoo, sin cuenta ni clave.
+    """Daily bars from Yahoo, with no account and no key.
 
-    Advertencias honestas sobre esta fuente:
+    Honest warnings about this source:
 
-      * yfinance es un cliente no oficial. Yahoo cambia sus endpoints cada
-        cierto tiempo y entonces hay que actualizar el paquete.
-      * Se descarga con `threads=False` a proposito: en paralelo, la cache
-        interna de yfinance (un SQLite propio) da "database is locked" en
-        Windows y devuelve simbolos vacios sin avisar.
-      * Los precios no vienen ajustados por splits ni dividendos
-        (`auto_adjust=False`), que es lo correcto aqui: queremos el precio al
-        que se habria operado, no la serie ajustada a posteriori.
+      * yfinance is an unofficial client. Yahoo changes its endpoints every so
+        often and then the package has to be updated.
+      * It downloads with `threads=False` on purpose: in parallel, yfinance's
+        internal cache (a SQLite of its own) gives "database is locked" on
+        Windows and returns empty symbols without warning.
+      * Prices do not come adjusted for splits or dividends
+        (`auto_adjust=False`), which is the right thing here: we want the price
+        trading would have happened at, not the series adjusted after the fact.
     """
 
     def __init__(
@@ -184,11 +183,11 @@ class YahooMarketData:
 
     @staticmethod
     def _extract_bars(frame: Any, symbol: str, *, single: bool = False) -> list[Bar]:
-        """Saca las barras de un simbolo, sea plano o multi-indice el DataFrame.
+        """Pulls a symbol's bars out, whether the DataFrame is flat or multi-index.
 
-        No se decide por el numero de tickers pedidos: yfinance devuelve una forma
-        u otra segun version y numero de simbolos, y adivinar hacia que la
-        extraccion devolviera cero barras sin avisar. Se prueban las dos.
+        It is not decided by the number of tickers requested: yfinance returns one
+        shape or the other depending on version and symbol count, and guessing
+        made the extraction return zero bars without warning. Both are tried.
         """
         required = ("Open", "High", "Low", "Close", "Volume")
 
@@ -209,8 +208,8 @@ class YahooMarketData:
         if sub is None or getattr(sub, "empty", True):
             return []
 
-        # Una fila con Close nulo es una sesion sin datos (festivo, o el simbolo
-        # todavia no cotizaba): se descarta en lugar de arrastrar huecos.
+        # A row with a null Close is a session with no data (a holiday, or the
+        # symbol was not listed yet): it is discarded instead of dragging gaps along.
         sub = sub.dropna(subset=["Open", "Close"])
 
         bars: list[Bar] = []
@@ -246,10 +245,10 @@ class YahooMarketData:
 # ----------------------------------------------------------------------
 
 def build_market_data(settings, database=None) -> MarketDataProvider:
-    """Elige el proveedor segun la configuracion.
+    """Picks the provider according to the configuration.
 
-    Con universo puesto se usa el embudo, que necesita la base de datos para la
-    cache de barras. Sin universo se descarga la watchlist tal cual.
+    With a universe set, the funnel is used, which needs the database for the bar
+    cache. Without a universe, the watchlist is downloaded as-is.
     """
     if settings.screener.enabled:
         if database is None:

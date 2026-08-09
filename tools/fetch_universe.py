@@ -1,20 +1,20 @@
 #!/usr/bin/env python
-"""Descarga la lista de componentes del S&P 500 y la guarda en un fichero.
+"""Downloads the list of S&P 500 constituents and stores it in a file.
 
     python tools/fetch_universe.py                    -> data/universe_sp500.txt
-    python tools/fetch_universe.py --out otra.txt
+    python tools/fetch_universe.py --out other.txt
 
-La fuente es el repositorio `datasets/s-and-p-500-companies` de GitHub, que se
-mantiene a partir de Wikipedia. Se prefiere a raspar Wikipedia directamente
-porque es un CSV estable en lugar de HTML que cambia de forma.
+The source is GitHub's `datasets/s-and-p-500-companies` repository, which is
+maintained from Wikipedia. It is preferred over scraping Wikipedia directly
+because it is a stable CSV instead of HTML that keeps changing shape.
 
-Por que un fichero y no una llamada en cada arranque: la composicion del indice
-cambia unas pocas veces al ano, y depender de la red para saber que analizar
-haria que un corte de conexion detuviera el agente. El fichero se versiona con la
-fecha de descarga dentro, para que se sepa cuando envejece.
+Why a file and not a call on every startup: the index's composition changes a few
+times a year, and depending on the network to know what to analyse would let a
+connection outage stop the agent. The file is versioned with the download date
+inside, so it is known when it grows stale.
 
-Nota sobre los simbolos: Yahoo usa guion donde el indice usa punto (BRK.B es
-BRK-B en Yahoo). La conversion se hace aqui, al escribir el fichero.
+A note on the symbols: Yahoo uses a hyphen where the index uses a dot (BRK.B is
+BRK-B on Yahoo). The conversion happens here, when the file is written.
 """
 
 from __future__ import annotations
@@ -36,20 +36,20 @@ SOURCES = (
      "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv"),
 )
 
-# En `universe/` y no en `data/`: este fichero forma parte del proyecto y tiene que
-# viajar con git y con la imagen de Docker, mientras que `data/` esta excluido de
-# ambos porque contiene la base de datos.
+# In `universe/` and not in `data/`: this file is part of the project and has to
+# travel with git and with the Docker image, whereas `data/` is excluded from both
+# because it holds the database.
 DEFAULT_OUT = Path(__file__).resolve().parent.parent / "universe" / "sp500.txt"
 SYMBOL_RE = re.compile(r"^[A-Z][A-Z.\-]{0,6}$")
 
 
 def to_yahoo(symbol: str) -> str:
-    """BRK.B -> BRK-B. Yahoo usa guion para las clases de accion."""
+    """BRK.B -> BRK-B. Yahoo uses a hyphen for share classes."""
     return symbol.strip().upper().replace(".", "-")
 
 
 def fetch() -> tuple[list[tuple[str, str, str]], str]:
-    """Devuelve [(simbolo, nombre, sector)] y el nombre de la fuente usada."""
+    """Returns [(symbol, name, sector)] and the name of the source used."""
     headers = {"User-Agent": "financial-agent/0.1 (universe fetch)"}
     errors: list[str] = []
 
@@ -76,7 +76,7 @@ def fetch() -> tuple[list[tuple[str, str, str]], str]:
                 (row.get("GICS Sector") or "").strip(),
             ))
 
-        # Un indice con menos de 400 nombres significa que el CSV cambio de forma.
+        # An index with fewer than 400 names means the CSV changed shape.
         if len(entries) < 400:
             errors.append(f"{name}: solo {len(entries)} simbolos validos, formato inesperado")
             continue

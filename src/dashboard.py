@@ -1,13 +1,13 @@
-"""Ensamblado de los datos que consume el frontend.
+"""Assembly of the data the frontend consumes.
 
-Se mantiene separado del servidor HTTP para que sea testeable sin abrir sockets,
-y separado del ciclo porque solo lee: no contacta con el broker ni con el LLM.
-Consecuencia practica: el dashboard funciona sin conexion y no puede alterar
-nada, ni por accidente ni por un fallo.
+It is kept apart from the HTTP server so it is testable without opening sockets,
+and apart from the cycle because it only reads: it contacts neither the broker
+nor the LLM. Practical consequence: the dashboard works offline and cannot alter
+anything, neither by accident nor through a bug.
 
-El precio "actual" que se muestra es el ultimo registrado en `market_snapshots`,
-no una cotizacion en vivo. Se etiqueta como tal en la interfaz: mentir sobre la
-frescura de un precio es peor que no darlo.
+The "current" price shown is the last one recorded in `market_snapshots`, not a
+live quote. It is labelled as such in the interface: lying about a price's
+freshness is worse than not giving it.
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ from .db import Database
 
 
 def build_dashboard(db: Database, *, portfolio_name: str) -> dict[str, Any]:
-    """Payload completo del dashboard. Un solo viaje: la base es local y
-    pequena, y asi el frontend no encadena peticiones."""
+    """The dashboard's full payload. A single trip: the database is local and
+    small, and this way the frontend does not chain requests."""
     portfolio = _fetch_portfolio(db, portfolio_name)
     if portfolio is None:
         return {
@@ -81,7 +81,7 @@ def _fetch_portfolio(db: Database, name: str) -> dict[str, Any] | None:
 
 
 def list_portfolios(db: Database) -> list[dict[str, Any]]:
-    """Para el selector de cartera del frontend."""
+    """For the frontend's book selector."""
     return db.query(
         "select p.name, p.mode, p.created_at, "
         "       (select count(*) from cycles c where c.portfolio_id = p.id) as cycles "
@@ -90,7 +90,7 @@ def list_portfolios(db: Database) -> list[dict[str, Any]]:
 
 
 def _latest_prices(db: Database) -> dict[str, dict[str, Any]]:
-    """Ultimo precio observado por simbolo, con su fecha."""
+    """Last observed price per symbol, with its date."""
     rows = db.query(
         "select symbol, price, as_of from market_snapshots "
         "where id in (select max(id) from market_snapshots group by symbol)"
@@ -119,8 +119,8 @@ def _open_positions(
             row["market_value"] = round(last * qty, 2)
             row["unrealized_pnl"] = round((last - entry) * qty, 2)
             row["unrealized_pnl_pct"] = round((last / entry - 1) * 100, 2)
-            # Cuanto queda hasta el stop, en % del precio actual: la medida de
-            # cuanto respira la posicion.
+            # How far there is to the stop, in % of the current price: the measure
+            # of how much room the position has.
             stop = row["stop_price"]
             row["stop_distance_pct"] = (
                 round((last / stop - 1) * 100, 2) if stop else None
@@ -168,10 +168,10 @@ def _cycles(db: Database, portfolio_id: str) -> list[dict[str, Any]]:
 
 
 def _decisions(db: Database, portfolio_id: str) -> list[dict[str, Any]]:
-    """Decisiones con el veredicto de riesgo asociado.
+    """Decisions with their associated risk verdict.
 
-    Es la tabla que da sentido al experimento: junta lo que el modelo propuso
-    con lo que el Risk Manager permitio.
+    It is the table that gives the experiment its meaning: it joins what the
+    model proposed with what the Risk Manager allowed.
     """
     rows = db.query(
         "select d.id, d.created_at, d.symbol, d.kind, d.action, d.conviction, "
@@ -200,10 +200,10 @@ def _orders(db: Database, portfolio_id: str) -> list[dict[str, Any]]:
 
 
 def _conviction_histogram(db: Database, portfolio_id: str) -> list[dict[str, Any]]:
-    """Reparto de la conviccion declarada, separando compras de mantenimientos.
+    """Spread of the declared conviction, separating buys from holds.
 
-    Si el modelo declara 80 en todo, la conviccion no informa de nada y la vista
-    de calibracion lo confirmara.
+    If the model declares 80 for everything, conviction informs nothing and the
+    calibration view will confirm it.
     """
     return db.query(
         "select (cast(conviction / 10 as integer) * 10) as bucket, "
@@ -279,8 +279,8 @@ def _summary(
         "win_rate_pct": (
             round(100.0 * wins / len(closed_positions), 1) if closed_positions else None
         ),
-        # Beneficio bruto / perdida bruta. Por debajo de 1 el sistema pierde
-        # dinero aunque acierte mas veces de las que falla.
+        # Gross profit / gross loss. Below 1 the system loses money even when it
+        # is right more often than it is wrong.
         "profit_factor": (
             round(gross_win / gross_loss, 2) if gross_loss > 0
             else (None if gross_win == 0 else float("inf"))
@@ -303,8 +303,8 @@ def _summary(
 
 
 def _max_drawdown_pct(equity_curve: list[dict[str, Any]]) -> float | None:
-    """Maxima caida desde un maximo previo. Es la medida de riesgo que importa:
-    dice cuanto habria dolido en el peor momento."""
+    """Largest drop from a previous peak. It is the risk measure that matters:
+    it says how much it would have hurt at the worst moment."""
     peak = None
     worst = 0.0
     for row in equity_curve:

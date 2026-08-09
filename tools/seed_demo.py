@@ -1,14 +1,14 @@
 #!/usr/bin/env python
-"""Rellena una cartera de demostracion para ver el dashboard sin esperar
-semanas de ciclos reales.
+"""Fills a demonstration book so the dashboard can be seen without waiting weeks
+for real cycles.
 
-    python tools/seed_demo.py            crea la cartera 'demo'
-    python tools/seed_demo.py --reset    la borra y la vuelve a crear
+    python tools/seed_demo.py            creates the 'demo' book
+    python tools/seed_demo.py --reset    deletes it and creates it again
 
-Los datos son sinteticos y deterministas (generador congruente propio, sin
-`random`, para que dos ejecuciones den lo mismo). La cartera se llama `demo`
-para que nunca se confunda con la real: cambia PORTFOLIO_NAME en `.env` o usa
-el selector del dashboard para verla.
+The data is synthetic and deterministic (a congruential generator of our own,
+without `random`, so two runs give the same thing). The book is called `demo` so
+it is never confused with the real one: change PORTFOLIO_NAME in `.env` or use
+the dashboard's selector to see it.
 """
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ CYCLES = 40
 
 
 class Deterministic:
-    """Generador congruente lineal. Sustituye a `random` para que la demo sea
-    reproducible sin depender de una semilla global."""
+    """Linear congruential generator. It replaces `random` so the demo is
+    reproducible without depending on a global seed."""
 
     def __init__(self, seed: int = 20260807) -> None:
         self.state = seed
@@ -49,12 +49,12 @@ class Deterministic:
 
 
 def backdate_cycle(db: Database, cycle_id: str, when: datetime) -> None:
-    """Retrasa las marcas de tiempo de un ciclo ya insertado.
+    """Pushes the timestamps of an already-inserted cycle back in time.
 
-    Los metodos de `Database` sellan todo con la hora actual, que es lo correcto
-    en produccion pero deja la demo con 40 ciclos en el mismo instante: la curva
-    de capital saldria plana en el eje X y los dias de tenencia a cero. Aqui se
-    reescriben las marcas para simular 40 dias reales.
+    `Database`'s methods stamp everything with the current time, which is right in
+    production but leaves the demo with 40 cycles at the same instant: the equity
+    curve would come out flat on the X axis and the holding days at zero. Here the
+    marks are rewritten to simulate 40 real days.
     """
     stamp = when.isoformat()
     db.execute("update cycles set started_at = ?, finished_at = ? where id = ?",
@@ -69,14 +69,14 @@ def backdate_cycle(db: Database, cycle_id: str, when: datetime) -> None:
 
 
 def _demo_profile(db: Database) -> str:
-    """Crea el perfil de la demo y devuelve el id de su cartera.
+    """Creates the demo's profile and returns its book id.
 
-    **Hace falta desde F6.4**, y hasta F4 no se noto. Antes esto solo llamaba a
-    `ensure_portfolio`, que deja una cartera sin perfil: la consola la encontraba
-    por nombre y el dashboard viejo la ofrecia en su selector, asi que la demo
-    parecia funcionar. La interfaz nueva navega por perfil (`/p/demo/...`), asi
-    que una cartera huerfana es invisible: `/api/profiles` devolvia una lista
-    vacia y la demo del README no enseñaba nada.
+    **It has been needed since F6.4**, and it went unnoticed until F4. This used
+    to call only `ensure_portfolio`, which leaves a book with no profile: the
+    console found it by name and the old dashboard offered it in its selector, so
+    the demo seemed to work. The new interface navigates by profile
+    (`/p/demo/...`), so an orphan book is invisible: `/api/profiles` returned an
+    empty list and the README's demo showed nothing.
     """
     existente = db.get_profile_by_name(DEMO_NAME)
     if existente is not None:
@@ -214,7 +214,7 @@ def seed(db: Database) -> None:
             if not buying:
                 continue
 
-            # Veredicto de riesgo, con los mismos motivos que el sistema real.
+            # Risk verdict, with the same reasons as the real system.
             stop = price - atr * 2
             qty = int((equity * 0.01) / (price - stop))
             qty = min(qty, int((equity * 0.20) / price), int(cash / price))
@@ -312,10 +312,10 @@ def reset(db: Database) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Genera datos de demostracion.")
-    # El default sale de `DB_PATH` como en el resto de comandos. Estaba escrito a
-    # mano —"data/trading.db"— y eso hacia que `DB_PATH=otra.db python
-    # tools/seed_demo.py` escribiera en la base de siempre sin decir nada: en
-    # Docker coincidia por casualidad, porque el directorio de trabajo es /app.
+    # The default comes from `DB_PATH` as in every other command. It used to be
+    # written by hand —"data/trading.db"— and that made `DB_PATH=other.db python
+    # tools/seed_demo.py` write to the usual database without saying anything: in
+    # Docker it coincided by chance, because the working directory is /app.
     parser.add_argument(
         "--db", default=Infra.load().db_path, help="Ruta de la base."
     )

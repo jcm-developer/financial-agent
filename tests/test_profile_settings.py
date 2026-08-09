@@ -1,15 +1,16 @@
-"""F6.4 y F6.3: los parametros del ciclo salen del perfil, y quedan registrados.
+"""F6.4 and F6.3: the cycle's parameters come from the profile, and get recorded.
 
-Antes de F6.4 el ciclo leia sus parametros del `.env`. Eso hacia que un
-experimento no fuera reproducible: el fichero se editaba y el historico anterior
-quedaba sin explicacion. Lo que se prueba aqui es esa cadena entera:
+Before F6.4 the cycle read its parameters from the `.env`. That made an
+experiment irreproducible: the file was edited and the earlier history was left
+without an explanation. What is tested here is that whole chain:
 
-  * una fila de `agent_settings` produce los `Settings` correctos,
-  * lo que no cuadra se rechaza **al resolver**, con el nombre del perfil, y no
-    tres funciones despues dentro de yfinance,
-  * elegir perfil nunca es una adivinanza,
-  * el ciclo deja copia de sus parametros (F6.3) y esa copia no lleva secretos,
-  * una base que ya existia recibe las columnas nuevas.
+  * a row of `agent_settings` produces the right `Settings`,
+  * what does not add up is refused **while resolving**, with the profile's name,
+    and not three functions later inside yfinance,
+  * choosing a profile is never guesswork,
+  * the cycle leaves a copy of its parameters (F6.3) and that copy carries no
+    secrets,
+  * a database that already existed receives the new columns.
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ INFRA = Infra(
 
 @pytest.fixture
 def perfil(db):
-    """Un perfil activo con universo, listo para resolver."""
+    """An active profile with a universe, ready to resolve."""
     profile_id = db.create_profile(name="experimento-01", description="control")
     db.set_profile_universe(profile_id, ["AAPL", "MSFT"])
     db.set_profile_status(profile_id, "active")
@@ -48,7 +49,7 @@ def perfil(db):
 # -- Resolucion --------------------------------------------------------------
 
 
-def test_los_settings_salen_de_la_fila_del_perfil(db, perfil):
+def test_the_settings_come_from_the_profiles_row(db, perfil):
     db.update_settings(perfil, {
         "initial_budget": 25_000.0,
         "llm_model": "otro/modelo",
@@ -70,12 +71,12 @@ def test_los_settings_salen_de_la_fila_del_perfil(db, perfil):
     assert settings.sim_slippage_bps == 12.0
     assert settings.watchlist == ("AAPL", "MSFT")
     assert settings.profile_id == perfil
-    # La cartera se llama igual que el perfil: es como la encuentra el ciclo.
+    # The book is named after the profile: that is how the cycle finds it.
     assert settings.portfolio_name == "experimento-01"
 
 
-def test_la_infraestructura_sigue_viniendo_del_entorno(db, perfil):
-    """`agent_settings` no guarda rutas ni claves: eso es de la maquina."""
+def test_the_infrastructure_still_comes_from_the_environment(db, perfil):
+    """`agent_settings` stores no paths and no keys: that belongs to the machine."""
     settings = resolve_settings(db, perfil, infra=INFRA)
 
     assert settings.db_path == INFRA.db_path
@@ -83,7 +84,7 @@ def test_la_infraestructura_sigue_viniendo_del_entorno(db, perfil):
     assert settings.log_level == INFRA.log_level
 
 
-def test_los_limites_de_riesgo_pasan_por_los_deslizadores(db, perfil):
+def test_the_risk_limits_go_through_the_sliders(db, perfil):
     db.update_settings(perfil, {"risk_profile": 10, "diversification": 1})
 
     settings = resolve_settings(db, perfil, infra=INFRA)
@@ -93,7 +94,7 @@ def test_los_limites_de_riesgo_pasan_por_los_deslizadores(db, perfil):
     assert settings.risk_summary and "10/10" in settings.risk_summary
 
 
-def test_el_modo_avanzado_llega_hasta_el_risk_manager(db, perfil):
+def test_advanced_mode_reaches_the_risk_manager(db, perfil):
     db.update_settings(perfil, {
         "advanced_overrides": 1, "max_open_positions": 2, "min_conviction": 90,
     })
@@ -104,7 +105,7 @@ def test_el_modo_avanzado_llega_hasta_el_risk_manager(db, perfil):
     assert settings.risk.min_conviction == 90
 
 
-def test_el_screener_se_arma_desde_el_perfil(db, perfil):
+def test_the_screener_is_assembled_from_the_profile(db, perfil):
     db.update_settings(perfil, {
         "universe_file": "universe/sp500.txt",
         "screener_top_n": 30,
@@ -120,15 +121,15 @@ def test_el_screener_se_arma_desde_el_perfil(db, perfil):
     assert settings.screener.min_price == 12.0
 
 
-def test_sin_universo_no_hay_embudo(db, perfil):
+def test_with_no_universe_there_is_no_funnel(db, perfil):
     settings = resolve_settings(db, perfil, infra=INFRA)
 
     assert not settings.screener.enabled
 
 
-def test_con_fichero_de_universo_la_watchlist_es_opcional(db):
-    """El universo sustituye a la watchlist, asi que un perfil sin simbolos
-    propios pero con fichero si es utilizable."""
+def test_with_a_universe_file_the_watchlist_is_optional(db):
+    """The universe replaces the watchlist, so a profile with no symbols of its
+    own but with a file is usable."""
     profile_id = db.create_profile(name="embudo")
     db.update_settings(profile_id, {"universe_file": "universe/sp500.txt"})
 
@@ -138,43 +139,43 @@ def test_con_fichero_de_universo_la_watchlist_es_opcional(db):
     assert settings.screener.enabled
 
 
-# -- Lo que se rechaza al resolver -------------------------------------------
+# -- What is refused while resolving -----------------------------------------
 
 
-def test_un_perfil_sin_nada_que_analizar_se_rechaza(db):
+def test_a_profile_with_nothing_to_analyse_is_refused(db):
     profile_id = db.create_profile(name="vacio")
 
     with pytest.raises(ConfigError, match="nada que analizar"):
         resolve_settings(db, profile_id, infra=INFRA)
 
 
-def test_el_intervalo_de_un_minuto_no_sirve_para_el_ciclo(db, perfil):
-    """`agent_settings.bar_interval` admite '1m' porque la columna la comparte
-    con el ingestor. El ciclo no: con barras de un minuto no hay historico para
-    los indicadores largos."""
+def test_the_one_minute_interval_is_no_good_for_the_cycle(db, perfil):
+    """`agent_settings.bar_interval` admits '1m' because the column is shared
+    with the ingestor. The cycle does not: with one-minute bars there is no
+    history for the long indicators."""
     db.update_settings(perfil, {"bar_interval": "1m"})
 
     with pytest.raises(ConfigError, match="ingestor"):
         resolve_settings(db, perfil, infra=INFRA)
 
 
-def test_el_error_nombra_el_perfil(db, perfil):
-    """Con varios experimentos a la vez, un error sin nombre obliga a adivinar
-    cual de ellos esta mal configurado."""
+def test_the_error_names_the_profile(db, perfil):
+    """With several experiments at once, an error with no name forces guessing
+    which of them is misconfigured."""
     db.update_settings(perfil, {"bar_interval": "1m"})
 
     with pytest.raises(ConfigError, match="experimento-01"):
         resolve_settings(db, perfil, infra=INFRA)
 
 
-def test_un_perfil_inexistente_se_rechaza(db):
+def test_a_profile_that_does_not_exist_is_refused(db):
     with pytest.raises(ConfigError, match="no existe"):
         resolve_settings(db, "no-existe", infra=INFRA)
 
 
-def test_sin_clave_de_modelo_falla_al_resolver(db, perfil):
-    """Mejor aqui que dentro de la primera llamada al LLM, con el ciclo ya
-    abierto y filas escritas."""
+def test_with_no_model_key_it_fails_while_resolving(db, perfil):
+    """Better here than inside the first call to the LLM, with the cycle already
+    open and rows written."""
     sin_clave = Infra(db_path="x.db", model_api_key="")
 
     with pytest.raises(ConfigError, match="NVIDIA_API_KEY"):
@@ -184,18 +185,18 @@ def test_sin_clave_de_modelo_falla_al_resolver(db, perfil):
 # -- Eleccion de perfil ------------------------------------------------------
 
 
-def test_sin_perfiles_el_mensaje_explica_como_empezar(db):
+def test_with_no_profiles_the_message_explains_how_to_start(db):
     with pytest.raises(ConfigError, match="import-profile"):
         select_profile(db)
 
 
-def test_un_unico_perfil_activo_se_elige_solo(db, perfil):
+def test_a_single_active_profile_is_chosen_on_its_own(db, perfil):
     assert select_profile(db) == perfil
 
 
-def test_con_varios_activos_hay_que_elegir(db, perfil):
-    """Ejecutar un ciclo contra el experimento equivocado ensucia dos historicos
-    a la vez y no se puede deshacer."""
+def test_with_several_active_one_must_be_chosen(db, perfil):
+    """Running a cycle against the wrong experiment dirties two histories at once
+    and cannot be undone."""
     otro = db.create_profile(name="experimento-02")
     db.set_profile_status(otro, "active")
 
@@ -203,22 +204,22 @@ def test_con_varios_activos_hay_que_elegir(db, perfil):
         select_profile(db)
 
 
-def test_sin_ninguno_activo_tampoco_se_adivina(db):
+def test_with_none_active_nothing_is_guessed_either(db):
     db.create_profile(name="borrador")
 
     with pytest.raises(ConfigError, match="Ningun perfil esta activo"):
         select_profile(db)
 
 
-def test_el_nombre_manda_sobre_el_estado(db, perfil):
-    """Se puede operar a mano contra un perfil pausado; lo que no se puede es
-    que se elija sin decirlo."""
+def test_the_name_wins_over_the_status(db, perfil):
+    """Trading by hand against a paused profile is allowed; what is not allowed
+    is it being chosen without saying so."""
     pausado = db.create_profile(name="pausado")
 
     assert select_profile(db, name="pausado") == pausado
 
 
-def test_un_nombre_que_no_existe_lista_los_que_si(db, perfil):
+def test_a_name_that_does_not_exist_lists_the_ones_that_do(db, perfil):
     with pytest.raises(ConfigError, match="experimento-01"):
         select_profile(db, name="typo")
 
@@ -245,7 +246,7 @@ def _env_settings(**overrides) -> Settings:
     return Settings(**base)
 
 
-def test_importar_el_env_deja_un_perfil_utilizable(db):
+def test_importing_the_env_leaves_a_usable_profile(db):
     profile_id = import_env_profile(db, _env_settings())
 
     assert db.get_profile(profile_id)["status"] == "active"
@@ -255,32 +256,32 @@ def test_importar_el_env_deja_un_perfil_utilizable(db):
     assert settings.watchlist == ("AAPL", "TSLA")
 
 
-def test_importar_conserva_los_limites_exactos_del_env(db):
-    """Se importan como modo avanzado a proposito.
+def test_importing_keeps_the_exact_limits_of_the_env(db):
+    """They are imported as advanced mode on purpose.
 
-    El `.env` traia nueve numeros explicitos; sustituirlos por los que salen de
-    `risk_profile=5` cambiaria el comportamiento del agente en la misma
-    operacion en la que solo se pretendia mover la configuracion de sitio.
+    The `.env` carried nine explicit numbers; replacing them with the ones coming
+    out of `risk_profile=5` would change the agent's behaviour in the very
+    operation that was only meant to move the configuration somewhere else.
     """
     profile_id = import_env_profile(db, _env_settings())
 
-    fila = db.get_settings(profile_id)
-    assert fila["advanced_overrides"] == 1
-    assert fila["risk_per_trade_pct"] == pytest.approx(1.5)
-    assert fila["max_open_positions"] == 7
+    row = db.get_settings(profile_id)
+    assert row["advanced_overrides"] == 1
+    assert row["risk_per_trade_pct"] == pytest.approx(1.5)
+    assert row["max_open_positions"] == 7
 
     settings = resolve_settings(db, profile_id, infra=INFRA)
     assert settings.risk.risk_per_trade_pct == pytest.approx(1.5)
     assert settings.risk.max_open_positions == 7
 
 
-def test_el_nombre_explicito_gana_al_del_env(db):
+def test_the_explicit_name_beats_the_one_in_the_env(db):
     profile_id = import_env_profile(db, _env_settings(), name="otro-nombre")
 
     assert db.get_profile(profile_id)["name"] == "otro-nombre"
 
 
-def test_importar_dos_veces_el_mismo_nombre_falla(db):
+def test_importing_the_same_name_twice_fails(db):
     from src.db import DatabaseError
 
     import_env_profile(db, _env_settings())
@@ -289,12 +290,12 @@ def test_importar_dos_veces_el_mismo_nombre_falla(db):
         import_env_profile(db, _env_settings())
 
 
-# -- F6.3: copia de los parametros en el ciclo -------------------------------
+# -- F6.3: the copy of the parameters in the cycle ---------------------------
 
 
-def test_el_snapshot_no_lleva_secretos():
-    """El historico se exporta y se abre con DB Browser: una clave dentro de una
-    columna JSON no se ve venir."""
+def test_the_snapshot_carries_no_secrets():
+    """The history gets exported and opened with DB Browser: a key inside a JSON
+    column is not something you see coming."""
     datos = _env_settings(model_api_key="nvapi-secreto").snapshot()
 
     assert "model_api_key" not in datos
@@ -302,7 +303,7 @@ def test_el_snapshot_no_lleva_secretos():
     assert "db_path" not in datos
 
 
-def test_el_snapshot_lleva_los_limites_efectivos():
+def test_the_snapshot_carries_the_effective_limits():
     datos = _env_settings().snapshot()
 
     assert datos["risk"]["risk_per_trade_pct"] == pytest.approx(1.5)
@@ -310,7 +311,7 @@ def test_el_snapshot_lleva_los_limites_efectivos():
     assert datos["watchlist"] == ["AAPL", "TSLA"]
 
 
-def test_el_ciclo_guarda_y_devuelve_sus_parametros(db, perfil):
+def test_the_cycle_stores_and_returns_its_settings(db, perfil):
     portfolio_id = db.get_profile(perfil)["portfolio_id"]
     settings = resolve_settings(db, perfil, infra=INFRA)
 
@@ -326,10 +327,10 @@ def test_el_ciclo_guarda_y_devuelve_sus_parametros(db, perfil):
     assert guardado["risk"]["max_open_positions"] == settings.risk.max_open_positions
 
 
-def test_un_ciclo_sin_copia_devuelve_none(db, perfil):
-    """Los ciclos anteriores a F6.3 no la llevan. Es informacion que falta, no un
-    cero: comparar experimentos exige distinguir "corrio con estos ajustes" de
-    "no se sabe con que ajustes corrio".
+def test_a_cycle_with_no_copy_returns_none(db, perfil):
+    """Cycles predating F6.3 do not carry it. It is missing information, not a
+    zero: comparing experiments demands telling "it ran with these settings" from
+    "we do not know which settings it ran with".
     """
     portfolio_id = db.get_profile(perfil)["portfolio_id"]
     cycle_id = db.start_cycle(
@@ -343,21 +344,21 @@ def test_un_ciclo_sin_copia_devuelve_none(db, perfil):
 # -- Coherencia entre esquema y codigo ---------------------------------------
 
 
-def test_todo_limite_derivable_tiene_columna_anulable(db, perfil):
-    """Si un limite de `RiskLimits` no tiene columna, el modo avanzado no puede
-    fijarlo y el formulario de F6.8 tendria un campo que no guarda nada."""
-    fila = db.get_settings(perfil)
+def test_every_derivable_limit_has_a_nullable_column(db, perfil):
+    """If a limit of `RiskLimits` has no column, advanced mode cannot set it and
+    F6.8's form would have a field that stores nothing."""
+    row = db.get_settings(perfil)
 
     for campo in DERIVED_FIELDS:
-        assert campo in fila, f"falta la columna {campo} en agent_settings"
-        assert fila[campo] is None, f"{campo} deberia nacer NULL"
+        assert campo in row, f"falta la columna {campo} en agent_settings"
+        assert row[campo] is None, f"{campo} deberia nacer NULL"
 
 
-def test_las_columnas_nuevas_aparecen_en_una_base_que_ya_existia(tmp_path):
-    """`create table if not exists` no anade columnas a una tabla existente.
+def test_the_new_columns_appear_in_a_database_that_already_existed(tmp_path):
+    """`create table if not exists` does not add columns to an existing table.
 
-    Sin la migracion, una columna nueva funcionaria en una base recien creada y
-    faltaria en la que ya esta corriendo, que es el peor reparto posible.
+    Without the migration, a new column would work on a freshly created database
+    and be missing from the one already running, which is the worst possible split.
     """
     ruta = tmp_path / "vieja.db"
     nuevas = ADDED_COLUMNS["agent_settings"]
@@ -365,7 +366,7 @@ def test_las_columnas_nuevas_aparecen_en_una_base_que_ya_existia(tmp_path):
     with Database(path=ruta) as database:
         database.create_profile(name="anterior")
 
-    # Se simula la base de antes de F6.4 quitando las columnas nuevas.
+    # The pre-F6.4 database is simulated by dropping the new columns.
     plana = sqlite3.connect(ruta)
     for columna in nuevas:
         plana.execute(f"alter table agent_settings drop column {columna}")
@@ -375,14 +376,14 @@ def test_las_columnas_nuevas_aparecen_en_una_base_que_ya_existia(tmp_path):
     assert not (set(nuevas) & restantes), "la simulacion no quito las columnas"
 
     with Database(path=ruta) as database:
-        fila = database.get_settings(database.list_profiles()[0]["id"])
+        row = database.get_settings(database.list_profiles()[0]["id"])
 
     for columna in nuevas:
-        assert columna in fila, f"la migracion no anadio {columna}"
+        assert columna in row, f"la migracion no anadio {columna}"
 
 
-def test_la_migracion_es_idempotente(tmp_path):
-    """Se ejecuta en cada arranque: la segunda vez no debe hacer nada."""
+def test_the_migration_is_idempotent(tmp_path):
+    """It runs on every startup: the second time it must do nothing."""
     ruta = tmp_path / "repetida.db"
 
     with Database(path=ruta) as database:

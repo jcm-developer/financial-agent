@@ -1,8 +1,9 @@
-"""Tests del screener y de la carga del universo.
+"""Tests of the screener and of loading the universe.
 
-Lo que mas importa comprobar son los descartes duros: si un valor ilíquido se
-cuela, el broker simulado supondra que se puede comprar al precio de apertura sin
-mover el mercado, y eso es una mentira que contamina el experimento entero.
+What matters most to check are the hard discards: if an illiquid name slips
+through, the simulated broker will assume it can be bought at the opening price
+without moving the market, and that is a lie that contaminates the whole
+experiment.
 """
 
 from __future__ import annotations
@@ -69,8 +70,8 @@ def test_a_penny_stock_is_rejected():
 
 
 def test_an_illiquid_symbol_is_rejected():
-    """El motivo real: el simulador supone ejecucion al precio de apertura sin
-    impacto de mercado, y en un ilíquido eso no se sostiene."""
+    """The real reason: the simulator assumes execution at the opening price with
+    no market impact, and in an illiquid name that does not hold."""
     report = screen({"ILIQUIDO": make_bars(80, volume=100.0)}, LIMITS)
 
     assert report.candidates == []
@@ -78,9 +79,9 @@ def test_an_illiquid_symbol_is_rejected():
 
 
 def choppy_bars(count: int = 80, *, base: float = 100.0, swing: float = 0.10):
-    """Serie que alterna subidas y bajadas fuertes: volatilidad alta de verdad.
-    Una serie que sube en linea recta tiene volatilidad casi nula, aunque suba
-    mucho — la volatilidad mide dispersion de retornos, no recorrido."""
+    """A series alternating strong rises and falls: genuinely high volatility.
+    A series rising in a straight line has almost no volatility, however far it
+    rises — volatility measures the dispersion of returns, not the distance."""
     origin = datetime(2026, 1, 1, tzinfo=timezone.utc)
     bars = []
     for index in range(count):
@@ -103,7 +104,7 @@ def test_an_extremely_volatile_symbol_is_rejected():
 
 
 def test_a_steadily_rising_series_is_not_considered_volatile():
-    """Contraparte del anterior: recorrido no es lo mismo que volatilidad."""
+    """Counterpart of the previous one: distance is not the same as volatility."""
     report = screen({"TRANQUILO": make_bars(80)}, LIMITS)
 
     assert "demasiado_volatil" not in report.rejected
@@ -136,8 +137,8 @@ def test_an_uptrend_scores_higher_than_a_downtrend():
 
 
 def test_the_components_add_up_to_the_score():
-    """Si dejaran de cuadrar, el informe del screener estaria mintiendo sobre por
-    que entro un candidato."""
+    """If they stopped adding up, the screener's report would be lying about why
+    a candidate got in."""
     from src.indicators import compute_snapshot
 
     score, components, _ = score_symbol(compute_snapshot(make_bars(250)))
@@ -146,11 +147,11 @@ def test_the_components_add_up_to_the_score():
 
 
 def indicators(**overrides):
-    """Indicadores de un activo en tendencia sana, para variar uno a uno.
+    """Indicators of an asset in a healthy trend, to vary them one at a time.
 
-    Se construyen a mano en lugar de derivarlos de series sinteticas porque lo que
-    se quiere probar es la logica de puntuacion, no el calculo de indicadores —que
-    ya tiene sus propios tests.
+    They are built by hand instead of derived from synthetic series because what
+    is being tested is the scoring logic, not the computation of indicators —which
+    already has its own tests.
     """
     base = {
         "price": 100.0, "sma_50": 95.0, "sma_200": 90.0, "rsi_14": 45.0,
@@ -162,8 +163,8 @@ def indicators(**overrides):
 
 
 def test_overbought_scores_lower_than_a_pullback():
-    """El objetivo declarado del screener: no perseguir el precio. Misma tendencia,
-    mismo momento, mismo volumen; solo cambia el RSI."""
+    """The screener's declared goal: not to chase the price. Same trend, same
+    momentum, same volume; only the RSI changes."""
     pullback = score_symbol(indicators(rsi_14=45))[0]
     overbought = score_symbol(indicators(rsi_14=85))[0]
 
@@ -171,8 +172,8 @@ def test_overbought_scores_lower_than_a_pullback():
 
 
 def test_a_perfect_trend_does_not_rescue_an_overbought_setup():
-    """Este es el caso que fallaba cuando el RSI era un sumando: tendencia
-    impecable y momento maximo compensaban el castigo por sobrecompra."""
+    """This is the case that failed when the RSI was an addend: an impeccable
+    trend and maximum momentum made up for the overbought penalty."""
     overbought_perfect = score_symbol(indicators(
         rsi_14=90, return_60d_pct=40.0, volume_ratio=2.5,
     ))[0]
@@ -184,8 +185,8 @@ def test_a_perfect_trend_does_not_rescue_an_overbought_setup():
 
 
 def test_oversold_scores_below_a_pullback_too():
-    """Sobreventa puede ser un retroceso o una caida estructural; se penaliza,
-    pero menos que la sobrecompra."""
+    """Oversold can be a pullback or a structural fall; it is penalised, but less
+    than overbought."""
     pullback = score_symbol(indicators(rsi_14=45))[0]
     oversold = score_symbol(indicators(rsi_14=20))[0]
     overbought = score_symbol(indicators(rsi_14=85))[0]
@@ -201,8 +202,8 @@ def test_breaking_the_trend_lowers_the_score():
 
 
 def test_a_missing_rsi_is_penalised_but_not_zeroed():
-    """Sin RSI no se puede juzgar la situacion, pero el activo sigue siendo
-    analizable: se le baja la nota en lugar de descartarlo aqui."""
+    """With no RSI the situation cannot be judged, but the asset is still
+    analysable: its score is lowered instead of discarding it here."""
     known = score_symbol(indicators(rsi_14=45))[0]
     unknown = score_symbol(indicators(rsi_14=None))[0]
 
@@ -242,8 +243,8 @@ def test_ties_break_by_symbol_so_the_result_is_reproducible():
 # -- Modo control ------------------------------------------------------------
 
 def test_random_mode_ignores_the_score_but_keeps_the_hard_filters():
-    """Es el grupo de control: si el agente rinde igual con candidatos arbitrarios,
-    el filtro no aporta nada. Los descartes duros siguen aplicandose."""
+    """It is the control group: if the agent performs the same with arbitrary
+    candidates, the filter adds nothing. The hard discards still apply."""
     universe = {f"SYM{i}": make_bars(80, start=50 + i) for i in range(6)}
     universe["ILIQUIDO"] = make_bars(80, volume=10.0)
 
@@ -288,8 +289,8 @@ def test_load_universe_explains_what_to_do_when_the_file_is_missing(tmp_path):
 
 
 def test_the_bundled_sp500_file_is_usable():
-    """El fichero que viaja con el proyecto tiene que estar bien formado, en
-    notacion de Yahoo (guion, no punto)."""
+    """The file that travels with the project has to be well formed, in Yahoo's
+    notation (hyphen, not dot)."""
     from pathlib import Path
 
     path = Path(__file__).resolve().parent.parent / "universe" / "sp500.txt"

@@ -1,14 +1,14 @@
-"""F6.9: un ciclo sin modelo no se puede parecer a un dia tranquilo.
+"""F6.9: a cycle with no model must not look like a quiet day.
 
-`Analyst` se traga los `LLMError` a proposito —un 429 en un simbolo no debe
-tumbar el ciclo entero— y hasta F6.9 eso tenia un efecto secundario caro: con la
-cuota agotada, las 33 llamadas fallaban seguidas y el ciclo terminaba en
-'completed' con cero propuestas, exactamente igual que una sesion en la que el
-modelo no vio ninguna oportunidad. En un experimento de dos semanas eso son diez
-sesiones perdidas sin que el historico lo diga.
+`Analyst` swallows the `LLMError`s on purpose —a 429 on one symbol must not take
+the whole cycle down— and until F6.9 that had an expensive side effect: with the
+quota exhausted, all 33 calls failed in a row and the cycle ended in 'completed'
+with zero proposals, exactly like a session in which the model saw no
+opportunity. In a two-week experiment that is ten lost sessions with the history
+saying nothing about it.
 
-Lo que se fija aqui es la distincion: cuantas veces se pregunto, cuantas se
-quedaron sin respuesta, y cuando eso degrada el estado del ciclo.
+What is pinned down here is the distinction: how many times it was asked, how
+many got no answer, and when that degrades the cycle's status.
 """
 
 from __future__ import annotations
@@ -29,10 +29,10 @@ from src.llm import LLMError
 
 
 class BrokenLLM:
-    """Falla como falla la cuota agotada: en todas las llamadas.
+    """It fails the way an exhausted quota fails: on every call.
 
-    No hereda de `StubLLM` para que quede claro que no responde nunca; el
-    contador de llamadas se conserva porque es lo que se compara.
+    It does not inherit from `StubLLM` so it is clear it never answers; the call
+    counter is kept because that is what gets compared.
     """
 
     def __init__(self, *, fail_after: int = 0) -> None:
@@ -53,7 +53,7 @@ def _cycle_row(db: Database) -> dict:
 
 
 # ----------------------------------------------------------------------
-# Fallo total: el caso que motiva la tarea
+# Total failure: the case that motivates the task
 # ----------------------------------------------------------------------
 
 def test_a_cycle_where_every_call_fails_is_not_recorded_as_completed(db):
@@ -62,7 +62,7 @@ def test_a_cycle_where_every_call_fails_is_not_recorded_as_completed(db):
 
     report = make_cycle(db, settings, BrokenLLM(), market).run()
 
-    # Lo que pasaba antes de F6.9: 'completed' y cero propuestas.
+    # What used to happen before F6.9: 'completed' and zero proposals.
     assert report.status == "failed"
     assert report.proposals_buy == 0
     assert report.analyst_calls == 2
@@ -70,7 +70,7 @@ def test_a_cycle_where_every_call_fails_is_not_recorded_as_completed(db):
 
 
 def test_the_total_failure_is_visible_in_the_history_not_just_in_the_log(db):
-    """El log se pierde; la fila es lo que se mira dos semanas despues."""
+    """The log gets lost; the row is what is looked at two weeks later."""
     settings = make_settings()
     market = StubMarketData({s: rising() for s in WATCHLIST})
 
@@ -93,7 +93,7 @@ def test_the_summary_names_the_failures(db):
 
 
 def test_a_healthy_cycle_says_nothing_about_the_analyst(db):
-    """Un aviso que sale siempre acaba sin leerse."""
+    """A warning that is always on ends up unread."""
     settings = make_settings()
     market = StubMarketData({s: rising() for s in WATCHLIST})
 
@@ -107,8 +107,8 @@ def test_a_healthy_cycle_says_nothing_about_the_analyst(db):
 # ----------------------------------------------------------------------
 
 def test_a_partial_failure_keeps_the_cycle_valid(db):
-    """Con 1 fallo de 2 el ciclo si analizo y si pudo operar. Marcarlo 'failed'
-    mentiria en la otra direccion: pareceria que no se opero nada."""
+    """With 1 failure out of 2 the cycle did analyse and could trade. Marking it
+    'failed' would lie in the other direction: it would look as if nothing traded."""
     settings = make_settings()
     market = StubMarketData({s: rising() for s in WATCHLIST})
 
@@ -117,7 +117,7 @@ def test_a_partial_failure_keeps_the_cycle_valid(db):
     assert report.status == "completed"
     assert report.analyst_calls == 2
     assert report.analyst_failures == 1
-    # Y el que si se analizo llego hasta la orden.
+    # And the one that was analysed made it all the way to an order.
     assert report.orders_submitted == 1
 
 
@@ -134,12 +134,12 @@ def test_a_partial_failure_still_leaves_a_note_in_the_row(db):
 
 
 # ----------------------------------------------------------------------
-# Cuando NO hay que degradar
+# When NOT to degrade
 # ----------------------------------------------------------------------
 
 def test_counters_are_written_even_when_nothing_failed(db):
-    """0 fallos de 20 llamadas es informacion; distinguirlo de "no se sabe" es
-    el objetivo de la tarea, asi que el 0 se escribe."""
+    """0 failures out of 20 calls is information; telling that apart from
+    "nothing is known" is the task's goal, so the 0 gets written."""
     settings = make_settings()
     market = StubMarketData({s: rising() for s in WATCHLIST})
 
@@ -152,9 +152,9 @@ def test_counters_are_written_even_when_nothing_failed(db):
 
 
 def test_the_kill_switch_keeps_the_headline_of_its_cycle(db):
-    """Un ciclo detenido por perdida diaria no evalua entradas por definicion,
-    asi que sus pocas llamadas no son representativas: convertir 'halted' en
-    'failed' taparia el motivo de verdad."""
+    """A cycle halted by the daily loss does not evaluate entries by definition,
+    so its few calls are not representative: turning 'halted' into 'failed' would
+    hide the real reason."""
     settings = make_settings(
         watchlist=("AAPL",),
         risk=RiskLimits(min_conviction=65, max_daily_loss_pct=3.0),
@@ -174,9 +174,9 @@ def test_the_kill_switch_keeps_the_headline_of_its_cycle(db):
 
 
 def test_a_cycle_that_asked_nothing_is_not_a_failure(db):
-    """Sin candidatos no hay llamadas, y 0 de 0 no es un fallo. Sin esta
-    distincion, un dia en que el screener no selecciona nada se marcaria como
-    ciclo roto."""
+    """With no candidates there are no calls, and 0 out of 0 is not a failure.
+    Without this distinction, a day on which the screener selects nothing would be
+    marked as a broken cycle."""
     settings = make_settings(watchlist=())
     report = make_cycle(db, settings, BrokenLLM(), StubMarketData({})).run()
 
@@ -190,9 +190,9 @@ def test_a_cycle_that_asked_nothing_is_not_a_failure(db):
 # ----------------------------------------------------------------------
 
 def test_the_columns_reach_a_database_created_before_them(tmp_path):
-    """`create table if not exists` no anade columnas a una tabla que ya existe.
-    Sin `ADDED_COLUMNS`, F6.9 funcionaria en una base nueva y fallaria justo en
-    la que lleva el experimento en marcha."""
+    """`create table if not exists` does not add columns to a table that already
+    exists. Without `ADDED_COLUMNS`, F6.9 would work on a new database and fail on
+    precisely the one carrying the running experiment."""
     path = tmp_path / "vieja.db"
     with Database(path=path) as database:
         database.execute("alter table cycles drop column analyst_calls")

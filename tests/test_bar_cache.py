@@ -1,9 +1,9 @@
-"""Tests de la cache de barras.
+"""Tests of the bar cache.
 
-No tocan la red: se sustituye `yf.download` por un doble que devuelve DataFrames
-sinteticos. Lo que se comprueba es el comportamiento que hace la cache util —
-idempotencia, refresco incremental y no insistir con simbolos muertos— porque un
-error ahi se manifiesta como barras duplicadas o como un HTTP 429 de Yahoo.
+They do not touch the network: `yf.download` is replaced by a double returning
+synthetic DataFrames. What is checked is the behaviour that makes the cache
+useful —idempotence, incremental refresh and not insisting on dead symbols—
+because a mistake there shows up as duplicated bars or as an HTTP 429 from Yahoo.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ def db(tmp_path):
 
 
 def frame_for(symbols: list[str], *, days: int = 5, start_price: float = 100.0):
-    """DataFrame con el mismo aspecto que devuelve yfinance con group_by='ticker'."""
+    """A DataFrame shaped exactly as yfinance returns with group_by='ticker'."""
     index = pandas.to_datetime(
         [datetime(2026, 1, 5, tzinfo=timezone.utc) + timedelta(days=i) for i in range(days)]
     )
@@ -110,8 +110,8 @@ def test_bars_come_back_in_chronological_order(db, patch_yf):
 
 
 def test_refreshing_twice_does_not_duplicate_bars(db, patch_yf):
-    """La idempotencia es lo que permite reescribir la ultima barra en cada ciclo
-    mientras el mercado esta abierto, sin acumular filas."""
+    """Idempotence is what allows rewriting the last bar on every cycle while the
+    market is open, without piling up rows."""
     cache = BarCache(db, interval="1d")
     fake = patch_yf(FakeYFinance(frame_for(["AAPL"])))
 
@@ -138,7 +138,7 @@ def test_the_last_bar_is_overwritten_with_fresh_data(db, patch_yf):
 
 
 def test_symbols_are_batched_into_few_requests(db, patch_yf):
-    """El motivo de existir de la cache: 500 simbolos no pueden ser 500 peticiones."""
+    """The cache's reason to exist: 500 symbols cannot be 500 requests."""
     symbols = [f"SYM{i:03d}" for i in range(150)]
     cache = BarCache(db, interval="1d")
     fake = patch_yf(FakeYFinance(frame_for(symbols, days=2)))
@@ -181,8 +181,8 @@ def test_a_failing_download_is_counted_not_swallowed(db, patch_yf):
 
 
 def test_a_symbol_yahoo_does_not_know_stops_being_requested(db, patch_yf):
-    """Un ticker excluido del indice o fusionado dejaria de existir en Yahoo.
-    Insistir en cada ciclo gastaria peticiones para nada."""
+    """A ticker dropped from the index or merged away would stop existing at
+    Yahoo. Insisting every cycle would spend requests for nothing."""
     cache = BarCache(db, interval="1d")
     fake = patch_yf(FakeYFinance(frame_for(["AAPL"]), fail_for={"MUERTO"}))
 
