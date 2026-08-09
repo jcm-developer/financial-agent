@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (F9.7 apuntada: spike de noticias y fundamentales; un experimento activo con ocho ciclos horarios)
+Última actualización: 2026-08-10 (EXPERIMENT.md documenta la logica del ciclo; F5.8 y F9.3 apuntadas)
 
 ---
 
@@ -1152,6 +1152,31 @@ diez sesiones en silencio.
       **617 tests en verde** (1 nuevo), typecheck limpio, 24 de front, build correcto, y el
       flujo comprobado contra la API.
 
+- [ ] **F5.8** ⚠️ **«Cerrar experimento»: vender las posiciones y dejar el resultado
+      realizado.** Pedido el 2026-08-10, y es un hueco real: hoy solo se puede **pausar**, y
+      pausar no cierra nada. El resultado que se lee al final de la semana es **no
+      realizado** —la cartera valorada a mercado— y no el resultado de las decisiones que el
+      agente tomó. Peor: un experimento pausado con posiciones vivas **deja de comprobar
+      stops y objetivos**, porque eso solo pasa dentro de un ciclo.
+
+      **Tiene que vender por el broker, no por SQL.** Un `UPDATE` a `positions` dejaría el
+      histórico mintiendo: sin órdenes, sin fills, sin precio de salida y sin motivo. Y como
+      la API **no puede escribir en el histórico** (F3.3, y lo impide SQLite), esto sale por
+      subproceso como el ciclo — `run.py close-experiment --profile X` o un modo del ciclo.
+
+      Cuatro cosas que decidir al hacerlo:
+      - **A qué precio se vende.** La misma regla que todo lo demás: apertura de la barra
+        siguiente más deslizamiento en contra. Inventarse aquí un precio mejor que el que
+        tuvo el resto del experimento falsearía justo la cifra que se quiere leer.
+      - **Qué estado queda.** `profiles.status` tiene un CHECK de cuatro valores y **SQLite
+        no sabe alterar una restricción** —es lo que bloqueó el `degraded` de F6.9—, así que
+        un `closed` nuevo obligaría a reconstruir la tabla. Lo barato es reutilizar `paused`
+        o `archived` y que el cierre se note en que no quedan posiciones abiertas.
+      - **Es irreversible y hay que confirmarlo**, con el mismo criterio que el borrado:
+        vender la cartera entera no se deshace.
+      - **Qué pasa con el mercado cerrado.** O se espera a la apertura siguiente, o se dice
+        que no se puede cerrar ahora. Lo que no vale es vender a un precio inventado.
+
 ### F6 — Parámetros del agente
 
 - [x] **F6.1** Tabla `agent_settings` — hecha en F1.2, con `get_settings` / `update_settings`
@@ -1782,7 +1807,32 @@ más una lectura de DESIGN.md contra el código. Salieron cuatro cosas:
         decidirlo a propósito, no de descubrirlo en la factura.
 - [ ] **F9.2** Backtesting sobre el histórico de `bars_1m` que se vaya acumulando — es la
       razón de peso para empezar a guardarlo ya.
-- [ ] **F9.3** Ejecución intradía real aprovechando los datos de 1 minuto.
+- [ ] **F9.3** Ejecución intradía real aprovechando los datos de 1 minuto. **Concretado el
+      2026-08-10**, que era una línea suelta y ahora tiene un fallo medido detrás.
+
+      ⚠️ **El precio de ejecución no es el del momento de la orden.** `fill_price` es la
+      **apertura de la barra siguiente** (`MarketSnapshot`), y eso se diseñó para barras
+      diarias: decidir con el cierre de ayer y ejecutar en la apertura de hoy es realista, y
+      evita regalarse el hueco de apertura. **Con barras horarias esa protección casi
+      desaparece** —el cierre de las 10:00 y la apertura de las 10:00 son casi el mismo
+      precio— y aparece un desfase nuevo: el ciclo de las 10:20 decide con la barra
+      09:00–10:00 y **ejecuta al precio de las 10:00**, que para cuando el modelo ha
+      contestado tiene 20–40 minutos. No es sesgo de anticipación —no ve el futuro— pero
+      **tampoco es un precio al que se hubiera podido comprar**.
+
+      **La solución está ya escrita a medias en el proyecto:** `quotes_live` lleva el último
+      precio de cada símbolo, refrescado **cada minuto** por el ingestor, y hoy no llega al
+      circuito de operar (ver [EXPERIMENT.md](EXPERIMENT.md) §3). Usarlo como precio de
+      ejecución hace la orden ejecutable de verdad **y** conecta los dos relojes.
+
+      Dos condiciones antes de tocarlo:
+      - **La decisión sigue usando solo barras completas.** Lo que cambia es dónde se
+        ejecuta, no lo que ve el analista; si no, vuelve el sesgo que los tres precios
+        evitan.
+      - ⚠️ **Depende de F2.1c.** Si el feed europeo llega con ~15 minutos de desfase, el
+        «precio vivo» tampoco es vivo, y la mejora se queda en pasar de 20–40 minutos de
+        retraso a 15. Sigue siendo mejor, pero hay que saberlo antes de venderlo como
+        ejecución en tiempo real.
 - [ ] **F9.4** Noticias / sentimiento como entrada adicional del analista. **Depende de
       F9.7**: hasta saber qué fuentes hay y con qué cobertura, no se puede diseñar.
 - [ ] **F9.5** Notificaciones (Telegram) al abrir o cerrar posición.
@@ -1870,7 +1920,12 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
 4. **F8.5** — confirmar que el `.env` con claves reales nunca llegó a subirse.
 5. **F1.1 (resto)** — tirar el volumen de Docker con `docker compose down -v`. ⚠️ **No antes
    del experimento**: destruye `trading-data`.
-6. **F9** entera, que no bloquea nada — con **F9.7** recién añadida: el spike de noticias y fundamentales, del que depende F9.4.
+6. **F5.8** — «Cerrar experimento»: vender las posiciones para que el resultado sea
+   realizado y no una cartera valorada a mercado. Hace falta antes de dar por terminada
+   la primera tanda.
+7. **F9** entera, que no bloquea nada — con **F9.7** recién añadida (spike de noticias y
+   fundamentales, del que depende F9.4) y **F9.3** concretada (el precio de ejecución
+   arrastra 20–40 minutos con barras horarias).
 
 **Plan de las dos próximas semanas:**
 

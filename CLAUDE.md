@@ -4,17 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## Los tres documentos que hay que leer
+## Los cuatro documentos que hay que leer
 
 | Documento | Qué es | Cuándo leerlo |
 |---|---|---|
 | [TASKS.md](TASKS.md) | El plan de trabajo. Cada tarea tiene un id (`F4.9`) que se cita en los commits | **Antes de empezar cualquier cosa**, para saber si lo pedido ya tiene id y contexto |
+| [EXPERIMENT.md](EXPERIMENT.md) | La lógica real de un experimento: los dos relojes, la anatomía de un ciclo, los tres precios, qué ve el modelo y qué no | **Obligatorio antes de tocar `src/cycle.py`, el screener, el risk manager o el planificador** |
 | [DESIGN.md](DESIGN.md) | El sistema de diseño: paleta, escala, componentes, accesibilidad | **Obligatorio antes de tocar `app/`** |
 | [README.md](README.md) | Qué es el proyecto y qué esperar de él | Para entender el porqué del experimento |
 
 `TASKS.md` no es una lista de deseos: lleva las **decisiones de arquitectura** (D1–D8), los
 riesgos vigilados (R1–R8) y, en cada tarea cerrada, lo que se descartó y por qué. Si algo del
 código parece raro, la explicación suele estar ahí.
+
+`EXPERIMENT.md` describe **cómo opera el agente de verdad**, y existe porque esa lógica
+estaba repartida entre docstrings de seis módulos. Lleva además la lista de lo que el sistema
+**no** hace y dónde está apuntado, para no volver a deducirlo del código. Cuando algo de ahí
+deje de ser cierto, se corrige ahí.
 
 ---
 
