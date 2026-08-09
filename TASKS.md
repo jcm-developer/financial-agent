@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F8.7 cerrada: screener_min_turnover, con migración de renombrado para no deshacer FE.11 en silencio)
+Última actualización: 2026-08-09 (F5.3 cerrada: el alta de experimento cabe en un formulario, con las tres llamadas encadenadas)
 
 ---
 
@@ -965,7 +965,7 @@ diez sesiones en silencio.
 
       **610 tests en verde, typecheck limpio, 24 de front, build correcto**, y comprobado
       contra la API de verdad con la base de demostración (`tools/seed_demo.py`).
-- [ ] **F5.3** Alta de perfil **en un solo formulario**: nombre, descripción, **mercado**
+- [x] **F5.3** Alta de perfil **en un solo formulario** (2026-08-09): nombre, descripción, **mercado**
       (`eu` / `us`), capital inicial, universo, cuántos símbolos seguir en vivo, y las
       decisiones de estrategia y modelo —perfil de riesgo 1–10, diversificación 1–10,
       proveedor, modelo, clave— sin pasar por una segunda pantalla. Decidido 2026-08-08:
@@ -984,6 +984,35 @@ diez sesiones en silencio.
 
       La UI lee `/api/markets` para el selector: divisa, horario y suelo de liquidez de
       cada bolsa salen del registro, no cableados (F3.2).
+
+      **Hecho tal como estaba planificado**, en
+      [app/src/components/NewProfileForm.tsx](app/src/components/NewProfileForm.tsx), y con
+      la secuencia de tres llamadas comprobada contra la API de verdad: el alta responde
+      `draft`, el `PATCH` de ajustes devuelve qué cambió y solo entonces se activa.
+
+      Tres decisiones que salieron al escribirlo:
+      - ⚠️ **Un fallo después del alta se dice nombrando el borrador que ha quedado.** Es el
+        caso que el plan preveía —perfil en `draft` si el `PATCH` falla— pero faltaba la
+        consecuencia de interfaz: un formulario que dice «error» después de haber creado algo
+        invita a volver a pulsar, y el segundo intento falla con «ya existe un perfil
+        llamado…», que es un mensaje imposible de relacionar con el anterior. Ahora el aviso
+        distingue los tres puntos de fallo y, en los dos últimos, dice que el borrador está
+        en la lista, que no está corriendo y que se puede completar o borrar.
+      - **Una clave vacía no se manda.** Con NIM, columna vacía significa «usa
+        `NVIDIA_API_KEY` del entorno» (F6.7), y eso lo lleva el NULL: mandar `""` escribiría
+        una cadena vacía donde el NULL es el que carga el significado.
+      - **Las consecuencias del mercado se enseñan mientras se elige, no después.** El
+        mercado no se puede cambiar más adelante, así que la nota bajo el selector trae
+        sesión, ventana operativa, divisa, benchmark, tamaño del universo y suelo de
+        liquidez, todo de `/api/markets`. Una decisión irreversible tiene que enseñar lo que
+        decide antes de tomarse.
+
+      **Se añade `Slider` a [pieces.tsx](app/src/components/pieces.tsx)**, que F6.8 reutiliza.
+      Lleva el valor siempre a la vista y los dos extremos nombrados: un deslizador cuyo
+      número no se lee es un control que no se puede poner a propósito, y «1» y «10» no dicen
+      por sí solos hacia dónde hay más riesgo.
+
+      **610 tests en verde, typecheck limpio, 24 de front, build correcto.**
 - [ ] **F5.4** Acciones: activar, pausar, archivar, **duplicar** (clonar y cambiar un solo
       parámetro es el gesto central del experimento) y borrar con confirmación por nombre.
 - [x] **F5.5** Selector de perfil global en la cabecera, **con el perfil en la URL por su

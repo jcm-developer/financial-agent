@@ -1,6 +1,9 @@
+import { useState } from "react";
+
 import { useProfiles } from "@/api/hooks";
 import type { ProfileSummary } from "@/api/types";
-import { Block, Card, PageTitle } from "@/components/pieces";
+import { NewProfileForm } from "@/components/NewProfileForm";
+import { Block, Button, Card, PageTitle } from "@/components/pieces";
 import { ProfileCard } from "@/components/ProfileCard";
 import { Section } from "@/components/Section";
 import { useTitle } from "@/layout/useTitle";
@@ -20,14 +23,29 @@ import { useTitle } from "@/layout/useTitle";
 export function Profiles() {
   useTitle("Experimentos");
   const profiles = useProfiles();
+  const [creating, setCreating] = useState(false);
 
   return (
     <>
-      <PageTitle>Experimentos</PageTitle>
+      <PageTitle
+        aside={
+          !creating && (
+            <Button onClick={() => setCreating(true)}>Nuevo experimento</Button>
+          )
+        }
+      >
+        Experimentos
+      </PageTitle>
+
+      {creating && (
+        <div className="mb-8">
+          <NewProfileForm onCancel={() => setCreating(false)} />
+        </div>
+      )}
 
       <Section query={profiles}>
         {(data: ProfileSummary[]) =>
-          data.length === 0 ? <NoProfiles /> : (
+          data.length === 0 ? <NoProfiles onCreate={() => setCreating(true)} /> : (
             <ul className="flex flex-col gap-3">
               {sorted(data).map((profile) => (
                 <li key={profile.id}>
@@ -71,25 +89,29 @@ function sorted(profiles: ProfileSummary[]): ProfileSummary[] {
  * sees.
  *
  * It is worded as instructions and not as "no hay nada" because at this point
- * there is nothing wrong: the application has just been installed and the next
- * step is a command. Creating one from the interface is F5.3.
+ * nothing is wrong: the application has just been installed and the next step is
+ * to create something. The console command stays alongside the button because it
+ * is the one that works before the interface is reachable —a fresh clone, a
+ * container that has not come up— and it is what the README documents.
  *
+ * @param props - Empty-state props.
+ * @param props.onCreate - Opens the creation form.
  * @return The rendered empty state.
  */
-function NoProfiles() {
+function NoProfiles({ onCreate }: { onCreate: () => void }) {
   return (
     <Card padding="p-6" dashed>
       <p className="text-[13px] text-text-secondary">
-        No hay ningún experimento todavía. Se crean desde la consola mientras el alta de
-        F5.3 no exista:
+        No hay ningún experimento todavía. Un experimento es un mercado, un capital, un
+        criterio de riesgo y un modelo; todo lo demás se mide contra eso.
       </p>
-      <Block className="mt-3">
+      <div className="mt-4">
+        <Button onClick={onCreate}>Crear el primero</Button>
+      </div>
+      <p className="mt-4 text-[13px] text-text-muted">O desde la consola:</p>
+      <Block className="mt-2">
         python run.py new-profile --name europa-01 --market eu --watch 89
       </Block>
-      <p className="mt-3 text-[13px] text-text-muted">
-        El mercado decide horario, calendario, divisa, benchmark y suelo de liquidez, y no
-        se puede cambiar después.
-      </p>
     </Card>
   );
 }

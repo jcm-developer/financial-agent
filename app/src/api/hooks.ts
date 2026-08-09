@@ -7,6 +7,7 @@ import type {
   Analytics,
   CycleControl,
   CycleDetail,
+  DerivedLimits,
   IngestStatus,
   MarketInfo,
   Page_CycleRow,
@@ -14,9 +15,14 @@ import type {
   Page_OrderRow,
   Page_PositionRow,
   Page_RiskEventRow,
+  ProfileCreate,
   ProfileDetail,
+  ProfileDuplicate,
+  ProfilePatch,
   ProfileSummary,
   QuoteRow,
+  SettingsApplied,
+  SettingsUpdate,
 } from "@/api/types";
 
 /**
@@ -290,5 +296,139 @@ export function useStopCycle() {
   return useMutation({
     mutationFn: () => api.post<ActionResult>("/api/cycles/stop"),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.cycleControl() }),
+  });
+}
+
+// ----------------------------------------------------------------------
+// Configuration writes (F5.3, F5.4, F6.8)
+// ----------------------------------------------------------------------
+
+/**
+ * The nine effective limits and which of them come from the sliders.
+ *
+ * The derivation is **not repeated in the frontend** (F6.8): `derive_limits`
+ * interpolates by stretches in `src/risk_presets.py`, and a second
+ * implementation in TypeScript would be two tables condemned to disagree — with
+ * the interface promising limits the Risk Manager does not apply, which is the
+ * one lie this screen must not tell.
+ *
+ * @param ref - Profile name or id. Undefined leaves the query disabled.
+ * @return The query for `GET /api/profiles/:ref/limits`.
+ */
+export function useProfileLimits(ref: string | undefined) {
+  return useQuery({
+    queryKey: keys.profileLimits(ref ?? ""),
+    queryFn: ({ signal }) =>
+      api.get<DerivedLimits>(
+        `/api/profiles/${encodeURIComponent(ref!)}/limits`, undefined, signal,
+      ),
+    enabled: Boolean(ref),
+  });
+}
+
+/**
+ * Everything a configuration write may have changed.
+ *
+ * The profile list carries the metrics and the risk summary, and the active
+ * profile is resolved against it (`useActiveProfile`), so a rename or a status
+ * change that did not invalidate it would leave the header naming a profile that
+ * no longer exists under that name.
+ *
+ * @param client - The query client to invalidate on.
+ * @param ref - Profile whose own entries are refreshed too.
+ */
+function invalidateProfile(client: ReturnType<typeof useQueryClient>, ref?: string) {
+  client.invalidateQueries({ queryKey: keys.profiles() });
+  if (ref) {
+    client.invalidateQueries({ queryKey: keys.profile(ref) });
+    client.invalidateQueries({ queryKey: keys.profileLimits(ref) });
+    client.invalidateQueries({ queryKey: keys.profileSettings(ref) });
+  }
+}
+
+/**
+ * Creates an experiment.
+ *
+ * It answers with the profile in `draft`: the API creates it that way and
+ * activating it is a separate call, which is what F5.3 relies on so a failed
+ * settings patch leaves a visible, deletable draft instead of an experiment
+ * running with parameters the user did not choose.
+ *
+ * @return The mutation for `POST /api/profiles`.
+ */
+export function useCreateProfile() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ProfileCreate) => api.post<ProfileDetail>("/api/profiles", body),
+    onSuccess: () => invalidateProfile(client),
+  });
+}
+
+/**
+ * Changes an experiment's name, description or status.
+ *
+ * @return The mutation for `PATCH /api/profiles/:ref`, taking the reference and
+ *     the patch together so one hook serves a list of profiles.
+ */
+export function useUpdateProfile() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ref, patch }: { ref: string; patch: ProfilePatch }) =>
+      api.patch<ProfileDetail>(`/api/profiles/${encodeURIComponent(ref)}`, patch),
+    onSuccess: (_data, { ref }) => invalidateProfile(client, ref),
+  });
+}
+
+/**
+ * Writes the experiment's parameters.
+ *
+ * @return The mutation for `PATCH /api/profiles/:ref/settings`, which answers
+ *     with the list of fields that actually changed.
+ */
+export function useUpdateSettings() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ref, changes }: { ref: string; changes: SettingsUpdate }) =>
+      api.patch<SettingsApplied>(
+        `/api/profiles/${encodeURIComponent(ref)}/settings`, changes,
+      ),
+    onSuccess: (_data, { ref }) => invalidateProfile(client, ref),
+  });
+}
+
+/**
+ * Clones an experiment's settings and universe, not its history.
+ *
+ * @return The mutation for `POST /api/profiles/:ref/duplicate`.
+ */
+export function useDuplicateProfile() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ref, body }: { ref: string; body: ProfileDuplicate }) =>
+      api.post<ProfileDetail>(
+        `/api/profiles/${encodeURIComponent(ref)}/duplicate`, body,
+      ),
+    onSuccess: () => invalidateProfile(client),
+  });
+}
+
+/**
+ * Deletes an experiment and everything hanging off it.
+ *
+ * The name has to be repeated in `confirm`, and that is the API's rule and not
+ * the screen's: it is the only call in the whole API that destroys data which
+ * took weeks to produce.
+ *
+ * @return The mutation for `DELETE /api/profiles/:ref?confirm=`.
+ */
+export function useDeleteProfile() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ref, confirm }: { ref: string; confirm: string }) =>
+      api.delete<ActionResult>(`/api/profiles/${encodeURIComponent(ref)}`, { confirm }),
+    // Everything is invalidated, not just the profiles: deleting drags along
+    // cycles, positions, orders and decisions, and any table still cached would
+    // be showing the history of an experiment that no longer exists.
+    onSuccess: () => client.invalidateQueries(),
   });
 }

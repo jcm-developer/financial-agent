@@ -586,22 +586,85 @@ export function Select({
  *
  * @param props - Input props, on top of everything an `<input>` accepts.
  * @param props.label - Label text, in the interface language.
+ * @param props.hint - The line under the field explaining what it decides.
  * @param props.fieldClass - Extra classes for the wrapping `<label>`.
  * @return The rendered input inside its label.
  */
 export function Input({
   label,
+  hint,
   fieldClass,
   className,
   ...rest
 }: ComponentProps<"input"> & {
   label: string;
+  /** What the field decides, when the label alone does not say it. */
+  hint?: ReactNode;
   /** Classes for the wrapping `<label>`, not for the box. */
   fieldClass?: string;
 }) {
   return (
     <Field label={label} className={fieldClass}>
       <input className={cn(CONTROL_CLASSES, className)} {...rest} />
+      {hint && <span className="text-xs leading-snug text-text-muted">{hint}</span>}
     </Field>
+  );
+}
+
+/**
+ * A 1–10 slider with its value beside the label.
+ *
+ * **The value is always in sight, and that is not decoration**: a slider whose
+ * number you cannot read is a control you cannot set on purpose, and these two
+ * —risk profile and diversification— are the ones the whole experiment is
+ * described by (F6.5). The ends are named as well, because "1" and "10" do not
+ * say which way is more risk.
+ *
+ * @param props - Slider props, on top of everything an `<input type="range">` accepts.
+ * @param props.label - Label text, in the interface language.
+ * @param props.value - Current value, shown next to the label.
+ * @param props.low - What the low end means, in the interface language.
+ * @param props.high - What the high end means.
+ * @param props.hint - The line under the slider explaining what it decides.
+ * @return The rendered slider inside its label.
+ */
+export function Slider({
+  label,
+  value,
+  low,
+  high,
+  hint,
+  className,
+  ...rest
+}: Omit<ComponentProps<"input">, "type" | "value"> & {
+  label: string;
+  value: number;
+  low: string;
+  high: string;
+  hint?: ReactNode;
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-[13px]">
+      <span className="flex items-baseline justify-between gap-2">
+        <span className="text-text-muted">{label}</span>
+        <span className="tabular font-semibold">{value}/10</span>
+      </span>
+      <input
+        type="range"
+        min={1}
+        max={10}
+        step={1}
+        value={value}
+        // `accent-primary` and not an arbitrary value: the token utility is what
+        // DESIGN.md asks for, and it repaints itself with the theme switch.
+        className={cn("h-8 w-full accent-primary", className)}
+        {...rest}
+      />
+      <span className="flex justify-between text-xs text-text-muted">
+        <span>{low}</span>
+        <span>{high}</span>
+      </span>
+      {hint && <span className="text-xs leading-snug text-text-muted">{hint}</span>}
+    </label>
   );
 }
