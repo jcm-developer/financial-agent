@@ -3,6 +3,7 @@ import {
   Activity,
   ClipboardList,
   FlaskConical,
+  GitCompare,
   ChartLine,
   LayoutDashboard,
   Radio,
@@ -37,6 +38,10 @@ const PROFILE_LINKS = [
 
 const GENERAL_LINKS = [
   { to: "/profiles", text: "Experimentos", Icon: FlaskConical },
+  // It hangs off the lower group and not off the profile's: comparing is by
+  // definition about more than one experiment, so putting it under the selected
+  // one would suggest it only concerns that one.
+  { to: "/compare", text: "Comparar", Icon: GitCompare },
   { to: "/diagnostics", text: "Ingesta", Icon: Radio },
 ] as const;
 

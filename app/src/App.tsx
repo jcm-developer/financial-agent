@@ -8,6 +8,7 @@ import {
   LEGACY_TOP_PATHS,
   LegacyRedirect,
 } from "@/legacyRoutes";
+import { Compare } from "@/pages/Compare";
 import { Cycles } from "@/pages/Cycles";
 import { Decisions } from "@/pages/Decisions";
 import { Diagnostics } from "@/pages/Diagnostics";
@@ -55,6 +56,7 @@ export function App() {
         <Route element={<Layout />}>
           <Route index element={<Home />} />
           <Route path="profiles" element={<Profiles />} />
+          <Route path="compare" element={<Compare />} />
           <Route path="diagnostics" element={<Diagnostics />} />
 
           {/*

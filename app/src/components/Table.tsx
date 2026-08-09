@@ -9,8 +9,11 @@ import { cn } from "@/lib/utils";
  * shadcn's table is a set of wrappers over `<table>` with no Radix underneath,
  * so copying it would add one more file and no capability; and these already
  * have to carry the inherited palette and `tabular-nums` on the figure columns.
- * shadcn will be brought in when something that does need Radix comes up: the
- * confirmation dialog of F5.4 and the toasts.
+ *
+ * F4.7 expected shadcn to arrive with F5.4's confirmation dialog. It did not:
+ * what Radix supplies there —focus trap, Esc, the page made inert— is what the
+ * browser's own `<dialog>` already does (see `ConfirmDialog.tsx`). The rule
+ * stands as written; nothing has needed Radix yet.
  *
  * `overflow-x-auto` on the container and not on the page: a wide table has to
  * scroll inside its own slot, without dragging the rest of the screen (F4.9).

@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 
 import { LinkButton, Card, BlockTitle } from "@/components/pieces";
+import { cn } from "@/lib/utils";
 
 /**
  * What every chart shares.
@@ -59,6 +60,7 @@ export function Chart({
   title,
   explanation,
   empty,
+  height = "h-56",
   table,
   children,
 }: {
@@ -66,6 +68,16 @@ export function Chart({
   explanation?: ReactNode;
   /** Empty-state text. When present, nothing is drawn. */
   empty?: string;
+  /**
+   * Height utility of the plotting area.
+   *
+   * A prop and not something overridden from `className`, for the same reason
+   * `Card`'s padding is: `h-56` and `h-96` are the same utility group, so which
+   * one wins would be decided by the stylesheet's order. The only caller that
+   * changes it is the comparison's small multiples, which stack several charts
+   * inside one frame.
+   */
+  height?: string;
   table: ReactNode;
   children: ReactNode;
 }) {
@@ -94,7 +106,7 @@ export function Chart({
       ) : showTable ? (
         <div className="overflow-x-auto">{table}</div>
       ) : (
-        <div className="h-56 w-full">{children}</div>
+        <div className={cn(height, "w-full")}>{children}</div>
       )}
     </Card>
   );

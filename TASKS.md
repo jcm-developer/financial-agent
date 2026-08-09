@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F6.8 cerrada: los 41 parametros con los limites derivados en vivo, y el endpoint de ajustes pasa a tener modelo)
+Última actualización: 2026-08-09 (F5.6 cerrada: el comparador, en % y con multiplos pequeños a partir de tres experimentos)
 
 ---
 
@@ -1072,8 +1072,47 @@ diez sesiones en silencio.
       **Consecuencia asumida: renombrar un perfil rompe los enlaces guardados.** Es el precio
       de una URL legible, y está bien que se rompa de forma visible en lugar de resolverse a
       un experimento distinto.
-- [ ] **F5.6** **Comparador**: varios perfiles en la misma gráfica de equity, con tabla de
-      métricas lado a lado. Es lo que convierte esto en un experimento y no en un bot.
+- [x] **F5.6** **Comparador**: varios perfiles en la misma gráfica de equity, con tabla de
+      métricas lado a lado (2026-08-09). Es lo que convierte esto en un experimento y no en
+      un bot. Ruta `/compare`, en el grupo de abajo de la barra lateral: comparar es por
+      definición de más de un experimento, así que colgarlo del perfil seleccionado sugeriría
+      que solo va de ese.
+
+      ⚠️ **La gráfica va en % y la tabla en la divisa de cada uno, y son dos respuestas al
+      mismo problema.** El proyecto no convierte divisa en ningún sitio (D8), así que un eje
+      compartido solo puede llevar una cifra indexada; una tabla, en cambio, tiene una columna
+      por experimento y cada celda puede llevar su símbolo. Poner euros y dólares en el mismo
+      eje es el error de FE.8 dibujado a escala. Y aun dentro de una divisa, indexar es lo que
+      hace comparables dos presupuestos distintos: 200 sobre 10.000 y 200 sobre 1.000 son el
+      mismo dinero y no el mismo resultado. Comprobado que el indexado del cliente coincide
+      con el `total_return_pct` que calcula el servidor.
+
+      ⚠️ **Como mucho dos curvas comparten eje, y eso salió de medir, no de estimar.** La
+      paleta validada tiene dos tonos categóricos; el verde está reservado a `delta-good` y el
+      ámbar a `warning`, así que un tercero tendría que salir de lo que queda, y lo que queda
+      choca con el azul que ya está en uso: **el morado da ΔE 3,7–5,8 en deuteranopía contra
+      `--series-1`**, frente a un objetivo de 8 y un suelo duro de 15 en visión normal. Se
+      probaron tres combinaciones y las tres fallan. Inventar un tercer tono igualmente es
+      cómo una gráfica acaba afirmando que dos experimentos son distintos cuando el lector no
+      los distingue. Así que a partir de tres se pasa a **múltiplos pequeños**: una gráfica por
+      experimento, una serie cada una, **compartiendo dominio vertical** —con autoescala, un
+      vaivén del 0,4 % y una carrera del 12 % dibujarían la misma forma, que es justo lo que
+      una comparación no puede hacer—. La paleta no se ha tocado.
+
+      **La tabla pone un experimento por columna y no por fila**: las filas son las métricas,
+      así que dos capitales quedan uno al lado del otro, que es de lo que se trata. Con los
+      experimentos como filas, comparar una cifra sería recorrer una columna de unidades
+      mezcladas. El nombre de la métrica va como `th scope="row"`, porque cada fila es una
+      cifra y sin eso un lector de pantalla dice «10.240,00 €» sin decir de qué.
+
+      **Recharts sigue fuera del bundle principal**: la comparación se carga con `lazy()` igual
+      que Analítica, y las dos comparten el trozo de Recharts.
+
+      ⚠️ **Lo que F6.10 bloquea, y lo que no.** Comparar históricos que ya existen funciona;
+      lo que no se puede todavía es **correr** dos experimentos con horarios distintos, porque
+      `cycle_times` está en el esquema y no lo lee nadie. La pantalla lo dice.
+
+      **616 tests en verde, typecheck limpio, 24 de front, build correcto.**
 - [ ] **F5.7** Perfil de control: screener en modo `random`, para tener contra qué medir el
       criterio del LLM.
 
