@@ -94,6 +94,33 @@ INTERVAL_LABELS = {
     "1h": ("barras horarias", "HORAS DE COTIZACION"),
 }
 
+#: Singular of each window label. It used to be `window_label.rstrip("S")`, which
+#: gave "SESIONE" and "HORAS DE COTIZACION" — the model reads that line, and a
+#: prompt that writes badly is a prompt that is being read carelessly.
+SINGULAR_WINDOW = {
+    "SESIONES": "SESION",
+    "HORAS DE COTIZACION": "HORA DE COTIZACION",
+}
+
+#: Warning handed to the model when the bars are not daily.
+#:
+#: ⚠️ The indicator keys carry a unit **in the name** —`return_60d_pct`,
+#: `high_52w`, `volatility_20d_pct`— and those names are inherited from the daily
+#: design. The windows are counted in **bars**, so with hourly data
+#: `pct_from_52w_high` is the distance to the high of 252 *hours*, about six
+#: weeks, and not to the 52-week high. Saying "computed on hourly bars" was not
+#: enough: the key name invites reading it the other way, and the model builds its
+#: thesis on exactly these figures.
+#:
+#: The keys are not renamed because they are serialised into
+#: `market_snapshots.indicators` and queried from SQL later; the note costs four
+#: lines of prompt and lies to nobody.
+WINDOW_UNITS_NOTE = """ATENCION A LAS UNIDADES: los nombres de los indicadores dicen "d" y "w" por
+herencia del diseño con barras diarias, pero las ventanas se cuentan en BARRAS.
+Aqui, con {bar_label}: `return_20d_pct` y `volatility_20d_pct` son 20 barras,
+`return_60d_pct` son 60, `sma_200` son 200, y `high_52w`, `low_52w` y
+`pct_from_52w_high` son 252 barras. NO son dias ni semanas."""
+
 
 class Analyst:
     """One analyst per cycle: the counters belong to that run, not to the process.
@@ -104,9 +131,17 @@ class Analyst:
     `TradingCycle._grade_analyst`; here it is only counted (F6.9).
     """
 
-    def __init__(self, llm: LLMClient, *, interval: str = "1d") -> None:
+    def __init__(
+        self, llm: LLMClient, *, interval: str = "1d", currency: str = "USD"
+    ) -> None:
         self.llm = llm
         self.interval = interval
+        #: Currency of the profile's market. **It is passed, never assumed**
+        #: (FE.8): the prompt used to say "USD" for every price, so a European
+        #: experiment told the model that SAN.MC trades in dollars. It is the
+        #: same invariant the interface obeys, and it was being broken in the one
+        #: place where nobody would see it — inside the prompt.
+        self.currency = currency
         self.labels = INTERVAL_LABELS.get(interval, INTERVAL_LABELS["1d"])
         #: Times the model has been asked, including the calls that failed.
         self.calls = 0
@@ -120,7 +155,7 @@ class Analyst:
     ) -> Proposal | None:
         """Analyses one candidate. Returns None if the model fails: a symbol with
         no analysis is skipped, not traded blind."""
-        user_prompt = _render_entry_prompt(snapshot, account, self.labels)
+        user_prompt = _render_entry_prompt(snapshot, account, self.labels, self.currency)
         self.calls += 1
         try:
             response = self.llm.complete_json(
@@ -168,7 +203,8 @@ class Analyst:
         target_price: float | None,
     ) -> Proposal | None:
         user_prompt = _render_exit_prompt(
-            position, snapshot, entry_thesis, stop_price, target_price, self.labels
+            position, snapshot, entry_thesis, stop_price, target_price,
+            self.labels, self.currency,
         )
         self.calls += 1
         try:
@@ -205,20 +241,24 @@ class Analyst:
 # ----------------------------------------------------------------------
 
 def _render_entry_prompt(
-    snapshot: MarketSnapshot, account: AccountState, labels: tuple[str, str]
+    snapshot: MarketSnapshot,
+    account: AccountState,
+    labels: tuple[str, str],
+    currency: str = "USD",
 ) -> str:
     bar_label, window_label = labels
+    units = _window_units_note(bar_label)
     open_positions = (
         ", ".join(sorted(account.open_symbols)) if account.positions else "ninguna"
     )
     return f"""\
 FECHA DE ANALISIS: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}
 ACTIVO: {snapshot.symbol}
-PRECIO DE CIERRE DE LA ULTIMA {window_label.rstrip('S')} COMPLETA: {snapshot.price:.2f} USD
+PRECIO DE CIERRE DE LA ULTIMA {SINGULAR_WINDOW.get(window_label, window_label)} COMPLETA: {snapshot.price:.2f} {currency}
 
 INDICADORES TECNICOS (calculados sobre {bar_label}; null = no disponible):
 {_format_indicators(snapshot.indicators)}
-
+{units}
 ULTIMAS 10 {window_label} (fecha, apertura, maximo, minimo, cierre, volumen):
 {_format_bars(snapshot.recent_bars)}
 
@@ -239,16 +279,18 @@ def _render_exit_prompt(
     stop_price: float | None,
     target_price: float | None,
     labels: tuple[str, str],
+    currency: str = "USD",
 ) -> str:
     bar_label, window_label = labels
+    units = _window_units_note(bar_label)
     return f"""\
 FECHA DE REVISION: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}
 POSICION ABIERTA: {position.symbol}
 
 - Acciones: {position.qty:g}
-- Precio medio de entrada: {position.avg_entry_price:.2f} USD
-- Precio actual: {position.current_price:.2f} USD
-- P&L no realizado: {position.unrealized_pl:+.2f} USD ({position.unrealized_pl_pct:+.2f}%)
+- Precio medio de entrada: {position.avg_entry_price:.2f} {currency}
+- Precio actual: {position.current_price:.2f} {currency}
+- P&L no realizado: {position.unrealized_pl:+.2f} {currency} ({position.unrealized_pl_pct:+.2f}%)
 - Stop vigilado automaticamente: {_fmt(stop_price)}
 - Objetivo vigilado automaticamente: {_fmt(target_price)}
 
@@ -257,11 +299,26 @@ TESIS ORIGINAL DE LA ENTRADA:
 
 INDICADORES TECNICOS ACTUALES (sobre {bar_label}):
 {_format_indicators(snapshot.indicators)}
-
+{units}
 ULTIMAS 10 {window_label} (fecha, apertura, maximo, minimo, cierre, volumen):
 {_format_bars(snapshot.recent_bars)}
 
 Decide si la tesis sigue viva, en el JSON especificado."""
+
+
+def _window_units_note(bar_label: str) -> str:
+    """The units warning, only when the bars are not daily.
+
+    With daily bars the names do not lie —`60d` really is 60 sessions— so adding
+    the note would be noise in a prompt that is already long, and noise in a
+    prompt costs attention on the figures that do matter.
+
+    It comes back with a leading newline so the caller can drop it in without a
+    blank line appearing when there is nothing to say.
+    """
+    if bar_label == INTERVAL_LABELS["1d"][0]:
+        return ""
+    return "\n" + WINDOW_UNITS_NOTE.format(bar_label=bar_label) + "\n"
 
 
 def _format_indicators(indicators: dict[str, Any]) -> str:

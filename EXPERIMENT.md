@@ -156,11 +156,23 @@ Esa regla es lo que hace **interpretable** el experimento: hoy, si el modelo cit
 un catalizador, es una alucinación y se ve en la pantalla de Decisiones. Añadir
 noticias obligaría a rediseñar esa garantía (ver **F9.7**).
 
-⚠️ **Las ventanas están en BARRAS, no en días, y varios nombres mienten con
-`1h`.** `return_60d_pct` son 60 barras (~7 sesiones con barras horarias);
-`pct_from_52w_high` son 252 barras (~30 sesiones), no 52 semanas. El prompt avisa
-de que los indicadores están «calculados sobre barras horarias», pero el nombre de
-la clave induce a leerlo mal.
+⚠️ **Las ventanas están en BARRAS, no en días, y varios nombres lo contradicen.**
+`return_60d_pct` son 60 barras (~7 sesiones con barras horarias);
+`pct_from_52w_high` son 252 barras (~30 sesiones), no 52 semanas. Los nombres
+vienen del diseño con barras diarias, donde sí eran ciertos.
+
+**Resuelto el 2026-08-10 sin renombrar las claves**: cuando el intervalo no es
+diario, el prompt lleva una nota que dice exactamente cuántas barras es cada
+ventana. Las claves no se tocan porque se serializan en
+`market_snapshots.indicators` y se consultan luego por SQL; la nota cuesta cuatro
+líneas y no engaña a nadie. Decir solo «calculados sobre barras horarias» no
+bastaba: el nombre de la clave invita a leerlo al revés, y la tesis se apoya justo
+en esas cifras.
+
+**Y la divisa se pasa, nunca se asume** (FE.8). El prompt escribía `USD` en los
+cuatro precios que enseña, así que un experimento europeo le contaba al modelo que
+SAN.MC cotiza en dólares. Era el mismo invariante que la interfaz respeta, roto en
+el único sitio donde no se ve.
 
 ---
 

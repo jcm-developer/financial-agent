@@ -141,7 +141,14 @@ class TradingCycle:
             broker=broker,
             market_data=build_market_data(settings, database),
             database=database,
-            analyst=Analyst(llm, interval=settings.bar_interval),
+            analyst=Analyst(
+                llm,
+                interval=settings.bar_interval,
+                # La divisa se pasa, nunca se asume (FE.8): el prompt decia
+                # "USD" para todo, asi que un experimento europeo le contaba al
+                # modelo que SAN.MC cotiza en dolares.
+                currency=market_calendar.get_market(settings.market).currency,
+            ),
             risk_manager=RiskManager(settings.risk),
             portfolio_id=portfolio_id,
         )
