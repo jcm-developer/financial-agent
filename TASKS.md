@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F5.4 cerrada: las cinco acciones del experimento, con el dialogo nativo y sin traer shadcn)
+Última actualización: 2026-08-09 (F6.8 cerrada: los 41 parametros con los limites derivados en vivo, y el endpoint de ajustes pasa a tener modelo)
 
 ---
 
@@ -1163,8 +1163,60 @@ diez sesiones en silencio.
         que nadie relaciona con el perfil. Igual con `NVIDIA_BASE_URL`.
       - Con NIM, una columna vacía **no** significa "sin clave" sino "usa la del entorno", y
         la pantalla lo dice así. Poner "(sin clave)" mandaba a buscar un problema inexistente.
-- [ ] **F6.8** Formulario con sliders y **valores derivados visibles en vivo** ("con estos
-      ajustes: máx. 8 posiciones, 1,5 % de riesgo por operación").
+- [x] **F6.8** Formulario con sliders y **valores derivados visibles en vivo** ("con estos
+      ajustes: máx. 8 posiciones, 1,5 % de riesgo por operación") — 2026-08-09.
+      [app/src/pages/Settings.tsx](app/src/pages/Settings.tsx).
+
+      **Los dos deslizadores son la pantalla; los 41 campos son la letra pequeña.** Es la
+      forma que pide F6.5: riesgo y diversificación deciden los nueve límites duros, y el
+      panel de al lado dice cuáles son mientras el deslizador se mueve. El resto va agrupado
+      debajo en las cuatro familias que los parámetros tienen de verdad —modelo, estrategia,
+      ejecución y límites duros—, y la última solo se abre en modo avanzado.
+
+      ⚠️ **«En vivo» obligaba a una decisión, y las dos alternativas obvias eran malas.**
+      Aplicar un `PATCH` en cada movimiento sería escribir en la base para contestar una
+      pregunta; y reimplementar `derive_limits` en TypeScript sería una segunda fórmula
+      condenada a discrepar el día que se toque un ancla, con la pantalla prometiendo límites
+      que el Risk Manager no aplica —que es la única mentira que este formulario no puede
+      decir—. De ahí **`GET /api/profiles/limits-preview`**, que llama a la misma
+      `queries.derived_limits` sobre un diccionario que solo existe para esa llamada y no
+      escribe nada. Tiene tres tests: que reproduce las tres anclas de la tabla de F6.5, que
+      la ruta literal no queda tapada por `/{profile_ref}`, y que no deja el perfil tocado.
+
+      ⚠️ **Encontrado de paso: `GET /api/profiles/{ref}/settings` no tenía modelo Pydantic** y
+      llegaba al frontend como `Record<string, unknown>` — justo lo que F4.11 dio por
+      eliminado al retirar `/api/dashboard`, y lo que la cabecera de F4 prohíbe. Construir
+      encima el formulario de 41 campos habría repetido el error entero: un cambio del backend
+      no rompería el build, rompería la pantalla en caliente. Se añaden **`AgentSettings` y
+      `SettingsBundle`**, con su test comparando los campos contra las columnas reales, igual
+      que el que ya existía para `SettingsUpdate`. Dos matices que el modelo de lectura fija y
+      el de escritura no:
+      - **Los booleanos se convierten una vez, aquí.** SQLite no tiene booleano y devolvía
+        0/1; un `dry_run: 0` leído como verdadero diría que un experimento está en seco
+        cuando está operando.
+      - **Un límite derivado sigue llegando NULL.** El NULL es el dato (F6.5): significa
+        «vuelve a derivarlo». Un modelo que lo rellenara con un número borraría la diferencia
+        entre un límite elegido y uno heredado, y el modo avanzado se quedaría sin nada que
+        encender.
+
+      Tres decisiones más:
+      - **Solo se manda lo que cambió.** `update_settings` ya ignora un campo que llega con el
+        valor que tenía, pero mandar los 41 en cada guardado llenaría
+        `agent_settings_history` de filas «5 → 5», y ese historial es lo que hace legible un
+        experimento después. Comprobado: reenviar el mismo valor devuelve `applied: []`.
+      - **El formulario se remonta cuando cambian los ajustes guardados** (`key` en
+        `updated_at`). Un formulario que discrepa en silencio de la base es peor que uno que
+        se recarga.
+      - **El tope por sector se enseña diciendo que no se aplica.** Es el caso de FE.12, y es
+        el peor de los tres posibles si se calla: un límite cuya ausencia no falla, solo
+        acumula posiciones en un sector. Igual con `cycle_times` y `cycle_tz`, que llevan su
+        aviso de F6.10 en el propio campo: hoy se guardan y no los lee nadie.
+
+      **`Pending.tsx` se borra**: F5.3 y F6.8 han tapado los dos huecos que anunciaba, y era
+      el único uso que tenía.
+
+      **616 tests en verde** (6 nuevos), typecheck limpio, 24 de front, build correcto, y
+      comprobado contra la API de verdad.
 - [x] **F6.9** **Un ciclo sin modelo ya no se parece a un día tranquilo.** Encontrado al
       calcular el gasto del experimento de 10 días (decisión nº 2): `evaluate_entry` y
       `evaluate_exit` capturan `LLMError`, dejan un `log.warning` y devuelven `None`. Es lo

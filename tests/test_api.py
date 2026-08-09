@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 from api.deps import ApiConfig, config_db, read_db
 from api.guard import WRITABLE, ConfigDatabase, HistoryIsReadOnly, history_tables
 from api.main import create_app
-from api.models import SettingsUpdate
+from api.models import AgentSettings, SettingsUpdate
 from src.db import Database
 
 # Routes that change state without writing to the database: they launch
@@ -304,6 +304,65 @@ def test_a_created_profile_brings_market_currency_and_limits(profile):
     # The limits come from risk_presets, not from arithmetic repeated in the API.
     assert profile["limits"]["max_open_positions"] == 13
     assert "risk_per_trade_pct" in profile["limits"]["derived_fields"]
+
+
+def test_the_limits_preview_matches_the_anchors_of_f65(client):
+    """F6.8's form asks what the sliders would give, without writing anything.
+
+    The three anchors of the F6.5 table are checked and not just "it answers":
+    what this endpoint exists to prevent is the interface deriving the limits on
+    its own, so the point is that it gives the same numbers the Risk Manager
+    applies.
+    """
+    anchors = {
+        1: (0.25, 5.0, 85, 2.0),
+        5: (1.0, 20.0, 65, 5.0),
+        10: (3.0, 40.0, 45, 10.0),
+    }
+    for level, (risk_per_trade, max_position, conviction, kill) in anchors.items():
+        body = client.get(
+            "/api/profiles/limits-preview",
+            params={"risk_profile": level, "diversification": 5},
+        ).json()
+        assert body["risk_per_trade_pct"] == risk_per_trade
+        assert body["max_position_pct"] == max_position
+        assert body["min_conviction"] == conviction
+        assert body["max_daily_loss_pct"] == kill
+
+    # Diversification moves only the number of positions: 1 -> 3, 10 -> 25.
+    for level, expected in ((1, 3), (10, 25)):
+        body = client.get(
+            "/api/profiles/limits-preview",
+            params={"risk_profile": 5, "diversification": level},
+        ).json()
+        assert body["max_open_positions"] == expected
+
+
+def test_the_preview_does_not_shadow_a_profile_route(client, profile):
+    """The literal path is declared before `/{profile_ref}`.
+
+    With the parameter route first, `/api/profiles/limits-preview` would arrive
+    as a profile named "limits-preview" and answer 404 for a route that exists.
+    The reverse has to keep working too, which is what the second half checks.
+    """
+    assert client.get("/api/profiles/limits-preview").status_code == 200
+    assert client.get(f"/api/profiles/{profile['name']}/limits").status_code == 200
+
+
+def test_the_preview_writes_nothing(client, db_path, profile):
+    """It answers a question; it must not leave the profile changed.
+
+    Asking what a slider would do is the gesture the form repeats on every move,
+    so if it wrote, moving the slider to look would already have changed the
+    experiment.
+    """
+    before = client.get(f"/api/profiles/{profile['name']}/settings").json()
+    client.get(
+        "/api/profiles/limits-preview",
+        params={"risk_profile": 10, "diversification": 1},
+    )
+    after = client.get(f"/api/profiles/{profile['name']}/settings").json()
+    assert before == after
 
 
 def test_the_market_sets_the_liquidity_floor(profile):
@@ -777,6 +836,50 @@ def test_settings_update_covers_the_real_columns_of_agent_settings(db_path):
         f"sobran en el modelo: {sorted(del_modelo - columnas)}; "
         f"faltan: {sorted(columnas - del_modelo)}"
     )
+
+
+def test_agent_settings_covers_the_real_columns_too(db_path):
+    """The read model is checked the same way as the write one.
+
+    Until F6.8 this endpoint answered a plain `dict` and reached the frontend as
+    `Record<string, unknown>`, which is what F4.11 said no longer happened
+    anywhere: a change in the backend would not break the build, it would break
+    the 41-field form at runtime.
+    """
+    with Database(path=db_path) as db:
+        columnas = db._columns("agent_settings") - {"profile_id"}
+
+    del_modelo = set(AgentSettings.model_fields)
+    assert del_modelo == columnas, (
+        f"sobran en el modelo: {sorted(del_modelo - columnas)}; "
+        f"faltan: {sorted(columnas - del_modelo)}"
+    )
+
+
+def test_the_settings_booleans_arrive_as_booleans(client, profile):
+    """SQLite has no boolean and gives back 0/1.
+
+    They are converted once, in the model, and not in each screen deciding
+    whether `0` is false: `dry_run: 0` read as truthy would say an experiment is
+    in dry run when it is trading.
+    """
+    settings = client.get(f"/api/profiles/{profile['name']}/settings").json()["settings"]
+    for field in ("dry_run", "allow_shorts", "skip_when_market_closed", "advanced_overrides"):
+        assert isinstance(settings[field], bool), f"{field} llega como {type(settings[field])}"
+
+
+def test_a_derived_limit_stays_null_when_read(client, profile):
+    """NULL is the datum: it means "recompute it from the sliders" (F6.5).
+
+    A read model that filled it in with a number would erase the difference
+    between a limit that was chosen and one that was inherited, and the advanced
+    mode of the form would have nothing to switch on.
+    """
+    body = client.get(f"/api/profiles/{profile['name']}/settings").json()
+    assert body["settings"]["risk_per_trade_pct"] is None
+    # And the effective one does have a value, which is the whole point of
+    # sending both together.
+    assert body["limits"]["risk_per_trade_pct"] is not None
 
 
 def test_the_writable_tables_really_exist(db_path):

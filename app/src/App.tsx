@@ -14,8 +14,8 @@ import { Diagnostics } from "@/pages/Diagnostics";
 import { Home } from "@/pages/Home";
 import { NotFound } from "@/pages/NotFound";
 import { Orders } from "@/pages/Orders";
-import { Pending } from "@/pages/Pending";
 import { Profiles } from "@/pages/Profiles";
+import { Settings } from "@/pages/Settings";
 import { Positions } from "@/pages/Positions";
 import { Summary } from "@/pages/Summary";
 
@@ -83,16 +83,7 @@ export function App() {
             <Route path="orders" element={<Orders />} />
             <Route path="risk" element={<Risk />} />
             <Route path="cycles" element={<Cycles />} />
-            <Route
-              path="settings"
-              element={
-                <Pending
-                  title="Ajustes"
-                  task="F6.8"
-                  description="Los 41 parámetros del experimento, con los deslizadores de riesgo y diversificación y los límites derivados visibles en vivo."
-                />
-              }
-            />
+            <Route path="settings" element={<Settings />} />
             {LEGACY_PROFILE_PATHS.map((path) => (
               <Route key={path} path={path} element={<LegacyRedirect />} />
             ))}

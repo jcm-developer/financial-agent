@@ -22,6 +22,7 @@ import type {
   ProfileSummary,
   QuoteRow,
   SettingsApplied,
+  SettingsBundle,
   SettingsUpdate,
 } from "@/api/types";
 
@@ -311,6 +312,50 @@ export function useStopCycle() {
 // ----------------------------------------------------------------------
 // Configuration writes (F5.3, F5.4, F6.8)
 // ----------------------------------------------------------------------
+
+/**
+ * An experiment's 41 parameters, plus the limits they currently imply.
+ *
+ * @param ref - Profile name or id. Undefined leaves the query disabled.
+ * @return The query for `GET /api/profiles/:ref/settings`.
+ */
+export function useProfileSettings(ref: string | undefined) {
+  return useQuery({
+    queryKey: keys.profileSettings(ref ?? ""),
+    queryFn: ({ signal }) =>
+      api.get<SettingsBundle>(
+        `/api/profiles/${encodeURIComponent(ref!)}/settings`, undefined, signal,
+      ),
+    enabled: Boolean(ref),
+  });
+}
+
+/**
+ * What the two sliders would give, without writing anything.
+ *
+ * This is how the form shows the derived limits **while the slider moves**
+ * (F6.8). It is a request per position of the slider, which sounds like a lot
+ * and is not: it goes against a local SQLite, `staleTime: Infinity` means each
+ * pair is asked for once, and going back over values already tried paints from
+ * the cache. The alternative was redoing `derive_limits` in TypeScript, which is
+ * the one thing F6.5 forbids.
+ *
+ * @param risk - Risk profile, 1 to 10.
+ * @param diversification - Diversification, 1 to 10.
+ * @return The query for `GET /api/profiles/limits-preview`.
+ */
+export function useLimitsPreview(risk: number, diversification: number) {
+  return useQuery({
+    queryKey: ["limits-preview", risk, diversification] as const,
+    queryFn: ({ signal }) =>
+      api.get<DerivedLimits>(
+        "/api/profiles/limits-preview",
+        { risk_profile: risk, diversification },
+        signal,
+      ),
+    staleTime: Infinity,
+  });
+}
 
 /**
  * The nine effective limits and which of them come from the sliders.

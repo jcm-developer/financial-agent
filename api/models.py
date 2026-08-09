@@ -204,6 +204,95 @@ class UniverseUpdate(BaseModel):
     symbols: list[str] = Field(max_length=500)
 
 
+class AgentSettings(BaseModel):
+    """One row of `agent_settings`, as it is read.
+
+    ⚠️ **It is the read counterpart of `SettingsUpdate`, and it is not the same
+    shape**, which is why they are two models and not one with everything
+    optional:
+
+      * The **hard limits come back NULL** when they are derived from the
+        sliders. That NULL is the datum (F6.5): it means "recompute it", and a
+        model that filled it in with a number would erase the difference between
+        a limit that was chosen and one that was inherited.
+      * The **booleans come back as 0/1**, because SQLite has no boolean. They
+        are declared `bool` so Pydantic converts them once, here, instead of
+        every screen deciding whether `0` is false.
+
+    It exists because until F6.8 this endpoint answered a plain `dict` and
+    therefore reached the frontend as `Record<string, unknown>` — exactly what
+    F4.11 said no longer happened anywhere, and what the F4 header forbids: a
+    change in the backend would not break the build, it would break the
+    41-field form at runtime. A test compares these fields against the real
+    columns, the same way it does for `SettingsUpdate`.
+    """
+
+    # -- Modelo
+    llm_provider: str
+    llm_model: str
+    #: Never the key itself. What the screen shows is `llm_api_key_masked` of
+    #: `ProfileSummary`; here it only says whether there is one (F6.7).
+    llm_api_key: str | None = None
+    llm_temperature: float
+    llm_timeout_seconds: float
+    llm_max_retries: int
+    analyst_persona: str | None = None
+
+    # -- Estrategia
+    risk_profile: int
+    diversification: int
+    horizon_days: int
+    market: MarketCode
+    universe_file: str | None = None
+    screener_mode: str
+    screener_top_n: int
+    screener_min_turnover: float
+    screener_min_price: float
+    screener_max_volatility_pct: float
+    allow_shorts: bool
+    excluded_sectors_json: str
+    cash_reserve_pct: float
+    benchmark: str
+
+    # -- Ejecucion
+    initial_budget: float
+    bar_interval: str
+    lookback_days: int
+    cycle_times: str
+    cycle_tz: str
+    sim_slippage_bps: float
+    sim_commission: float
+    dry_run: bool
+    skip_when_market_closed: bool
+
+    # -- Limites duros. NULL = derivado de los deslizadores.
+    advanced_overrides: bool
+    risk_per_trade_pct: float | None = None
+    max_position_pct: float | None = None
+    max_total_exposure_pct: float | None = None
+    max_open_positions: int | None = None
+    max_daily_loss_pct: float | None = None
+    min_conviction: int | None = None
+    stop_atr_multiple: float | None = None
+    min_reward_risk: float | None = None
+    min_order_notional: float | None = None
+
+    extra_json: str
+    updated_at: str
+
+
+class SettingsBundle(BaseModel):
+    """The settings and the limits they imply, together.
+
+    They travel together because the F6.8 form needs both at once: it shows the
+    slider and, beside it, what that slider means in numbers.
+    """
+
+    profile_id: str
+    settings: AgentSettings
+    limits: DerivedLimits
+
+
 class SettingsUpdate(BaseModel):
     """A patch over `agent_settings`.
 

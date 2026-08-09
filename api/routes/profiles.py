@@ -38,6 +38,7 @@ from ..models import (
     ProfilePatch,
     ProfileSummary,
     SettingsApplied,
+    SettingsBundle,
     SettingsHistoryRow,
     SettingsUpdate,
     UniverseUpdate,
@@ -57,12 +58,44 @@ def list_profiles(db: ReadDb, include_archived: bool = False):
     return queries.profile_summaries(db, include_archived=include_archived)
 
 
+# Declared before `/{profile_ref}` so the literal path wins: with the parameter
+# route first, `/api/profiles/limits-preview` would arrive as a profile named
+# "limits-preview" and answer 404 for a route that exists.
+@router.get("/limits-preview", response_model=DerivedLimits)
+def limits_preview(
+    risk_profile: int = Query(5, ge=1, le=10),
+    diversification: int = Query(5, ge=1, le=10),
+):
+    """The nine limits these two sliders would give, without writing anything.
+
+    It exists for F6.8's form, which has to show the derived limits **while the
+    slider moves**. The two alternatives were worse in the same way: patching the
+    profile on every move would write to the database to answer a question, and
+    reimplementing `derive_limits` in TypeScript would be a second formula
+    condemned to disagree with the one the Risk Manager applies the day an anchor
+    is tweaked — with the screen promising limits the agent does not enforce,
+    which is the one lie that form must not tell (F6.5).
+
+    So it goes through `queries.derived_limits`, the same function the profile's
+    own endpoint uses, over a settings dict that exists only for this call.
+    """
+    return queries.derived_limits(
+        {
+            "risk_profile": risk_profile,
+            "diversification": diversification,
+            # No overrides: the question being asked is precisely what the
+            # sliders alone give.
+            "advanced_overrides": 0,
+        }
+    )
+
+
 @router.get("/{profile_ref}", response_model=ProfileDetail)
 def get_profile(db: ReadDb, profile_ref: str):
     return queries.profile_detail(db, find_profile(db, profile_ref))
 
 
-@router.get("/{profile_ref}/settings")
+@router.get("/{profile_ref}/settings", response_model=SettingsBundle)
 def get_settings(db: ReadDb, profile_ref: str) -> dict:
     """The raw settings plus the limits they imply.
 

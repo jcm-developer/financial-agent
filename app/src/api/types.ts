@@ -12,6 +12,73 @@ export interface ActionResult {
 }
 
 /**
+ * One row of `agent_settings`, as it is read.
+ *
+ * ⚠️ **It is the read counterpart of `SettingsUpdate`, and it is not the same
+ * shape**, which is why they are two models and not one with everything
+ * optional:
+ *
+ *   * The **hard limits come back NULL** when they are derived from the
+ *     sliders. That NULL is the datum (F6.5): it means "recompute it", and a
+ *     model that filled it in with a number would erase the difference between
+ *     a limit that was chosen and one that was inherited.
+ *   * The **booleans come back as 0/1**, because SQLite has no boolean. They
+ *     are declared `bool` so Pydantic converts them once, here, instead of
+ *     every screen deciding whether `0` is false.
+ *
+ * It exists because until F6.8 this endpoint answered a plain `dict` and
+ * therefore reached the frontend as `Record<string, unknown>` — exactly what
+ * F4.11 said no longer happened anywhere, and what the F4 header forbids: a
+ * change in the backend would not break the build, it would break the
+ * 41-field form at runtime. A test compares these fields against the real
+ * columns, the same way it does for `SettingsUpdate`.
+ */
+export interface AgentSettings {
+  llm_provider: string;
+  llm_model: string;
+  llm_api_key?: string | null;
+  llm_temperature: number;
+  llm_timeout_seconds: number;
+  llm_max_retries: number;
+  analyst_persona?: string | null;
+  risk_profile: number;
+  diversification: number;
+  horizon_days: number;
+  market: "us" | "eu";
+  universe_file?: string | null;
+  screener_mode: string;
+  screener_top_n: number;
+  screener_min_turnover: number;
+  screener_min_price: number;
+  screener_max_volatility_pct: number;
+  allow_shorts: boolean;
+  excluded_sectors_json: string;
+  cash_reserve_pct: number;
+  benchmark: string;
+  initial_budget: number;
+  bar_interval: string;
+  lookback_days: number;
+  cycle_times: string;
+  cycle_tz: string;
+  sim_slippage_bps: number;
+  sim_commission: number;
+  dry_run: boolean;
+  skip_when_market_closed: boolean;
+  advanced_overrides: boolean;
+  risk_per_trade_pct?: number | null;
+  max_position_pct?: number | null;
+  max_total_exposure_pct?: number | null;
+  max_open_positions?: number | null;
+  max_daily_loss_pct?: number | null;
+  min_conviction?: number | null;
+  stop_atr_multiple?: number | null;
+  min_reward_risk?: number | null;
+  min_order_notional?: number | null;
+  extra_json: string;
+  updated_at: string;
+}
+
+/**
  * The five chart series (F4.6), in a single trip.
  *
  * Together and not in five endpoints because they are one single screen: five
@@ -450,6 +517,18 @@ export interface SettingsApplied {
   limits: DerivedLimits;
 }
 
+/**
+ * The settings and the limits they imply, together.
+ *
+ * They travel together because the F6.8 form needs both at once: it shows the
+ * slider and, beside it, what that slider means in numbers.
+ */
+export interface SettingsBundle {
+  profile_id: string;
+  settings: AgentSettings;
+  limits: DerivedLimits;
+}
+
 export interface SettingsHistoryRow {
   id: number;
   field: string;
@@ -563,6 +642,8 @@ export interface ApiOperations {
   "GET /api/profiles": Array<ProfileSummary>;
   /** Create Profile */
   "POST /api/profiles": ProfileDetail;
+  /** Limits Preview */
+  "GET /api/profiles/limits-preview": DerivedLimits;
   /** Delete Profile */
   "DELETE /api/profiles/{profile_ref}": ActionResult;
   /** Get Profile */
@@ -574,7 +655,7 @@ export interface ApiOperations {
   /** Get Limits */
   "GET /api/profiles/{profile_ref}/limits": DerivedLimits;
   /** Get Settings */
-  "GET /api/profiles/{profile_ref}/settings": Record<string, unknown>;
+  "GET /api/profiles/{profile_ref}/settings": SettingsBundle;
   /** Patch Settings */
   "PATCH /api/profiles/{profile_ref}/settings": SettingsApplied;
   /** Get Settings History */
