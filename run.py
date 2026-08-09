@@ -98,7 +98,7 @@ def command_check(settings: Settings) -> int:
             f"kill switch a -{risk.max_daily_loss_pct}%"
         )
         print("  Parametros leidos del .env: todavia no hay perfil. Crealo con "
-              "python run.py import-profile")
+              "python run.py new-profile --market eu")
 
     from src import market_calendar
 
@@ -587,7 +587,9 @@ def command_profiles(infra: Infra) -> int:
         profiles = database.list_profiles(include_archived=True)
         if not profiles:
             print("\n  No hay ningun perfil todavia.")
-            print("  Importa el .env actual con:  "
+            print("  Crea uno con:  "
+                  "python run.py new-profile --name europa-01 --market eu --watch 89")
+            print("  Si vienes de un .env de la version anterior:  "
                   "python run.py import-profile --name experimento-01")
             return 0
 

@@ -199,16 +199,22 @@ Solo `NVIDIA_API_KEY`. La consigues en [build.nvidia.com](https://build.nvidia.c
 única clave del proyecto: los datos son de Yahoo y el broker es local.
 
 **2. Crea el perfil de experimento.** Los parámetros del agente viven en la base
-de datos, no en el `.env`. Para partir de los valores de la plantilla:
+de datos, no en el `.env`: el fichero solo lleva infraestructura.
 
 ```powershell
-docker compose run --rm bot python run.py import-profile --name experimento-01
+docker compose run --rm bot python run.py new-profile --name europa-01 --market eu --watch 89
 ```
 
-Eso crea el perfil, su cartera y sus parámetros, y lo deja activo. Compruébalo
-con `run.py profiles`.
+Eso crea el perfil, su cartera, su universo y sus parámetros, y lo deja activo.
+El mercado decide horario, calendario, divisa, benchmark y suelo de liquidez, y
+**no se puede cambiar después**: hacerlo a mitad de experimento reinterpretaría el
+histórico ya grabado. Compruébalo con `run.py profiles`.
 
-**2. Comprueba que conecta:**
+*(Si vienes de una versión anterior y tienes un `.env` con los parámetros
+dentro, `run.py import-profile --name experimento-01` lo convierte en un perfil
+sin volver a teclearlo. Para una instalación nueva no hace falta.)*
+
+**3. Comprueba que conecta:**
 
 ```powershell
 docker compose run --rm bot python run.py check
@@ -219,7 +225,7 @@ simulado, NVIDIA NIM y base de datos. El de datos te muestra los precios de
 decisión y de ejecución uno al lado del otro, que es la forma rápida de ver que
 la separación funciona.
 
-**3. Ciclo en seco**, que analiza y registra pero no ejecuta:
+**4. Ciclo en seco**, que analiza y registra pero no ejecuta:
 
 ```powershell
 docker compose run --rm bot python run.py cycle --dry-run
@@ -227,7 +233,7 @@ docker compose run --rm bot python run.py cycle --dry-run
 
 Revisa el resultado en la interfaz, pestaña *Decisiones*.
 
-**4. Arranca todo**: interfaz, ingestor y planificador.
+**5. Arranca todo**: interfaz, ingestor y planificador.
 
 ```powershell
 docker compose up -d
@@ -364,8 +370,12 @@ notepad .env
 
 ```
 NVIDIA_API_KEY=nvapi-...
-LLM_MODEL=meta/llama-3.3-70b-instruct
 ```
+
+El **modelo** no va aquí: es un parámetro del perfil (`llm_provider` y
+`llm_model` en `agent_settings`), porque cambiar de modelo es cambiar de
+experimento y tiene que quedar registrado junto al resto de la configuración con
+la que corrió cada ciclo.
 
 Modelos que funcionan bien con este prompt:
 

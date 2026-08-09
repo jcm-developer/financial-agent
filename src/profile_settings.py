@@ -60,9 +60,13 @@ def select_profile(db: Database, *, name: str = "") -> str:
         raise ConfigError(
             "No hay ningun perfil en la base de datos, y desde F6.4 el ciclo toma\n"
             "  sus parametros del perfil y no del .env.\n"
-            "  Importa la configuracion actual del .env a un perfil nuevo con:\n"
-            "      python run.py import-profile --name experimento-01\n"
-            "  Eso crea el perfil, sus parametros y su cartera, y lo deja activo."
+            "  Crea uno con:\n"
+            "      python run.py new-profile --name europa-01 --market eu --watch 89\n"
+            "  Eso crea el perfil, sus parametros, su universo y su cartera, y lo\n"
+            "  deja activo.\n"
+            "  Si vienes de un .env de la version anterior que ya trae los\n"
+            "  parametros dentro, puedes convertirlo en su lugar con:\n"
+            "      python run.py import-profile --name experimento-01"
         )
 
     if name:

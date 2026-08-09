@@ -186,7 +186,11 @@ def test_with_no_model_key_it_fails_while_resolving(db, perfil):
 
 
 def test_with_no_profiles_the_message_explains_how_to_start(db):
-    with pytest.raises(ConfigError, match="import-profile"):
+    # The command offered first is the one that works on a fresh install
+    # (F8.3): `import-profile` reads a `.env` from the previous version, so
+    # pointing someone with nothing to migrate at it sends them down a path
+    # that ends in a profile for the inherited American experiment.
+    with pytest.raises(ConfigError, match="new-profile"):
         select_profile(db)
 
 

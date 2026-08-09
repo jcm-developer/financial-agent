@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F8.10 cerrada: las diez rutas viejas redirigen a las nuevas, con la query traducida)
+Última actualización: 2026-08-09 (F8.3 cerrada: el .env.example queda solo con infraestructura, y documentaba una variable que nadie lee)
 
 ---
 
@@ -1210,10 +1210,44 @@ diez sesiones en silencio.
       el experimento que se está midiendo.
 - [x] **F8.2** Hecho en **F4.11**, donde está el registro. Eran la misma tarea vista desde F4
       («cerrar el frontend») y desde F8 («limpiar»), y se cerraron juntas.
-- [ ] **F8.3** ⚠️ **A medias.** Las variables de estrategia ya **no las lee el ciclo** (F6.4)
-      y [.env.example](.env.example) está partido en dos mitades rotuladas: infraestructura
-      arriba, heredadas abajo. La mitad de abajo sigue ahí porque `run.py import-profile` la
-      necesita; se borra cuando ya no haya ningún `.env` que migrar.
+- [x] **F8.3** Las variables de estrategia ya no las lee el ciclo (F6.4) y
+      [.env.example](.env.example) queda **solo con infraestructura** (2026-08-09).
+
+      ⚠️ **La premisa de esta tarea era falsa, y conviene dejarlo escrito.** Decía que la
+      mitad de abajo seguía ahí «porque `run.py import-profile` la necesita», y que se
+      borraría cuando no quedara ningún `.env` que migrar. No era eso: **`import-profile` lee
+      el `.env` de la versión anterior —uno que ya trae esas treinta variables escritas— y no
+      esta plantilla.** Rellenarlas aquí para luego importarlas sería crear un perfil por el
+      camino largo, teniendo `new-profile` desde FE.7. Así que la condición de borrado nunca
+      fue «que no quede nada que migrar»: la sección sobraba desde que existió `new-profile`.
+      El comando se queda, porque sigue haciendo su trabajo para quien sí tenga ese `.env`.
+
+      Comprobado antes de borrar, y es lo que lo hace seguro: **la única variable obligatoria
+      del fichero es `NVIDIA_API_KEY`** (el único `_require` de [src/config.py](src/config.py));
+      las demás tienen valor por defecto en el código, así que `run.py check` sigue
+      funcionando en una instalación recién clonada sin perfil, que era la garantía de F6.4.
+
+      **Y había un defecto de fondo en la mitad de arriba, la que sí está viva:** documentaba
+      `DASHBOARD_CONTROLS`, que **no lo lee nadie** desde que F7.4 lo renombró a
+      `API_CONTROLS`. Poner a `false` lo que decía la plantilla dejaba los controles de ciclo
+      encendidos, en el único fichero que se consulta justo antes de publicar el puerto fuera
+      de loopback. `CYCLE_TIMES` también seguía con `22:15` —el cierre de Nueva York— cuando
+      el experimento es europeo; ahora trae los tres ciclos de la decisión nº 2.
+
+      **Tres mensajes mandaban al camino equivocado** y se han corregido: el de `run.py check`
+      sin perfil, el de `run.py profiles` con la base vacía y el de `select_profile` en
+      [src/profile_settings.py](src/profile_settings.py). Los tres ofrecían `import-profile` a
+      quien no tiene nada que importar, y el resultado habría sido un perfil del experimento
+      americano heredado. Ahora ofrecen `new-profile` primero e `import-profile` como el caso
+      de migración que es. El test que los sostenía comprobaba literalmente `import-profile`,
+      así que se ha invertido: ahora fija que lo que se ofrece es `new-profile`.
+
+      El [README.md](README.md) §2.3 hacía lo mismo en el paso 2 del arranque —y tenía dos
+      pasos numerados «2»—; ahora crea el perfil con `new-profile --market eu` y menciona la
+      importación entre paréntesis. En §3.3 se ha quitado `LLM_MODEL` del `.env`: el modelo es
+      un parámetro del perfil, porque cambiar de modelo es cambiar de experimento.
+
+      **607 tests en verde.**
 - [x] **F8.4** `.gitignore` con `node_modules/`, `app/dist/` y `.vite/`, añadidos en F3
       porque `app/` ya existe: ahí deja `tools/gen_api_types.py` los tipos del frontend.
       **`app/src/api/types.ts` sí se sube**, para que el frontend compile sin tener que
