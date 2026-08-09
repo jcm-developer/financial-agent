@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (un experimento activo a la vez con ocho ciclos horarios; los otros cuatro niveles, en pausa)
+Última actualización: 2026-08-10 (F9.7 apuntada: spike de noticias y fundamentales; un experimento activo con ocho ciclos horarios)
 
 ---
 
@@ -1783,10 +1783,56 @@ más una lectura de DESIGN.md contra el código. Salieron cuatro cosas:
 - [ ] **F9.2** Backtesting sobre el histórico de `bars_1m` que se vaya acumulando — es la
       razón de peso para empezar a guardarlo ya.
 - [ ] **F9.3** Ejecución intradía real aprovechando los datos de 1 minuto.
-- [ ] **F9.4** Noticias / sentimiento como entrada adicional del analista.
+- [ ] **F9.4** Noticias / sentimiento como entrada adicional del analista. **Depende de
+      F9.7**: hasta saber qué fuentes hay y con qué cobertura, no se puede diseñar.
 - [ ] **F9.5** Notificaciones (Telegram) al abrir o cerrar posición.
 - [ ] **F9.6** Publicar en internet: sería el momento de Supabase + Cloudflare del plan
       anterior, con autenticación. Hoy no hace falta y costaría dinero.
+- [ ] **F9.7** ⚠️ **Spike: ¿se pueden conseguir noticias y fundamentales, y a qué precio?**
+      Pedido el 2026-08-10. Hoy el sistema es **100 % técnico**: los ~30 indicadores que ve
+      el analista salen todos de barras OHLCV, y el prompt le **prohíbe expresamente** citar
+      resultados trimestrales, catalizadores o titulares. La pregunta es si eso se puede
+      levantar sin romper nada.
+
+      **Es un spike y no una implementación**, por lo mismo que F2.1: es lo único que puede
+      invalidar una decisión ya tomada, y lo barato es medir antes.
+
+      **Qué hay que responder, en este orden:**
+
+      1. **Cobertura, y es la pregunta que hunde el resto si sale mal.** El universo son 89
+         valores europeos, buena parte medianas españolas (ANE.MC, LOG.MC, SCYR.MC…). La
+         cobertura de noticias de Yahoo para eso **no se parece a la de una large cap
+         americana**, y un dato que existe para 20 de 89 no es una entrada del analista: es
+         un sesgo, porque el modelo vería contexto solo de las grandes y lo interpretaría
+         como señal. **Hay que medirlo símbolo a símbolo**, igual que FE.2 verificó los 89
+         contra Yahoo uno a uno.
+      2. **Qué expone `yfinance` sin clave**: `.info` (PER, capitalización, márgenes),
+         estados trimestrales y `.get_news()`. Cuánto de eso llega relleno para los 89.
+      3. **Coste.** ⚠️ **Rompe la premisa de 0 €** en cuanto haga falta una API de noticias
+         de verdad. Es la misma advertencia de F9.1: es el momento de decidirlo a
+         propósito, no de descubrirlo en la factura.
+      4. **Cadencia.** No es «cada X minutos». Los fundamentales cambian con los resultados,
+         así que un refresco diario sobra; las noticias son continuas y son otro problema.
+         Mezclarlos en la misma tabla y el mismo reloj sería el error fácil.
+      5. **Peticiones por símbolo.** Cada fuente nueva son más llamadas a Yahoo desde la
+         misma IP doméstica: recalcular R2 antes, no después.
+
+      **Dos trampas que el spike tiene que dejar escritas, porque no fallan solas:**
+
+      - ⚠️ **Los fundamentales de `yfinance` son los de HOY, no los de la fecha.** Usarlos
+        para el backtesting de F9.2 sería **sesgo de anticipación** en su forma más pura:
+        backtestear marzo con el PER de agosto es saber el futuro. O se guardan con su
+        fecha desde el primer día —construyendo el histórico nosotros, como hace el
+        ingestor con `bars_1m`— o F9.2 no puede tocarlos.
+      - ⚠️ **La regla de honestidad del prompt es lo que hace interpretable el
+        experimento.** Hoy, si el modelo cita un catalizador, es una alucinación y se ve.
+        En cuanto pueda citar noticias de verdad, «se lo inventó» y «lo leyó» dejan de
+        distinguirse, y con ellas la mitad del valor de la pantalla de Decisiones. Levantar
+        esa regla exige decidir **cómo se marca en el registro** qué titular vio y cuándo.
+
+      **Consecuencia de método si sale adelante:** deja de ser el mismo experimento. El
+      grupo de control de F5.7 compara screener con y sin criterio; comparar «con noticias»
+      contra «sin noticias» pide **otro perfil más**, no cambiar el que corre.
 
 ---
 
@@ -1824,7 +1870,7 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
 4. **F8.5** — confirmar que el `.env` con claves reales nunca llegó a subirse.
 5. **F1.1 (resto)** — tirar el volumen de Docker con `docker compose down -v`. ⚠️ **No antes
    del experimento**: destruye `trading-data`.
-6. **F9** entera, que no bloquea nada.
+6. **F9** entera, que no bloquea nada — con **F9.7** recién añadida: el spike de noticias y fundamentales, del que depende F9.4.
 
 **Plan de las dos próximas semanas:**
 
