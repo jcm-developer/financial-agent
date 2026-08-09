@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (cinco perfiles de riesgo 1 a 10 en marcha, uno por nivel; queda F2.1c)
+Última actualización: 2026-08-10 (un experimento activo a la vez con ocho ciclos horarios; los otros cuatro niveles, en pausa)
 
 ---
 
@@ -1832,8 +1832,10 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
    como `failed` con el recuento de llamadas, no como una sesión tranquila.
 2. **Lunes 2026-08-10, 09:00 Madrid: F2.1c.** La medición del feed europeo, que decide entre
    `1d` con un ciclo y `1h` con ocho.
-3. **Lunes: arranca el experimento.** ⚠️ **Ya no es un solo perfil europeo sino cinco**, de
-   muy conservador a muy agresivo (decisión nº 5, revisada el 2026-08-10). ⚠️ **Ya no con el dashboard
+3. **Lunes: arranca el experimento**, con **un solo perfil activo** —`eu-05-muy-agresivo`—
+   y **ocho ciclos horarios** de 10:20 a 17:20. Los otros cuatro niveles de riesgo quedan
+   creados y en pausa, para correrlos después uno a uno (decisiones nº 2 y nº 5, revisadas
+   el 2026-08-10). ⚠️ **Ya no con el dashboard
    viejo:** F4 se cerró antes de tiempo, así que el experimento se vigila con la interfaz
    nueva desde el primer día. Es lo que había que conseguir —y de paso la única que enseña la
    salud del ingestor y la antigüedad de los precios, que son los dos números de estas dos
@@ -1970,10 +1972,21 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
    cinco ciclos de ~20 minutos seguidos son ~100, así que u ocho rondas no caben en la
    ventana, o hay que bajar el número de perfiles.
 
-   **Lo que sigue dependiendo de F2.1c** es solo si se queda en `1d` (un ciclo a las 18:00
-   de Madrid) o pasa a `1h` con esos ciclos intradía. Bajar de la hora exigiría añadir
-   `5m`/`15m` a `CYCLE_INTERVALS` y a `bar_cache`, y sobre todo **paralelizar las llamadas al
-   analista**; es trabajo, no un parámetro, y hoy no hay ninguna razón que lo pida.
+   ~~**Lo que sigue dependiendo de F2.1c** es solo si se queda en `1d` o pasa a `1h`…~~
+   ⚠️ **Decidido el 2026-08-10, y decidido antes de F2.1c a propósito:** `bar_interval=1h`
+   con los ocho ciclos, `10:20,11:20,…,17:20 Europe/Madrid`. Es la pauta que este mismo
+   apartado ya proponía —veinte minutos pasada la hora, para que el desfase de ~15 min del
+   feed europeo no deje la barra a medias—, así que la medición de F2.1c no la cambia: la
+   confirma o dice cuánto hay que correr el minuto. Lo que F2.1c sigue decidiendo es si el
+   intradía **real** de F9.3 tiene sentido en Europa, que es otra pregunta.
+
+   Bajar de la hora seguiría exigiendo añadir `5m`/`15m` a `CYCLE_INTERVALS` y a `bar_cache`,
+   y sobre todo **paralelizar las llamadas al analista**; es trabajo, no un parámetro.
+
+   **Consecuencia asumida:** con `1h`, `SMA200` pasa a ser 200 **horas** (~24 sesiones) y no
+   200 días. El indicador deja de significar lo mismo y las tesis del modelo lo notarán.
+   `lookback_days=200` no hace falta tocarlo: con intervalo horario son 200 días naturales de
+   barras, ~1.200, muy por encima de las 200 que pide el SMA200.
 3. ~~**Tamaño del universo a seguir minuto a minuto**: 50 es el punto de partida.~~
    **Resuelto para Europa: 89** (EURO STOXX 50 + IBEX 35, D8). Para el perfil americano
    sigue abierto y ahora se elige explícitamente con `--watch`. Condiciona R2 y R4, que ya
@@ -1984,9 +1997,26 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
 5. ~~**¿Se mantiene un perfil americano activo?**~~ ~~**Resuelto (2026-08-08): un solo
    experimento a la vez**, por decisión de método…~~
 
-   ⚠️ **Revisado el 2026-08-10, a petición explícita: cinco experimentos a la vez.** Se
-   borra `europa-01` —estaba vacío: 0 ciclos, 0 decisiones, 0 posiciones— y se crean cinco
-   perfiles europeos que **se diferencian solo en el perfil de riesgo**, de 1 a 10:
+   ⚠️ **Revisado dos veces el 2026-08-10, y la segunda deshace la primera.** Primero se
+   borró `europa-01` —estaba vacío: 0 ciclos, 0 decisiones, 0 posiciones— y se crearon cinco
+   perfiles europeos para correrlos a la vez. **Horas después se decidió lo contrario: un
+   solo experimento activo a la vez**, y los cinco quedan **guardados en pausa** para
+   ejecutarlos uno detrás de otro. El activo hoy es `eu-05-muy-agresivo`.
+
+   **El motivo es el que hace de bisagra con la decisión nº 2:** un solo perfil es lo que
+   deja sitio a los **ocho ciclos horarios**. Cinco perfiles × 8 ciclos × ~20 minutos no
+   caben en una ventana de 510; uno solo ocupa 160. Se cambia **amplitud por profundidad**:
+   en vez de cinco niveles de riesgo sobre los mismos días, un nivel con ocho comprobaciones
+   de stop y objetivo al día, que es lo que acumula operaciones cerradas deprisa.
+
+   ⚠️ **Consecuencia que hay que asumir, y es la cara mala del cambio:** ejecutados en
+   serie, **los cinco no serán comparables sobre los mismos datos**. A cada uno le tocará un
+   trozo distinto de mercado, así que una diferencia entre sus curvas no se podrá atribuir al
+   riesgo. **El comparador de F5.6 los pintará juntos igualmente** —no sabe de fechas de
+   arranque— y ahí está el riesgo: parecerán comparables sin serlo. Si en algún momento
+   interesa la comparación limpia, hay que activarlos a la vez y volver a `1d`.
+
+   Los cinco, que **se diferencian solo en el perfil de riesgo**, de 1 a 10:
 
    | Perfil | Riesgo | Riesgo/op. | Máx. posición | Exposición | Convicción mín. | Stop | R/R | Kill switch |
    |---|---|---|---|---|---|---|---|---|
@@ -2007,16 +2037,15 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
    son los que reparten el recorrido sin inventar puntos.
 
    **Lo que esto cambia de R2, R4 y R8, y lo que no:**
-   - **R2 y R4 no empeoran.** El ingestor sigue la **unión** de los universos, y los cinco
-     comparten el mismo: son **89 símbolos por minuto**, no 445. Verificado:
-     `symbols_tracked: 89`.
-   - **R8 aguanta.** Hasta 33 llamadas por ciclo × 5 = ~165 por ronda, pero secuenciales:
-     1–2 por minuto contra las 40 rpm de NIM, y sin tope acumulado.
-   - ⚠️ **Lo que sí cambia es el reloj.** Cinco ciclos de ~20 minutos **uno detrás de otro**
-     son ~100 minutos: empiezan a las 18:00 y el último acaba sobre las 19:40. Con barras
-     **diarias** da igual —los cinco leen la misma barra ya cerrada, así que deciden sobre
-     lo mismo—, pero **con barras horarias esto no cabría**: habría que reducir perfiles o
-     paralelizar, que es trabajo y no un parámetro.
+   - **R2 y R4 no empeoran, ni con cinco activos ni con uno.** El ingestor sigue la
+     **unión** de los universos de los perfiles **activos**, y los cinco comparten el mismo:
+     son **89 símbolos por minuto**, no 445. Verificado con los cinco activos y con uno:
+     `symbols_tracked: 89` en los dos casos. ⚠️ Y de ahí sale una trampa: **pausarlos todos
+     deja el ingestor sin nada que seguir** y `bars_1m` deja de crecer, que es histórico que
+     Yahoo no devuelve después (solo sirve ~30 días de intervalo de 1 minuto). Con uno
+     activo basta para seguir acumulándolo.
+   - **R8 aguanta de sobra con un perfil.** Hasta 33 llamadas por ciclo × 8 ciclos = ~264 al
+     día, secuenciales: 1–2 por minuto contra las 40 rpm de NIM, y sin tope acumulado.
 
    ⚠️ **Riesgo de método que hay que vigilar:** `eu-01` exige **convicción 85**, que es un
    listón alto. Es posible que no abra ni una posición en diez sesiones. Sería un resultado
