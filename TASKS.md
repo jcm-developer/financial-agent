@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F8.8 cerrada: el código está entero en inglés y las rutas cambiaron; el texto de pantalla sigue en español)
+Última actualización: 2026-08-09 (F8.8 cerrada: el código está entero en inglés; F8.10 abre la pregunta de si redirigir las rutas viejas, con la recomendación de no hacerlo)
 
 ---
 
@@ -640,7 +640,7 @@ diez sesiones en silencio.
 - **El SSE escribe en la caché de TanStack Query** (`setQueryData`), no en un estado paralelo
   de React. Con dos fuentes para el mismo precio, la pantalla acaba enseñando dos números
   distintos y no hay un sitio donde arreglarlo.
-- **El perfil activo vive en la URL** (`/p/:profile/posiciones`), no en un contexto. Recargar,
+- **El perfil activo vive en la URL** (`/p/:profile/positions`), no en un contexto. Recargar,
   compartir un enlace o volver atrás tienen que seguir apuntando al mismo experimento: todo
   este proyecto se dedica a no confundir dos experimentos, y un selector en memoria es la
   forma más fácil de mirar el equivocado.
@@ -1320,6 +1320,39 @@ diez sesiones en silencio.
       siete dependencias de `requirements.txt` están todas en uso. `src/dashboard.py`
       parecía huérfano tras F4.11 y no lo es: lo usa `run.py report`, que es la analítica de
       consola.
+- [ ] **F8.10** ¿Redirigir las rutas viejas en español? **Recomendación: no, y por eso está
+      abierta en lugar de hecha.**
+
+      F8.8 cambió las siete rutas del perfil (`/p/europa-01/posiciones` → `/positions`), las
+      dos generales (`/perfiles` → `/profiles`, `/diagnostico` → `/diagnostics`) y el
+      parámetro `?ciclo=` → `?cycle=`.
+
+      **Qué pasa hoy con un enlace guardado, comprobado y no supuesto:** el servidor
+      devuelve 200 con el `index.html` —la vuelta al SPA de F3.7 no distingue rutas del
+      router— y el enrutador cae en la ruta comodín, así que se pinta `NotFound`, que
+      **nombra la ruta pedida** y ofrece volver al inicio. No es un error del servidor ni
+      una pantalla en blanco: es un callejón sin salida que se explica solo.
+
+      **Lo que costaría arreglarlo:** nueve `<Route path="posiciones" element={<Navigate
+      to="../positions" replace />} />` en [app/src/App.tsx](app/src/App.tsx). Diez minutos.
+
+      **Por qué aun así se recomienda no hacerlo.** Reintroduce los nueve nombres de ruta en
+      español en el fichero que F8.8 acaba de dejar entero en inglés, y las capas de
+      compatibilidad no las quita nadie: dentro de seis meses seguirían ahí, con la
+      convención de idioma rota justo en el sitio donde se enuncia. A cambio protege a **un
+      solo usuario, en local**, de un inconveniente que se cura escribiendo la URL nueva una
+      vez y dejando que el navegador la aprenda.
+
+      **Lo que sí inclinaría la balanza,** y por eso queda escrito en vez de cerrado: que
+      esto dejara de ser de un usuario, o que el autocompletado del navegador siga colando
+      las rutas viejas durante semanas y resulte molesto de verdad. Es una molestia medible
+      en uso, no en teoría, así que se decide usándolo.
+
+      **No se tocan** las menciones a las rutas viejas dentro de los registros de F4.3 y
+      F5.5: eran ciertas cuando se escribieron y este fichero es un registro, no un espejo
+      del código. Es el mismo criterio con el que F4.11 dejó en pie las menciones a `web/`
+      en lugar de borrarlas de las tareas anteriores. La línea de la lista de decisiones sí
+      se corrigió, porque esa describe el presente.
 
 ### F9 — Futuro (no bloquea)
 
