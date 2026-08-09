@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F5 y F6.8 cerradas, mas el repaso del sistema de diseño; queda F2.1c y F6.10)
+Última actualización: 2026-08-09 (F6.10 cerrada: el experimento activo y su horario se gestionan desde la app; queda F2.1c)
 
 ---
 
@@ -1108,9 +1108,9 @@ diez sesiones en silencio.
       **Recharts sigue fuera del bundle principal**: la comparación se carga con `lazy()` igual
       que Analítica, y las dos comparten el trozo de Recharts.
 
-      ⚠️ **Lo que F6.10 bloquea, y lo que no.** Comparar históricos que ya existen funciona;
-      lo que no se puede todavía es **correr** dos experimentos con horarios distintos, porque
-      `cycle_times` está en el esquema y no lo lee nadie. La pantalla lo dice.
+      ⚠️ ~~**Lo que F6.10 bloquea, y lo que no.**~~ **Resuelto el mismo día**: F6.10 se cerró
+      después, así que ya se pueden **correr** dos experimentos con horarios distintos y no
+      solo comparar los históricos que ya existen.
 
       **616 tests en verde, typecheck limpio, 24 de front, build correcto.**
 - [x] **F5.7** Perfil de control: screener en modo `random`, para tener contra qué medir el
@@ -1284,8 +1284,9 @@ diez sesiones en silencio.
         se recarga.
       - **El tope por sector se enseña diciendo que no se aplica.** Es el caso de FE.12, y es
         el peor de los tres posibles si se calla: un límite cuya ausencia no falla, solo
-        acumula posiciones en un sector. Igual con `cycle_times` y `cycle_tz`, que llevan su
-        aviso de F6.10 en el propio campo: hoy se guardan y no los lee nadie.
+        acumula posiciones en un sector. `cycle_times` y `cycle_tz` llevaban el mismo tipo de
+        aviso —«hoy se guardan y no los lee nadie»— y **dejó de ser cierto el mismo día**: al
+        cerrar F6.10 el aviso se sustituyó por el formato que espera el planificador.
 
       **`Pending.tsx` se borra**: F5.3 y F6.8 han tapado los dos huecos que anunciaba, y era
       el único uso que tenía.
@@ -1324,7 +1325,49 @@ diez sesiones en silencio.
       [tests/test_analyst_failures.py](tests/test_analyst_failures.py): 10 tests, incluido
       el de la migración sobre una base creada antes de las columnas. **Suite: 606 en
       verde.**
-- [ ] **F6.10** ⚠️ **`cycle_times` y `cycle_tz` están en el esquema y no los lee nadie.**
+- [x] **F6.10** ⚠️ **`cycle_times` y `cycle_tz` estaban en el esquema y no los leía nadie.**
+      Cerrada el 2026-08-09, **pedida explícitamente**: «el nombre del experimento activo
+      debería definirse en la app, no en un `.env`, porque si no cada vez que quiera iniciar
+      uno nuevo tendría que modificar el `.env` y luego volver a actualizarlo en Docker».
+
+      [tools/scheduler.py](tools/scheduler.py) recorre ahora los perfiles **activos**, lee el
+      horario y la zona de cada uno y lanza `run.py cycle --profile X` a su hora. Del entorno
+      solo quedan `RUN_ON_START` y `SCHEDULER_REFRESH_SECONDS`; **`PROFILE`, `CYCLE_TIMES` y
+      `CYCLE_TZ` se han retirado** de [docker-compose.yml](docker-compose.yml) y del `.env`.
+
+      **Lo que resuelve de verdad es la molestia, no la columna muda:** el plan **se relee
+      cada minuto**, así que activar un experimento, pausarlo o cambiarle las horas desde las
+      pantallas de Experimentos y Ajustes **surte efecto sin tocar ningún fichero y sin
+      reiniciar el contenedor**. Comprobado con el planificador corriendo: activar un segundo
+      perfil lo recoge en segundos, cambiar `cycle_times` reprograma el siguiente ciclo, y
+      pausar el primero lo saca del plan.
+
+      Cuatro decisiones que salieron al escribirlo:
+      - ⚠️ **Una errata en el horario ya no mata el planificador.** `parse_times` lanzaba
+        `SystemExit`, y eso era una bomba desde F6.8: `cycle_times` pasó a ser un campo que
+        escribe la interfaz, así que un error de tecleo en un perfil habría dejado **sin
+        planificar a todos los demás**, con el contenedor pareciendo vivo. Ahora es
+        `ScheduleError`, se salta ese perfil y se dice en el log.
+      - **Y además se rechaza al guardar.** `SettingsUpdate` valida el formato y lo devuelve
+        **normalizado**, así que «9:5» y «09:05» no acaban siendo dos cadenas distintas en
+        `agent_settings_history`, que se lee a ojo.
+      - ⚠️ **Aviso de horario que analizaría la barra equivocada.** Con barras diarias, un
+        ciclo **antes del cierre** analiza la barra del día **sin terminar** —el «cierre» que
+        lee es el precio que hubiera en ese momento—; con barras horarias, uno fuera de la
+        ventana operativa lee la barra de ayer. Ninguno de los dos falla: los dos deciden
+        sobre datos que no son lo que parecen.
+      - **Los ciclos van uno detrás de otro y no a la vez.** Dos perfiles que caigan en el
+        mismo minuto doblarían las peticiones a Yahoo y al modelo justo entonces.
+
+      **Consecuencia que hay que asumir, y hay que mirarla antes del lunes:** el horario que
+      mandaba era `CYCLE_TIMES=16:30,18:30,20:30` del `.env` —la sesión **americana**— y
+      `europa-01` tiene en su columna el default del esquema, `22:15`, que es el cierre de
+      **Nueva York**. Ninguno de los dos es un horario europeo, así que no se ha «preservado
+      el comportamiento» porque no había ninguno que preservar: **hay que elegirlo en Ajustes**.
+      Con `bar_interval=1d` lo coherente es un solo ciclo tras el cierre de Madrid (17:40); si
+      F2.1c manda pasar a `1h`, los de la decisión nº 2.
+
+      **626 tests en verde** (9 nuevos).
       Existen en `agent_settings` (con defecto `22:15` / `Europe/Madrid`) y en
       `SettingsUpdate`, así que la API los acepta y los guarda — pero
       [src/profile_settings.py](src/profile_settings.py) no los pasa a `Settings` y
@@ -1340,11 +1383,9 @@ diez sesiones en silencio.
       El planificador tiene que recorrer los perfiles activos, leer el horario de cada uno y
       lanzar `run.py cycle --profile X` a su hora.
 
-      ⚠️ **No bloquea el primer experimento** (decisión nº 5: un solo perfil activo, así que
-      `CYCLE_TIMES=10:20,11:20,…` en el entorno del `scheduler` hace exactamente lo que hace
-      falta). Sí bloquea el comparador de F5.6, que es dos perfiles a la vez por definición.
-      Lo que no se puede dejar como está es la columna muda: o la lee el planificador, o la
-      API deja de aceptarla.
+      ~~⚠️ **No bloquea el primer experimento**… Sí bloquea el comparador de F5.6.~~
+      **Resuelto:** la lee el planificador, que era una de las dos salidas que esta tarea
+      dejaba escritas. Dos experimentos con horarios distintos ya se pueden correr a la vez.
 
 **Parámetros propuestos** (los tres que pediste en negrita, más los que creo que faltan):
 
@@ -1764,8 +1805,8 @@ FE se coló delante de F3 porque cambiaba el esquema (`agent_settings.market`) y
 reescribía la pregunta de F2.1c: medir la sesión americana ya no era lo que interesaba.
 Hacerlo después habría significado rehacer los endpoints de F3 y la medición del lunes.
 
-**Dónde estamos (2026-08-09, tarde):** F1, F2 (salvo F2.1c), FE, F3, F4, **F5**, F7 y F8
-cerradas; F6 salvo F6.10. La interfaz nueva es la única que hay —`web/` se borró en F4.11— y
+**Dónde estamos (2026-08-09, tarde):** F1, F2 (salvo F2.1c), FE, F3, F4, **F5**, **F6**, F7
+y F8 cerradas. La interfaz nueva es la única que hay —`web/` se borró en F4.11— y
 corre en Docker sobre 24 rutas de la API, todas con modelo Pydantic. **Ya no queda ningún
 cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8.
 
@@ -1773,9 +1814,10 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
 
 1. **F2.1c** — lo único bloqueante, y solo se puede medir en sesión: mañana lunes 2026-08-10
    en cuanto abra Madrid.
-2. **F6.10** — `cycle_times` y `cycle_tz` siguen siendo columnas mudas. No bloquea el primer
-   experimento (un solo perfil activo), pero sí correr dos con horarios distintos, que es
-   justo lo que el comparador de F5.6 invita a hacer ahora que existe.
+2. ⚠️ **Elegir el horario de `europa-01` en Ajustes.** No es una tarea del plan, es una
+   consecuencia de F6.10: la columna traía el `22:15` por defecto —el cierre de Nueva York— y
+   el `CYCLE_TIMES` del `.env` que mandaba antes eran las 16:30/18:30/20:30, la sesión
+   americana. Ninguno de los dos vale para un experimento europeo.
 3. **FE.12 / el tope por sector de F6.5** — se calcula y no se aplica, por falta de dato de
    sector por símbolo. La pantalla de Ajustes ya lo dice en voz alta.
 4. **F8.5** — confirmar que el `.env` con claves reales nunca llegó a subirse.
@@ -1919,9 +1961,10 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
    número de operaciones cerradas en diez días depende de con qué frecuencia se miran esos
    niveles. Ahí está el valor de los ocho ciclos, y no en preguntarle ocho veces al modelo.
 
-   ⚠️ **Hoy ese horario no se pone en el perfil: ver F6.10.** `cycle_times` existe en el
-   esquema y no lo lee nadie; con un solo perfil activo (decisión nº 5) basta
-   `CYCLE_TIMES` en el entorno del `scheduler`.
+   ⚠️ ~~**Hoy ese horario no se pone en el perfil: ver F6.10.**~~ **Ya sí** (F6.10,
+   2026-08-09): se pone en la pantalla de Ajustes de cada experimento y el planificador lo
+   recoge sin reiniciar nada. ⚠️ **`europa-01` sigue con el `22:15` por defecto del esquema,
+   que es el cierre de Nueva York**: hay que elegirle uno europeo antes del lunes.
 
    **Lo que sigue dependiendo de F2.1c** es solo si se queda en `1d` (un ciclo a las 18:00
    de Madrid) o pasa a `1h` con esos ciclos intradía. Bajar de la hora exigiría añadir

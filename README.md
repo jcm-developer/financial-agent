@@ -255,19 +255,33 @@ docker compose logs -f scheduler
 | Solo la interfaz | `docker compose up -d api` |
 | Parar el planificador | `docker compose stop scheduler` |
 
-### 2.5 Cambiar la cadencia
+### 2.5 Qué experimento corre, y a qué horas
 
-Por defecto un ciclo diario a las **22:15 hora peninsular**, poco después del
-cierre de Nueva York, cuando las barras diarias ya están completas. Para
-cambiarlo, añade al `.env`:
+**Las dos cosas se deciden en la interfaz, no en el `.env`.**
+
+- **Qué corre:** los experimentos en estado *activo*. Se activan y se pausan
+  desde la pantalla de **Experimentos**.
+- **A qué horas:** el campo *Horas de ciclo* de la pantalla de **Ajustes** de
+  cada experimento, en formato `HH:MM` separado por comas y en su propia zona
+  horaria.
+
+El planificador **relee el plan cada minuto**, así que activar un experimento
+nuevo, pausar el anterior o cambiarle el horario **surte efecto sin tocar ningún
+fichero y sin reiniciar el contenedor**. Cada experimento activo lleva su propio
+horario, de modo que uno europeo con tres ciclos intradía y otro americano al
+cierre pueden convivir.
+
+⚠️ **El valor por defecto de la columna es `22:15`**, que es el cierre de Nueva
+York. En un perfil europeo hay que cambiarlo: con barras diarias, un ciclo antes
+del cierre de Madrid analizaría la barra del día **sin terminar**. El planificador
+avisa en el log cuando eso pasa.
+
+Del `.env` solo queda la infraestructura del servicio:
 
 ```
-CYCLE_TIMES=15:35,22:15      # dos ciclos: apertura y cierre de NY
-CYCLE_TZ=Europe/Madrid
-RUN_ON_START=false           # true = un ciclo al arrancar el contenedor
+RUN_ON_START=false             # true = un ciclo de cada activo al arrancar
+SCHEDULER_REFRESH_SECONDS=60   # cada cuánto relee el plan
 ```
-
-Y recarga: `docker compose up -d`.
 
 ### 2.6 Detalles que conviene saber
 
@@ -290,11 +304,14 @@ son datos de una cuenta de inversión. Si de verdad quieres abrirlo al resto de
 tu red, cambia el mapeo a `"8000:8000"` en `docker-compose.yml` sabiendo lo que
 implica.
 
-**Si falta el `.env` o no hay perfil activo, el servicio `scheduler` se para**
-con un mensaje explicando qué falta, en lugar de entrar en bucle de reinicios. El
-perfil se resuelve al arrancar el planificador, no al lanzar el ciclo: descubrir
-que no hay ninguno activo a las 22:15, tras ocho horas dormido, es la peor hora
-posible para enterarse. La `api` sigue funcionando.
+**Si no hay ningún experimento activo, el `scheduler` no se para: espera.** Lo
+dice en el log y sigue releyendo, porque activar uno desde la interfaz es
+justamente lo que tiene que recoger. Antes se paraba, y tenía sentido cuando el
+perfil venía del `.env` —si estaba mal, no iba a arreglarse solo—; ahora sí puede.
+
+**Un experimento con el horario mal escrito se salta, y solo él.** El log dice
+cuál y por qué. La interfaz ya rechaza el formato al guardar, así que hace falta
+haber editado la base a mano para llegar ahí.
 
 ### 2.7 Modo desarrollo
 

@@ -3,6 +3,11 @@
 A scheduling failure is silent — the container looks alive and runs nothing, or
 runs twice in a row — so the calculation of the next time is tested explicitly,
 including the day rollover and the daylight-saving change.
+
+Since F6.10 the plan comes from the database and not from the environment, so
+what is checked as well is that only the **active** profiles are scheduled, that
+each one carries its own times, and that a profile with a bad schedule is skipped
+instead of taking the scheduler down with it.
 """
 
 from __future__ import annotations
@@ -12,7 +17,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from tools.scheduler import next_run, parse_times
+from src.db import Database
+from tools.scheduler import ScheduleError, load_plans, next_run, parse_times
 
 MADRID = ZoneInfo("Europe/Madrid")
 
@@ -39,22 +45,33 @@ def test_midnight_is_valid():
     assert parse_times("00:00") == [(0, 0)]
 
 
-@pytest.mark.parametrize("raw", ["", "   ", ",,"])
+@pytest.mark.parametrize("raw", ["", "   ", ",,", None])
 def test_empty_configuration_is_rejected(raw):
-    with pytest.raises(SystemExit, match="vacio"):
+    with pytest.raises(ScheduleError):
         parse_times(raw)
 
 
 @pytest.mark.parametrize("raw", ["22", "22h15", "abc", "22:15:30"])
 def test_malformed_time_is_rejected(raw):
-    with pytest.raises(SystemExit, match="invalido"):
+    with pytest.raises(ScheduleError, match="invalida"):
         parse_times(raw)
 
 
 @pytest.mark.parametrize("raw", ["24:00", "22:60", "-1:00"])
 def test_out_of_range_time_is_rejected(raw):
-    with pytest.raises(SystemExit):
+    with pytest.raises(ScheduleError):
         parse_times(raw)
+
+
+def test_a_bad_schedule_is_no_longer_fatal():
+    """It used to be `SystemExit`, and since F6.8 that is a loaded gun.
+
+    `cycle_times` is a field the interface writes, so a typo in one profile would
+    have taken the scheduler down for every other experiment — and the symptom is
+    a container that looks alive and runs nothing.
+    """
+    assert issubclass(ScheduleError, ValueError)
+    assert not issubclass(ScheduleError, SystemExit)
 
 
 # -- next_run ----------------------------------------------------------------
@@ -105,3 +122,73 @@ def test_next_run_still_advances_across_a_dst_change():
 
     assert result > now
     assert (result.year, result.month, result.day) == (2026, 10, 25)
+
+
+# -- El plan sale de la base, no del entorno (F6.10) --------------------------
+
+@pytest.fixture
+def db(tmp_path):
+    with Database(path=tmp_path / "sched.db") as database:
+        yield database
+
+
+def make_profile(db, name, *, status="active", **settings):
+    profile_id = db.create_profile(name=name)
+    if settings:
+        db.update_settings(profile_id, settings)
+    db.set_profile_status(profile_id, status)
+    return profile_id
+
+
+def test_only_the_active_profiles_are_scheduled(db):
+    """This is the whole point of F6.10: which experiment runs is decided by the
+    interface —activating and pausing— and not by a variable in the .env that has
+    to be edited and redeployed."""
+    make_profile(db, "vivo", status="active", cycle_times="17:40")
+    make_profile(db, "pausado", status="paused", cycle_times="17:40")
+    make_profile(db, "borrador", status="draft", cycle_times="17:40")
+    make_profile(db, "archivado", status="archived", cycle_times="17:40")
+
+    plans = load_plans(db)
+
+    assert [plan.profile for plan in plans] == ["vivo"]
+
+
+def test_each_profile_carries_its_own_times(db):
+    """With one set of hours for everyone, a European experiment with three
+    intraday cycles and an American one at the close could not both be
+    expressed."""
+    make_profile(db, "europa", cycle_times="11:20,14:20,17:40", market="eu")
+    make_profile(db, "usa", cycle_times="22:15", market="us")
+
+    plans = {plan.profile: plan for plan in load_plans(db)}
+
+    assert plans["europa"].times == ((11, 20), (14, 20), (17, 40))
+    assert plans["usa"].times == ((22, 15),)
+
+
+def test_a_profile_with_a_bad_schedule_is_skipped_not_fatal(db):
+    """One typo must not leave every other experiment unscheduled."""
+    make_profile(db, "roto", cycle_times="a las cinco")
+    make_profile(db, "bueno", cycle_times="17:40")
+
+    plans = load_plans(db)
+
+    assert [plan.profile for plan in plans] == ["bueno"]
+
+
+def test_an_unknown_timezone_falls_back_to_utc_without_dropping_the_profile(db):
+    """Losing the hour is bad; losing the experiment is worse, and the log says
+    which one happened."""
+    make_profile(db, "rara", cycle_times="17:40", cycle_tz="Marte/Olympus")
+
+    plans = load_plans(db)
+
+    assert [plan.profile for plan in plans] == ["rara"]
+    assert plans[0].tz_name == "UTC"
+
+
+def test_the_timezone_is_the_profiles_own(db):
+    make_profile(db, "madrid", cycle_times="17:40", cycle_tz="Europe/Madrid")
+
+    assert load_plans(db)[0].tz == ZoneInfo("Europe/Madrid")

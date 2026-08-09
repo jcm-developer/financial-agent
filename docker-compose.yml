@@ -112,34 +112,19 @@ services:
     command: ["python", "tools/scheduler.py"]
     environment:
       DB_PATH: /app/data/trading.db
-      # Contra que perfil opera. Vacio = el unico activo, que es lo que se quiere
-      # con un experimento a la vez (decision nº 5).
+      # Ya no hay ni PROFILE ni CYCLE_TIMES aqui, y es el cambio de F6.10.
       #
-      # ⚠️ Vacio NO significa "elige tu": `Infra.load()` cae en `PORTFOLIO_NAME`
-      # del .env, que es una variable heredada de antes de F6.4 y suele traer un
-      # nombre viejo. Si el planificador arranca diciendo "no existe ningun perfil
-      # llamado ...", es esto: pon aqui el nombre bueno o quita `PORTFOLIO_NAME`
-      # del .env (F8.3 lo retira cuando no queden `.env` que migrar).
+      # Que experimentos corren lo dice `profiles.status` y a que horas lo dice
+      # `agent_settings.cycle_times`, los dos en la base. O sea que se gestiona
+      # desde la pantalla de Experimentos y la de Ajustes: activar uno nuevo,
+      # pausar el anterior o cambiarle el horario NO exige tocar este fichero, ni
+      # el .env, ni reiniciar el contenedor.
       #
-      #   PROFILE=europa-01 docker compose up -d scheduler
-      PROFILE: "${PROFILE:-}"
-      # 22:15 en hora peninsular: poco despues del cierre de Nueva York, cuando
-      # las barras diarias ya estan completas.
-      #
-      # ⚠️ Ese default es para un perfil AMERICANO. Con `market=eu` el "tras el
-      # cierre" son las 18:00 de Madrid, y si se pasa a barras horarias son los
-      # ocho ciclos de la ventana europea, veinte minutos pasada la hora para que
-      # la barra este completa con el desfase del feed:
-      #
-      #   CYCLE_TIMES=18:00                                        (1d, europeo)
-      #   CYCLE_TIMES=10:20,11:20,12:20,13:20,14:20,15:20,16:20,17:20   (1h)
-      #
-      # Cual de los dos depende de la medicion de F2.1c. Y ⚠️ el horario sale de
-      # aqui y no del perfil: `agent_settings.cycle_times` existe pero no lo lee
-      # nadie todavia (F6.10), asi que con mas de un perfil activo esto se queda
-      # corto.
-      CYCLE_TIMES: "${CYCLE_TIMES:-22:15}"
-      CYCLE_TZ: "${CYCLE_TZ:-Europe/Madrid}"
+      # El plan se relee cada SCHEDULER_REFRESH_SECONDS, asi que un cambio hecho
+      # en la interfaz entra solo en menos de un minuto.
+      SCHEDULER_REFRESH_SECONDS: "${SCHEDULER_REFRESH_SECONDS:-60}"
+      # true = un ciclo de cada experimento activo al arrancar el contenedor, sin
+      # esperar a su hora.
       RUN_ON_START: "${RUN_ON_START:-false}"
     restart: on-failure
     # Margen para que un ciclo en curso termine antes del SIGKILL.

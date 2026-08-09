@@ -365,6 +365,34 @@ def test_the_preview_writes_nothing(client, db_path, profile):
     assert before == after
 
 
+def test_a_bad_schedule_is_refused_when_saving(client, profile):
+    """Since F6.10 `cycle_times` is what the scheduler runs on.
+
+    A typo typed into the settings form stops being cosmetic: that profile goes
+    unscheduled. The scheduler survives it —it skips the profile and says so— but
+    from the outside the failure is silent, and a container that looks alive and
+    runs nothing is the worst way to find out. So it is refused here, which is
+    what turns it into a red field while it is being typed.
+    """
+    for bad in ("a las cinco", "25:00", "17-40", ""):
+        response = client.patch(
+            f"/api/profiles/{profile['name']}/settings", json={"cycle_times": bad},
+        )
+        assert response.status_code == 422, f"{bad!r} deberia rechazarse"
+
+
+def test_the_schedule_is_stored_normalised(client, profile):
+    """"9:5" and "09:05" mean the same thing and must not become two different
+    strings in `agent_settings_history`, which is read by eye."""
+    client.patch(
+        f"/api/profiles/{profile['name']}/settings",
+        json={"cycle_times": "17:40, 9:5"},
+    )
+    settings = client.get(f"/api/profiles/{profile['name']}/settings").json()["settings"]
+
+    assert settings["cycle_times"] == "09:05,17:40"
+
+
 def test_the_market_sets_the_liquidity_floor(profile):
     """FE.11 from the API too: with 'us''s 20 M the European screener would
     discard 15 of the 89 without saying anything."""

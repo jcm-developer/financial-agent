@@ -335,14 +335,15 @@ function SettingsForm({
         <Input
           label="Horas de ciclo"
           value={value("cycle_times")}
+          placeholder="17:40 o 11:20,14:20,17:40"
           onChange={(e) => set("cycle_times", e.target.value)}
-          hint="⚠ Hoy no lo lee nadie: el planificador usa CYCLE_TIMES del entorno (F6.10)."
+          hint="HH:MM separadas por comas. El planificador lo recoge en menos de un minuto, sin reiniciar nada."
         />
         <Input
           label="Zona horaria del ciclo"
           value={value("cycle_tz")}
           onChange={(e) => set("cycle_tz", e.target.value)}
-          hint="⚠ Igual que la anterior: pendiente de F6.10."
+          hint="Nombre IANA, p. ej. Europe/Madrid."
         />
         <NumberField label="Deslizamiento (pb)" field="sim_slippage_bps" value={value} set={set} />
         <NumberField label="Comisión por orden" field="sim_commission" value={value} set={set} />

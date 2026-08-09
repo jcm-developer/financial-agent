@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import Any, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 T = TypeVar("T")
 
@@ -358,6 +358,35 @@ class SettingsUpdate(BaseModel):
     min_order_notional: float | None = Field(default=None, ge=0)
 
     extra_json: str | None = None
+
+    @field_validator("cycle_times")
+    @classmethod
+    def _check_cycle_times(cls, value: str | None) -> str | None:
+        """`cycle_times` is what the scheduler runs on, so it is validated here.
+
+        Since F6.10 the scheduler reads this column instead of `CYCLE_TIMES` from
+        the environment, which means a typo typed into the settings form stops
+        being cosmetic: the profile would go unscheduled. The scheduler survives
+        it —it skips that profile and says so— but the failure is silent from the
+        outside, and a container that looks alive and runs nothing is the worst
+        way to find out.
+
+        Rejecting it here is what turns it into a red field at the moment of
+        typing.
+        """
+        if value is None:
+            return None
+        # Imported here and not at module level: `api/models.py` is loaded by the
+        # type generator, which has no business dragging in the scheduler.
+        from tools.scheduler import ScheduleError, parse_times
+
+        try:
+            times = parse_times(value)
+        except ScheduleError as exc:
+            raise ValueError(str(exc)) from exc
+        # Given back normalised, so "9:5" and "09:05" do not end up as two
+        # different strings meaning the same thing in the history.
+        return ",".join(f"{hour:02d}:{minute:02d}" for hour, minute in times)
 
 
 class SettingsApplied(BaseModel):
