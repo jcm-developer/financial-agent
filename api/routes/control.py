@@ -63,6 +63,40 @@ def run_cycle(db: ReadDb, runner: Runner, body: CycleRunRequest):
     return runner.status()
 
 
+@router.post("/close-experiment", response_model=CycleControl)
+def close_experiment(db: ReadDb, runner: Runner, body: CycleRunRequest):
+    """Liquidates the book to end an experiment (F5.8).
+
+    It goes out as a subprocess and through the same runner as a cycle, for the
+    same two reasons: **the API cannot write to the history** —not even by
+    mistake, SQLite forbids it (F3.3)— and only one operation at a time may touch
+    a book.
+
+    It is deliberately **not** a `DELETE` nor a status change. Closing means
+    selling, with its orders, its exit prices and its reasons; a profile marked
+    "closed" with its positions still open would be a lie recorded in the one
+    place that is read to judge the experiment.
+    """
+    _require_controls(runner)
+
+    profile_name = None
+    if body.profile:
+        profile_name = find_profile(db, body.profile)["name"]
+
+    if _cycle_running_elsewhere(db):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Hay un ciclo en marcha. Espera a que termine antes de cerrar el "
+            "experimento: vender mientras el agente decide dejaria las dos "
+            "cosas a medias.",
+        )
+
+    ok, message = runner.start(profile=profile_name, action="close-experiment")
+    if not ok:
+        raise HTTPException(status.HTTP_409_CONFLICT, message)
+    return runner.status()
+
+
 @router.post("/stop", response_model=ActionResult)
 def stop_cycle(runner: Runner):
     """Asks the cycle this API launched to stop.

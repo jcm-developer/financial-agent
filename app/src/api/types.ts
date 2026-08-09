@@ -620,6 +620,8 @@ export interface ApiOperations {
   "GET /api/analytics": Analytics;
   /** Cycles */
   "GET /api/cycles": Page_CycleRow;
+  /** Close Experiment */
+  "POST /api/cycles/close-experiment": CycleControl;
   /** Control Status */
   "GET /api/cycles/control/status": CycleControl;
   /** Run Cycle */

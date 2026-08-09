@@ -29,7 +29,15 @@ from src.db import Database
 # `run.py cycle` as a subprocess, which opens its own connection. It is the
 # separation `api/routes/control.py` describes, and it is written here so that
 # adding a write route without a fenced connection has to be a conscious decision.
-CONTROL_ROUTES = {"/api/cycles/run", "/api/cycles/stop"}
+CONTROL_ROUTES = {
+    "/api/cycles/run",
+    "/api/cycles/stop",
+    # Closing an experiment sells the book (F5.8), so it writes to the history —
+    # and precisely because of that it cannot be an endpoint that writes: it goes
+    # out as `run.py close-experiment`, which opens its own connection. The test
+    # below forced this line to be written, which is what it is for.
+    "/api/cycles/close-experiment",
+}
 
 
 # ----------------------------------------------------------------------

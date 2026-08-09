@@ -245,8 +245,14 @@ minuto, sin reiniciar nada.
 **Mirar.** Resumen, Posiciones, Decisiones, Órdenes, Riesgo, Ciclos y Analítica.
 La pantalla de Ciclos enseña el log en vivo del que esté corriendo.
 
-**Cerrar.** ⚠️ **Aquí hay un hueco reconocido.** Hoy solo se puede **pausar**, y
-pausar:
+**Cerrar.** Botón **«Cerrar experimento»** en la pantalla de Ciclos (F5.8): vende
+todas las posiciones abiertas **por el broker**, a la apertura de la barra
+siguiente y con el mismo deslizamiento que cualquier otra venta, y deja el
+resultado **realizado**. No se consulta al modelo —no es una decisión de mercado,
+es el final del experimento— y queda registrado como un ciclo más con la regla
+`experiment_closed`. Con el mercado cerrado se niega en vez de inventar un precio.
+
+**Pausar es otra cosa**, y sigue siendo lo que era:
 
 - **no cierra las posiciones abiertas**, así que el resultado que se lee es **no
   realizado**: la cartera valorada a mercado, no un resultado cerrado;
@@ -255,9 +261,8 @@ pausar:
 - si era el único activo, **deja al ingestor sin símbolos** y los precios de
   valoración se congelan en el último conocido.
 
-Falta un **«Cerrar experimento»** que venda todo por el broker —con sus órdenes,
-sus fills y sus posiciones cerradas, no un `UPDATE` a mano— y deje el resultado
-realizado. Está apuntado como **F5.8**.
+O sea: **pausar guarda, cerrar liquida.** Para leer el resultado de las decisiones
+del agente hay que cerrar; pausar deja la cartera a medio camino.
 
 ---
 
@@ -267,7 +272,6 @@ Para no volver a preguntárselo:
 
 | No hace | Tarea |
 |---|---|
-| Cerrar el experimento vendiendo las posiciones | **F5.8** |
 | Ejecutar al precio del momento de la orden (usa la apertura de la barra) | **F9.3** |
 | Leer noticias o fundamentales | **F9.7** (spike), luego **F9.4** |
 | Aplicar el tope por sector (lo calcula y no lo hace cumplir) | **FE.12** / **F6.5** |

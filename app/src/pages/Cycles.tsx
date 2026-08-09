@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
 import {
+  useCloseExperiment,
   useCycle,
   useCycleControl,
   useCycles,
@@ -9,6 +10,7 @@ import {
   useStopCycle,
 } from "@/api/hooks";
 import type { CycleControl, CycleRow } from "@/api/types";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CycleStatus } from "@/components/CycleStatus";
 import {
   Alert,
@@ -135,7 +137,9 @@ function Control({
 }) {
   const run = useRunCycle(profile);
   const stop = useStopCycle();
-  const failure = run.error ?? stop.error;
+  const close = useCloseExperiment(profile);
+  const [closing, setClosing] = useState(false);
+  const failure = run.error ?? stop.error ?? close.error;
 
   if (!state.enabled) {
     return (
@@ -194,12 +198,59 @@ function Control({
           >
             Parar
           </Button>
+          {/* F5.8. It lives beside the cycle controls and not in the profile
+              actions because it IS an operation on the book —it sells— and it
+              shares the log and the lock with the cycle: only one thing at a
+              time may touch a book. */}
+          <Button
+            variant="danger"
+            disabled={state.running || close.isPending || !profile}
+            onClick={() => setClosing(true)}
+          >
+            Cerrar experimento
+          </Button>
         </div>
       </div>
 
       {failure && <Alert className="mt-3">{failure.message}</Alert>}
 
       <Log lines={state.lines ?? []} />
+
+      <ConfirmDialog
+        open={closing}
+        title={`Cerrar ${profile ?? "el experimento"}`}
+        confirmLabel="Vender todo y cerrar"
+        danger
+        busy={close.isPending}
+        onConfirm={async () => {
+          try {
+            await close.mutateAsync();
+            setClosing(false);
+          } catch {
+            // The message is already on the alert above; the dialog stays open
+            // so the reason is read where the decision was taken.
+          }
+        }}
+        onCancel={() => setClosing(false)}
+      >
+        <p>
+          Vende <strong className="font-semibold">todas las posiciones abiertas</strong> por
+          el broker, a la apertura de la barra siguiente y con el mismo deslizamiento que
+          cualquier otra venta. A partir de ahí el resultado es <strong
+          className="font-semibold">realizado</strong>, no una cartera valorada a mercado.
+        </p>
+        <p>
+          {/* Said out loud because it is the question anyone asks here: no, the
+              model does not get to weigh in. The experiment is over. */}
+          No se consulta al modelo: no es una decisión de mercado, es el final del
+          experimento. Queda registrado como un ciclo más, con la regla
+          <code> experiment_closed</code>.
+        </p>
+        <p className="text-text-muted">
+          No se puede deshacer, y con el mercado cerrado no se puede hacer: no habría precio
+          al que vender.
+        </p>
+      </ConfirmDialog>
     </Card>
   );
 }

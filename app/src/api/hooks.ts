@@ -297,6 +297,28 @@ export function useRunCycle(profile: string | undefined) {
 }
 
 /**
+ * Liquidates the book to end an experiment (F5.8).
+ *
+ * Everything is invalidated on success, not just the control state: closing
+ * sells the whole book, so positions, orders, cycles and the analytics all
+ * change at once. It is the same reasoning as deleting a profile.
+ *
+ * @param profile - Experiment to close.
+ * @return The mutation for `POST /api/cycles/close-experiment`.
+ */
+export function useCloseExperiment(profile: string | undefined) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api.post<CycleControl>("/api/cycles/close-experiment", { profile }),
+    onSuccess: (state) => {
+      client.setQueryData(keys.cycleControl(), state);
+      client.invalidateQueries();
+    },
+  });
+}
+
+/**
  * Asks the running cycle to stop.
  *
  * @return The mutation for `POST /api/cycles/stop`.

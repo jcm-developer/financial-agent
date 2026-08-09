@@ -54,16 +54,28 @@ class CycleRunner:
         return self._process is not None and self._process.poll() is None
 
     def start(
-        self, *, profile: str | None = None, dry_run: bool = False
+        self,
+        *,
+        profile: str | None = None,
+        dry_run: bool = False,
+        action: str = "cycle",
     ) -> tuple[bool, str]:
+        """Launches `run.py <action>` for one profile.
+
+        `action` exists so closing an experiment (F5.8) reuses this runner
+        instead of growing a second one: it is the same subprocess, the same
+        lock —one operation per book at a time— and the same log on screen. And
+        it has to be a subprocess for the same reason the cycle is: the API
+        cannot write to the history, not even by mistake (F3.3).
+        """
         with self._lock:
             if self.running:
                 return False, "Ya hay un ciclo en marcha."
 
-            command = [sys.executable, "run.py", "cycle"]
+            command = [sys.executable, "run.py", action]
             if profile:
                 command += ["--profile", profile]
-            if dry_run:
+            if dry_run and action == "cycle":
                 command.append("--dry-run")
 
             try:
@@ -78,7 +90,7 @@ class CycleRunner:
                     errors="replace",
                 )
             except OSError as exc:
-                return False, f"No se pudo lanzar el ciclo: {exc}"
+                return False, f"No se pudo lanzar {action}: {exc}"
 
             self._process = process
             self._lines.clear()

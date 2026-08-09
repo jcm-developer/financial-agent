@@ -559,6 +559,41 @@ def command_cycle(settings: Settings) -> int:
     return 0 if report.status in {"completed", "halted"} else 1
 
 
+def command_close_experiment(settings: Settings) -> int:
+    """Liquidates the book to end an experiment (F5.8).
+
+    **The model is not consulted**, so no client is opened and no quota is
+    spent: this is not a decision about the market, it is the end of the
+    experiment. `TradingCycle.build` needs an `LLMClient` to assemble itself, so
+    one is built with the profile's settings and simply never used.
+    """
+    with LLMClient(
+        api_key=settings.model_api_key,
+        provider=settings.llm_provider,
+        base_url=settings.model_base_url,
+        model=settings.llm_model,
+        temperature=settings.llm_temperature,
+        timeout=settings.llm_timeout_seconds,
+        max_retries=settings.llm_max_retries,
+    ) as llm:
+        cycle = TradingCycle.build(settings, llm)
+        report = cycle.close_all_positions()
+
+    _print_header("Cierre del experimento")
+    if report.status == "skipped":
+        print(f"  {report.halted_reason}")
+        # Not an error: "there was nothing to close" and "it could not be closed"
+        # both leave the caller with nothing to do, and neither is a failure of
+        # the command.
+        return 0
+
+    print(f"  Posiciones liquidadas: {report.exits_forced}")
+    print(f"  Capital: {report.equity_start:,.2f} -> {report.equity_end:,.2f}")
+    for error in report.errors:
+        print(f"  Error: {error}", file=sys.stderr)
+    return 0 if report.status == "completed" else 1
+
+
 # ----------------------------------------------------------------------
 
 def command_api(dash: DashboardSettings, *, host: str, port: int) -> int:
@@ -729,10 +764,12 @@ def main(argv: list[str] | None = None) -> int:
         "command",
         nargs="?",
         default="check",
-        choices=["check", "status", "cycle", "report", "api",
+        choices=["check", "status", "cycle", "close-experiment", "report", "api",
                  "profiles", "new-profile", "import-profile", "activate"],
         help="check: diagnostico (por defecto). status: estado de la cuenta. "
-             "cycle: ejecutar un ciclo. report: analitica en consola. "
+             "cycle: ejecutar un ciclo. "
+             "close-experiment: vender todas las posiciones y cerrar el "
+             "experimento. report: analitica en consola. "
              "api: API REST + interfaz web. "
              "profiles: listar experimentos. "
              "new-profile: crear un perfil para un mercado. "
@@ -826,6 +863,7 @@ def main(argv: list[str] | None = None) -> int:
         "check": command_check,
         "status": command_status,
         "cycle": command_cycle,
+        "close-experiment": command_close_experiment,
     }
     try:
         return handlers[args.command](settings)

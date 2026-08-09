@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (EXPERIMENT.md documenta la logica del ciclo; F5.8 y F9.3 apuntadas)
+Última actualización: 2026-08-10 (F5.8 cerrada: «Cerrar experimento» liquida la cartera; el prompt ya no miente con la divisa ni las ventanas)
 
 ---
 
@@ -1152,8 +1152,8 @@ diez sesiones en silencio.
       **617 tests en verde** (1 nuevo), typecheck limpio, 24 de front, build correcto, y el
       flujo comprobado contra la API.
 
-- [ ] **F5.8** ⚠️ **«Cerrar experimento»: vender las posiciones y dejar el resultado
-      realizado.** Pedido el 2026-08-10, y es un hueco real: hoy solo se puede **pausar**, y
+- [x] **F5.8** **«Cerrar experimento»: vender las posiciones y dejar el resultado
+      realizado** (2026-08-10, el mismo día que se pidió). Era un hueco real: hoy solo se puede **pausar**, y
       pausar no cierra nada. El resultado que se lee al final de la semana es **no
       realizado** —la cartera valorada a mercado— y no el resultado de las decisiones que el
       agente tomó. Peor: un experimento pausado con posiciones vivas **deja de comprobar
@@ -1176,6 +1176,35 @@ diez sesiones en silencio.
         vender la cartera entera no se deshace.
       - **Qué pasa con el mercado cerrado.** O se espera a la apertura siguiente, o se dice
         que no se puede cerrar ahora. Lo que no vale es vender a un precio inventado.
+
+      **Hecho así, y las cuatro decisiones se resolvieron como estaban previstas.**
+      `TradingCycle.close_all_positions()` reutiliza el camino de salida del ciclo entero
+      —`_execute_exit`—, así que la venta deja orden, precio de salida, motivo y evento de
+      riesgo, y la liquidación **queda registrada como un ciclo más**, con su copia de
+      parámetros y su punto en la curva de capital. Se distingue por la regla
+      `experiment_closed`, y cuenta como salida **forzada**: agruparla con las
+      discrecionales haría que la analítica leyera una liquidación como una decisión del
+      modelo.
+
+      Tres cosas que salieron al escribirlo:
+      - **Al modelo no se le pregunta**, y no es por ahorrar cuota: no es una decisión de
+        mercado, es el final del experimento. Consultarlo registraría un «sell» como si se
+        hubiera juzgado, y no se juzgó. Hay test.
+      - **Con el mercado cerrado o en `dry_run` se rechaza por delante**, en lugar de dejar
+        un montón de órdenes canceladas: las posiciones siguen abiertas y se dice, que es lo
+        que evita leer como resultado final una cartera que no se liquidó.
+      - **Sin posiciones abiertas no escribe nada.** «No había nada que cerrar» no es un
+        fallo y no debe dejar un ciclo vacío en el histórico.
+
+      **El test estructural de F3.3 hizo su trabajo**: la ruta nueva no compilaba hasta
+      declararla como control, porque escribe en el histórico y por eso mismo **no puede ser
+      un endpoint que escriba** — sale por subproceso, igual que el ciclo. Reutiliza el
+      `CycleRunner`, así que comparte cerrojo y log: una sola operación por cartera a la vez.
+
+      El botón vive **junto a los controles de ciclo** y no en las acciones del perfil,
+      porque es una operación sobre la cartera y comparte ese cerrojo.
+
+      **640 tests en verde** (6 nuevos), typecheck limpio, 24 de front.
 
 ### F6 — Parámetros del agente
 
@@ -1920,10 +1949,7 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
 4. **F8.5** — confirmar que el `.env` con claves reales nunca llegó a subirse.
 5. **F1.1 (resto)** — tirar el volumen de Docker con `docker compose down -v`. ⚠️ **No antes
    del experimento**: destruye `trading-data`.
-6. **F5.8** — «Cerrar experimento»: vender las posiciones para que el resultado sea
-   realizado y no una cartera valorada a mercado. Hace falta antes de dar por terminada
-   la primera tanda.
-7. **F9** entera, que no bloquea nada — con **F9.7** recién añadida (spike de noticias y
+6. **F9** entera, que no bloquea nada — con **F9.7** recién añadida (spike de noticias y
    fundamentales, del que depende F9.4) y **F9.3** concretada (el precio de ejecución
    arrastra 20–40 minutos con barras horarias).
 

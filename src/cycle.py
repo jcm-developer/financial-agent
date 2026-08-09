@@ -287,6 +287,162 @@ class TradingCycle:
 
     # ------------------------------------------------------------------
 
+    def close_all_positions(self, *, reason: str = "cierre del experimento") -> CycleReport:
+        """Sells every open position, to end an experiment (F5.8).
+
+        **It goes through the broker and the same exit path as any other sale**,
+        not through an `UPDATE` to `positions`. That is the whole point: a
+        position closed by hand in the database leaves no order, no fill, no exit
+        price and no reason, so the history stops explaining the result it is
+        being read for.
+
+        The model is not consulted, and that is deliberate. This is not a
+        decision about the market: the experiment is over and the book is
+        liquidated. Asking the analyst would record a "sell" as if it had been
+        judged, and it was not.
+
+        No entry is opened and nothing is screened, so it costs no quota.
+
+        It reuses the cycle's own lock, the copy of the settings and the equity
+        snapshot, so the closure appears in the history as one more cycle —which
+        is what it is— and can be told apart by its `experiment_closed` rule.
+        """
+        report = CycleReport()
+        settings = self.settings
+
+        portfolio_id = self.portfolio_id or self.db.ensure_portfolio(
+            name=settings.portfolio_name,
+            mode=settings.mode,
+            initial_budget=settings.initial_budget,
+        )
+
+        blocked = self._check_no_other_cycle_running(portfolio_id)
+        if blocked is not None:
+            report.status = "skipped"
+            report.halted_reason = blocked
+            log.warning("Cierre no iniciado: %s", blocked)
+            return report
+
+        open_symbols = tuple(sorted(self.db.get_open_positions(portfolio_id)))
+        if not open_symbols:
+            # Not a failure: an experiment with nothing open is already closed,
+            # and saying so beats writing an empty cycle into the history.
+            report.status = "skipped"
+            report.halted_reason = "No hay ninguna posicion abierta que cerrar."
+            log.info("Cierre innecesario: no hay posiciones abiertas.")
+            return report
+
+        snapshots = self.market_data.fetch_snapshots(open_symbols)
+        self._prime_broker(snapshots)
+
+        account = self.broker.get_account_state()
+        market_open = self.broker.is_market_open()
+        report.market_open = market_open
+        report.equity_start = account.equity
+        report.equity_end = account.equity
+
+        # Refused up front instead of recording a pile of cancelled orders. With
+        # the market shut there is no price to sell at, and inventing one would
+        # falsify precisely the figure this whole operation exists to produce.
+        if not self._can_execute(market_open):
+            why = "DRY_RUN activo" if settings.dry_run else "el mercado esta cerrado"
+            report.status = "skipped"
+            report.halted_reason = (
+                f"No se puede cerrar ahora: {why}. Las {len(open_symbols)} posiciones "
+                f"siguen abiertas; vuelve a intentarlo en la proxima sesion."
+            )
+            log.warning("Cierre no ejecutado: %s", why)
+            return report
+
+        cycle_id = self.db.start_cycle(
+            portfolio_id=portfolio_id,
+            equity_start=account.equity,
+            cash_start=account.cash,
+            market_open=market_open,
+            symbols=list(open_symbols),
+            llm_model=settings.llm_model,
+            settings=settings.snapshot(),
+        )
+        report.cycle_id = cycle_id
+        log.info(
+            "CIERRE DEL EXPERIMENTO %s: %d posiciones a liquidar.",
+            cycle_id, len(open_symbols),
+        )
+
+        tracked = self.db.get_open_positions(portfolio_id)
+        broker_positions = {p.symbol: p for p in account.positions}
+
+        try:
+            for symbol in open_symbols:
+                position = broker_positions.get(symbol)
+                snapshot = snapshots.get(symbol)
+                qty = position.qty if position else float(
+                    tracked.get(symbol, {}).get("qty") or 0.0
+                )
+                if qty <= 0:
+                    log.warning("%s: sin cantidad en el broker; se omite.", symbol)
+                    continue
+                signal = ExitSignal(
+                    symbol=symbol,
+                    qty=qty,
+                    reason=reason,
+                    rule="experiment_closed",
+                    forced=True,
+                    price=snapshot.price if snapshot else (
+                        position.current_price if position else 0.0
+                    ),
+                )
+                if self._execute_exit(
+                    report, portfolio_id, cycle_id, signal, tracked,
+                    broker_positions, market_open=market_open,
+                ):
+                    # Counted as forced: nobody judged the market, the experiment
+                    # ended. Grouping it with the discretionary exits would make
+                    # the analytics read a liquidation as a decision of the model.
+                    report.exits_forced += 1
+        except (BrokerError, MarketDataError, DatabaseError) as exc:
+            report.status = "failed"
+            report.errors.append(str(exc))
+            log.exception("El cierre fallo: %s", exc)
+        except Exception as exc:  # noqa: BLE001 - queremos cerrar el ciclo siempre
+            report.status = "failed"
+            report.errors.append(f"Error inesperado: {exc}")
+            log.exception("Error inesperado al cerrar el experimento.")
+
+        try:
+            final_account = self.broker.get_account_state()
+            report.equity_end = final_account.equity
+            self.db.save_equity_snapshot(
+                portfolio_id=portfolio_id,
+                cycle_id=cycle_id,
+                equity=final_account.equity,
+                cash=final_account.cash,
+                positions_value=final_account.positions_value,
+                open_positions=len(final_account.positions),
+                day_pnl=final_account.day_pnl,
+                day_pnl_pct=final_account.day_pnl_pct,
+            )
+        except (BrokerError, DatabaseError) as exc:
+            report.errors.append(f"No se pudo guardar la curva de capital: {exc}")
+
+        try:
+            self.db.finish_cycle(
+                cycle_id,
+                status=report.status,
+                equity_end=report.equity_end,
+                error="; ".join(report.errors) if report.errors else None,
+            )
+        except DatabaseError as exc:
+            log.error("No se pudo marcar el cierre como finalizado: %s", exc)
+
+        log.info(
+            "Experimento cerrado: %d posiciones liquidadas, capital final %.2f.",
+            report.exits_forced, report.equity_end,
+        )
+        return report
+
+    # ------------------------------------------------------------------
+
     def _grade_analyst(self, report: CycleReport) -> None:
         """Tells "the model said no" apart from "there was no model".
 
