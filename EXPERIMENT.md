@@ -131,7 +131,7 @@ Es la parte más sutil y la que evita engañarse solo.
 | Precio | Qué es | Para qué |
 |---|---|---|
 | `price` | **Cierre de la última barra COMPLETA** | Lo único que ven el analista y el risk manager. Sobre esto se dimensiona |
-| `fill_price` | **Apertura de la barra siguiente** | Donde se ejecuta, más deslizamiento en contra |
+| `fill_price` | **Apertura de la barra siguiente** | Donde se ejecuta, más deslizamiento en contra y la comisión del banco |
 | `mark_price` | Último precio conocido | Solo para valorar la cartera |
 
 **La última barra nunca se usa para decidir**, porque puede estar a medias si el
@@ -309,7 +309,8 @@ Para no volver a preguntárselo:
 4. Cada ciclo: screener determinista criba 89 → 20; el modelo opina sobre esos 20
    y sobre cada posición abierta; el risk manager decide; el broker ejecuta.
 5. Se decide con la **última barra completa** y se ejecuta en la **apertura de la
-   siguiente**, con deslizamiento en contra.
+   siguiente**, con deslizamiento en contra y la comisión del banco por cada lado
+   (4,11 € en españolas, 3,00 € en el resto de Europa).
 6. Todo queda registrado, incluidos los parámetros de ese ciclo.
 7. Pausar detiene los ciclos pero **no cierra nada**: el resultado es no realizado
    hasta que exista **F5.8**.

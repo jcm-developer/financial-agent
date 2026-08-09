@@ -41,6 +41,7 @@ import os
 import sys
 from dataclasses import replace
 
+from src import fees
 from src.config import ConfigError, DashboardSettings, Infra, Settings
 from src.cycle import TradingCycle
 from src.llm import LLMClient, LLMError
@@ -194,7 +195,7 @@ def command_check(settings: Settings) -> int:
                 portfolio_id=portfolio_id,
                 initial_cash=settings.initial_budget,
                 slippage_bps=settings.sim_slippage_bps,
-                commission_per_order=settings.sim_commission,
+                extra_commission=settings.sim_commission,
             )
             account = broker.get_account_state()
             fills = database.query(
@@ -207,8 +208,21 @@ def command_check(settings: Settings) -> int:
         print(f"      efectivo={money}{account.cash:,.2f}  "
               f"equity={money}{account.equity:,.2f}")
         print(f"      posiciones={len(account.positions)}  ejecuciones registradas={fills}")
+        # The tariff is per leg and depends on the exchange, so a single number
+        # would be wrong for a European profile holding Spanish names at 4,11
+        # and the rest at 3,00. It is printed grouped, dearest first.
+        groups = sorted(fees.tariffs_for_market(settings.market).items(), reverse=True)
+        standard = "  ".join(
+            f"{money}{amount:,.2f}"
+            + (f" ({', '.join(suffixes)})" if 0 < len(suffixes) <= 2
+               else " (el resto)" if suffixes else "")
+            for amount, suffixes in groups
+        )
         print(f"      deslizamiento={settings.sim_slippage_bps:.0f} pb  "
-              f"comision={money}{settings.sim_commission:,.2f} por orden")
+              f"comision estandar por orden y por lado: {standard}")
+        if settings.sim_commission:
+            print(f"      recargo del perfil: +{money}{settings.sim_commission:,.2f} "
+                  f"por orden, sobre la tarifa")
         for position in account.positions:
             print(
                 f"        {position.symbol:<6} {position.qty:>8g} @ "
@@ -315,7 +329,7 @@ def command_status(settings: Settings) -> int:
             portfolio_id=portfolio_id,
             initial_cash=settings.initial_budget,
             slippage_bps=settings.sim_slippage_bps,
-            commission_per_order=settings.sim_commission,
+            extra_commission=settings.sim_commission,
         )
         held = broker.held_symbols()
         if held:

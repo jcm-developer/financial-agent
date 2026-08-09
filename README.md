@@ -145,8 +145,17 @@ pasa de ahí.
 ### Broker simulado
 
 La ejecución es local: sin cuenta de broker, sin MFA, sin dinero real. El
-simulador aplica deslizamiento y comisión configurables, no permite comprar sin
-efectivo ni vender lo que no se tiene, y no hay apalancamiento.
+simulador no permite comprar sin efectivo ni vender lo que no se tiene, y no hay
+apalancamiento.
+
+**La fricción es la de verdad, y no es pequeña.** Además del deslizamiento
+configurable, se cobra la comisión del banco desde el que se opera, **por orden y
+por lado**: 4,11 € en las españolas y 3,00 € en el resto de Europa
+([`src/fees.py`](src/fees.py)); en Estados Unidos, nada. Eso significa que una ida
+y vuelta paga el doble, y que sobre el mínimo de 100 € por orden la fricción es
+del 6–8 %: una posición tiene que subir un 8 % solo para empatar. Es deliberado y
+está razonado en `TASKS.md` (F5.9), porque un simulador sin comisiones favorece
+justo a la conducta que el experimento quiere medir.
 
 Lo que **no** simula: liquidez (una orden grande movería el precio real), huecos
 intradía, órdenes parciales, horarios de mercado ni reglas de patrón day trader.
@@ -672,7 +681,8 @@ implementado — su API no es compatible y necesitaría su SDK.
 Otros parámetros del perfil: `llm_model`, `llm_temperature`, `initial_budget`,
 `bar_interval` (`1h` para varios ciclos por sesión), `screener_top_n`,
 `screener_mode` (`random` es el grupo de control), `sim_slippage_bps`,
-`sim_commission`, `dry_run` y `skip_when_market_closed`. Los ves todos con:
+`sim_commission` (un **recargo** sobre la tarifa del banco, no la tarifa: 0 es
+«solo el estándar»), `dry_run` y `skip_when_market_closed`. Los ves todos con:
 
 ```powershell
 python run.py profiles

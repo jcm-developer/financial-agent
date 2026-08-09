@@ -13,8 +13,10 @@ The honesty of the simulation, which is the only thing that makes it useful:
     decision was made on. Executing at the same price used to decide hands over
     the overnight gap and turns any result into rubbish. `MarketSnapshot` keeps
     the two prices apart precisely for this.
-  * **Slippage and commission are applied.** Both configurable; by default 5
-    basis points and zero commission (US brokers do not charge for shares).
+  * **Slippage and commission are applied.** Slippage is 5 basis points by
+    default; the commission is the bank's tariff for the symbol's exchange
+    ([fees.py](fees.py)) plus whatever surcharge the profile adds on top. It is
+    charged on both legs, so a round trip pays it twice.
   * **You cannot buy without cash** nor sell what you do not hold.
   * **There is no leverage.** Buying power is the available cash.
 
@@ -31,6 +33,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from . import fees
 from .broker import BrokerError, SubmittedOrder
 from .db import Database
 from .models import AccountState, BrokerPosition
@@ -61,15 +64,26 @@ class SimBroker:
         portfolio_id: str,
         initial_cash: float,
         slippage_bps: float = 5.0,
-        commission_per_order: float = 0.0,
+        extra_commission: float = 0.0,
     ) -> None:
         self.db = database
         self.account_id = portfolio_id
         self.slippage_bps = slippage_bps
-        self.commission = commission_per_order
+        #: Surcharge on top of the bank's tariff, from `agent_settings`. Zero --
+        #: the default -- means the standard and nothing else.
+        self.extra_commission = extra_commission
         self.paper = True
         self._quotes: dict[str, Quote] = {}
         self._ensure_account(initial_cash)
+
+    def commission_for(self, symbol: str) -> float:
+        """What one leg on `symbol` costs: the exchange's tariff plus the surcharge.
+
+        It is resolved per symbol and not once per broker because a single
+        European profile holds Spanish names at 4,11 and the rest at 3,00, so
+        one number for the whole portfolio could not be right for both.
+        """
+        return fees.standard_commission(symbol) + self.extra_commission
 
     # -- Estado interno ----------------------------------------------------
 
@@ -210,7 +224,8 @@ class SimBroker:
 
         # Slippage works against you: buying pays a little more.
         price = quote.fill_price * (1 + self.slippage_bps / 10_000.0)
-        cost = price * whole_qty + self.commission
+        commission = self.commission_for(symbol)
+        cost = price * whole_qty + commission
 
         row = self._account_row()
         cash = float(row["cash"])
@@ -231,28 +246,34 @@ class SimBroker:
             old_qty, old_price = float(old["qty"]), float(old["avg_entry_price"])
             new_qty = old_qty + whole_qty
             new_avg = (old_qty * old_price + whole_qty * price) / new_qty
+            # The commissions accumulate: two buys paid two of them, and the
+            # sale has to give back both.
+            paid = float(old["entry_commission"]) + commission
             self.db.execute(
-                "update sim_positions set qty = ?, avg_entry_price = ? where id = ?",
-                (new_qty, new_avg, old["id"]),
+                "update sim_positions set qty = ?, avg_entry_price = ?, "
+                "entry_commission = ? where id = ?",
+                (new_qty, new_avg, paid, old["id"]),
             )
         else:
             self.db.execute(
                 "insert into sim_positions "
-                "(id, account_id, symbol, qty, avg_entry_price, opened_at) "
-                "values (?, ?, ?, ?, ?, ?)",
+                "(id, account_id, symbol, qty, avg_entry_price, entry_commission, "
+                " opened_at) values (?, ?, ?, ?, ?, ?, ?)",
                 (str(uuid.uuid4()), self.account_id, symbol, float(whole_qty),
-                 price, _now()),
+                 price, commission, _now()),
             )
 
         self.db.execute(
             "update sim_accounts set cash = ?, updated_at = ? where id = ?",
             (cash - cost, _now(), self.account_id),
         )
-        self._record_fill(symbol, "buy", whole_qty, price, quote.basis)
+        self._record_fill(symbol, "buy", whole_qty, price, quote.basis, commission)
 
         log.info(
-            "[SIM] COMPRA %s: %d a %.4f (%s, deslizamiento %.0f pb). Efectivo: %.2f",
-            symbol, whole_qty, price, quote.basis, self.slippage_bps, cash - cost,
+            "[SIM] COMPRA %s: %d a %.4f (%s, deslizamiento %.0f pb, "
+            "comision %.2f). Efectivo: %.2f",
+            symbol, whole_qty, price, quote.basis, self.slippage_bps,
+            commission, cash - cost,
         )
         return SubmittedOrder(
             broker_order_id=f"sim-{uuid.uuid4().hex[:12]}",
@@ -297,16 +318,30 @@ class SimBroker:
 
         # Al vender, el deslizamiento resta.
         price = quote.fill_price * (1 - self.slippage_bps / 10_000.0)
-        proceeds = price * whole_qty - self.commission
+        commission = self.commission_for(symbol)
+        proceeds = price * whole_qty - commission
         entry = float(position["avg_entry_price"])
-        realized = (price - entry) * whole_qty - self.commission
+
+        # The share of the opening commission belonging to what is being sold.
+        # Prorated by quantity so a partial sale carries its part and leaves the
+        # rest with the remainder: charging it whole on the first partial sale
+        # would make that trade look worse and the last one look free.
+        paid_on_entry = float(position["entry_commission"])
+        entry_share = paid_on_entry * (whole_qty / held)
+
+        # Both legs are subtracted, which is the whole point of storing the
+        # first one: cash was already right --the buy took it out-- but the
+        # realized P&L only knew about the sale, so every closed trade reported
+        # exactly one commission more than it made.
+        realized = (price - entry) * whole_qty - commission - entry_share
 
         remaining = held - whole_qty
         if remaining <= 1e-9:
             self.db.execute("delete from sim_positions where id = ?", (position["id"],))
         else:
             self.db.execute(
-                "update sim_positions set qty = ? where id = ?", (remaining, position["id"])
+                "update sim_positions set qty = ?, entry_commission = ? where id = ?",
+                (remaining, paid_on_entry - entry_share, position["id"]),
             )
 
         row = self._account_row()
@@ -315,7 +350,9 @@ class SimBroker:
             "update sim_accounts set cash = ?, updated_at = ? where id = ?",
             (new_cash, _now(), self.account_id),
         )
-        self._record_fill(symbol, "sell", whole_qty, price, quote.basis, realized=realized)
+        self._record_fill(
+            symbol, "sell", whole_qty, price, quote.basis, commission, realized=realized
+        )
 
         log.info(
             "[SIM] VENTA %s: %d a %.4f (%s). P&L %+.2f. Efectivo: %.2f",
@@ -329,12 +366,18 @@ class SimBroker:
 
     def _record_fill(
         self, symbol: str, side: str, qty: int, price: float, basis: str,
-        realized: float | None = None,
+        commission: float, realized: float | None = None,
     ) -> None:
+        """Records the fill with the commission **of this leg**.
+
+        Not the round trip's: `sim_fills` is a ledger of executions, and each
+        one paid what it paid. The sale's `realized_pnl` is the one that already
+        nets both legs.
+        """
         self.db.execute(
             "insert into sim_fills "
             "(account_id, symbol, side, qty, price, basis, slippage_bps, commission, "
             " realized_pnl, filled_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (self.account_id, symbol, side, float(qty), price, basis,
-             self.slippage_bps, self.commission, realized, _now()),
+             self.slippage_bps, commission, realized, _now()),
         )

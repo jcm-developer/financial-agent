@@ -32,7 +32,7 @@ def broker(db, portfolio):
     """No slippage and no commission: the tests that measure them switch them on."""
     return SimBroker(
         database=db, portfolio_id=portfolio, initial_cash=10_000.0,
-        slippage_bps=0.0, commission_per_order=0.0,
+        slippage_bps=0.0, extra_commission=0.0,
     )
 
 
@@ -102,9 +102,15 @@ def test_buy_slippage_works_against_the_buyer(db, portfolio):
     assert broker.get_account_state().cash == pytest.approx(10_000.0 - 1005.0)
 
 
-def test_commission_is_charged_on_top(db, portfolio):
+def test_the_profiles_surcharge_is_charged_on_top_of_the_tariff(db, portfolio):
+    """`sim_commission` no longer *is* the commission: it is added to the bank's.
+
+    AAPL carries no suffix, so its tariff is zero and what is left in the cash is
+    the surcharge alone. That the two add up is checked over a European symbol in
+    `test_fees.py`.
+    """
     broker = SimBroker(database=db, portfolio_id=portfolio, initial_cash=10_000.0,
-                       slippage_bps=0.0, commission_per_order=1.5)
+                       slippage_bps=0.0, extra_commission=1.5)
     broker.set_quotes({"AAPL": quote(100.0)})
 
     broker.buy_market("AAPL", 10)
@@ -194,6 +200,104 @@ def test_realized_pnl_is_recorded_on_the_fill(db, portfolio, broker):
     assert fills[0]["realized_pnl"] is None
     assert fills[1]["side"] == "sell"
     assert fills[1]["realized_pnl"] == pytest.approx(150.0)
+
+
+# -- Comisiones y P&L realizado ----------------------------------------------
+
+def test_a_round_trip_pays_the_tariff_on_both_legs(broker):
+    """4,11 on the way in and 4,11 on the way out, on a Madrid name."""
+    broker.set_quotes({"SAN.MC": quote(100.0)})
+    broker.buy_market("SAN.MC", 10)
+    assert broker.get_account_state().cash == pytest.approx(10_000.0 - 1000.0 - 4.11)
+
+    broker.set_quotes({"SAN.MC": quote(120.0)})
+    broker.close_position("SAN.MC")
+
+    assert broker.get_account_state().cash == pytest.approx(10_000.0 + 200.0 - 8.22)
+
+
+def test_the_realized_pnl_nets_the_opening_commission_too(db, portfolio, broker):
+    """The regression this whole thing exists for.
+
+    The sale used to subtract only its own commission: the opening one had left
+    the cash but never reached `realized_pnl`, so every closed trade reported
+    exactly one commission more than it made. With a commission of zero --the old
+    default, and an American broker-- it was invisible; at 4,11 it is the
+    difference between a strategy that pays for itself and one that does not.
+    """
+    broker.set_quotes({"SAN.MC": quote(100.0)})
+    broker.buy_market("SAN.MC", 10)
+    broker.set_quotes({"SAN.MC": quote(120.0)})
+    broker.close_position("SAN.MC")
+
+    realized = db.query(
+        "select realized_pnl from sim_fills where account_id = ? and side = 'sell'",
+        (portfolio,),
+    )[0]["realized_pnl"]
+
+    assert realized == pytest.approx(200.0 - 4.11 - 4.11)
+
+
+def test_the_realized_pnl_agrees_with_what_the_cash_did(broker, db, portfolio):
+    """The invariant, and the reason the previous test cannot be fudged.
+
+    Over a complete round trip there is nothing left open, so the change in cash
+    **is** the result. Any commission counted once, twice or not at all breaks
+    the equality.
+    """
+    broker.set_quotes({"SAN.MC": quote(100.0)})
+    broker.buy_market("SAN.MC", 7)
+    broker.set_quotes({"SAN.MC": quote(93.0)})
+    broker.close_position("SAN.MC")
+
+    realized = db.query(
+        "select realized_pnl from sim_fills where account_id = ? and side = 'sell'",
+        (portfolio,),
+    )[0]["realized_pnl"]
+
+    assert realized == pytest.approx(broker.get_account_state().cash - 10_000.0)
+
+
+def test_a_partial_sale_carries_only_its_share_of_the_opening_commission(
+    broker, db, portfolio
+):
+    """Prorated by quantity, so the last sale does not come out free.
+
+    Charging the opening commission whole on the first partial sale would make
+    that trade look worse and every later one look better, and the sum would
+    still come out right --which is what makes it hard to notice.
+    """
+    broker.set_quotes({"SAN.MC": quote(100.0)})
+    broker.buy_market("SAN.MC", 10)
+
+    broker.set_quotes({"SAN.MC": quote(120.0)})
+    broker.sell_market("SAN.MC", 4)
+    broker.sell_market("SAN.MC", 6)
+
+    realized = [
+        row["realized_pnl"] for row in db.query(
+            "select realized_pnl from sim_fills where account_id = ? and side = 'sell' "
+            "order by id", (portfolio,)
+        )
+    ]
+
+    # 40 % of the 4,11 paid on entry goes with the first sale, 60 % with the second.
+    assert realized[0] == pytest.approx(80.0 - 4.11 - 4.11 * 0.4)
+    assert realized[1] == pytest.approx(120.0 - 4.11 - 4.11 * 0.6)
+    # Y el total sigue siendo el bruto menos las tres comisiones que se pagaron.
+    assert sum(realized) == pytest.approx(200.0 - 4.11 * 3)
+
+
+def test_the_tariff_is_charged_by_exchange_within_the_same_portfolio(broker):
+    """A Spanish name and a French one in the same book pay different amounts."""
+    broker.set_quotes({"SAN.MC": quote(100.0), "AIR.PA": quote(100.0)})
+
+    broker.buy_market("SAN.MC", 1)
+    broker.buy_market("AIR.PA", 1)
+
+    assert broker.get_account_state().cash == pytest.approx(
+        10_000.0 - 100.0 - 4.11 - 100.0 - 3.00
+    )
 
 
 def test_no_short_selling(broker):

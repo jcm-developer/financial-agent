@@ -72,6 +72,21 @@ export function Settings() {
   );
 }
 
+/**
+ * Why the commission field says "surcharge".
+ *
+ * The bank's tariff is not a parameter of the experiment: it depends on the
+ * exchange of each symbol (`src/fees.py`) and applies on its own. This field is
+ * what gets added on top, and it is worth saying so, because a zero here used to
+ * mean "no commission" and now means "the standard one and nothing more".
+ *
+ * The amounts are deliberately left out: repeating them here would be a second
+ * copy that drifts the day the bank changes its rates, and the screen would
+ * promise a friction the simulator does not apply.
+ */
+const SURCHARGE_HINT =
+  "Se suma a la tarifa del banco, que ya se aplica sola y depende de la bolsa de cada símbolo. 0 = solo la tarifa.";
+
 /** The subset of settings this form edits as free values, keyed as they are sent. */
 type Draft = Record<string, string | number | boolean>;
 
@@ -346,7 +361,13 @@ function SettingsForm({
           hint="Nombre IANA, p. ej. Europe/Madrid."
         />
         <NumberField label="Deslizamiento (pb)" field="sim_slippage_bps" value={value} set={set} />
-        <NumberField label="Comisión por orden" field="sim_commission" value={value} set={set} />
+        <NumberField
+          label="Recargo de comisión por orden"
+          field="sim_commission"
+          value={value}
+          set={set}
+          hint={SURCHARGE_HINT}
+        />
         <Check
           label="Dry run: analiza y registra pero no ordena"
           field="dry_run"
@@ -444,12 +465,14 @@ function NumberField({
   value,
   set,
   step = "any",
+  hint,
 }: {
   label: string;
   field: keyof AgentSettings;
   value: (field: keyof AgentSettings) => string;
   set: (field: string, next: string) => void;
   step?: string;
+  hint?: string;
 }) {
   return (
     <Input
@@ -458,6 +481,7 @@ function NumberField({
       step={step}
       value={value(field)}
       onChange={(e) => set(field as string, e.target.value)}
+      hint={hint}
     />
   );
 }

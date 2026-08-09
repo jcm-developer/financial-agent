@@ -306,12 +306,19 @@ create table if not exists sim_accounts (
     updated_at   text not null
 );
 
+-- `entry_commission` es la comision ya pagada al abrir, que se guarda porque el
+-- P&L realizado no puede reconstruirla. `avg_entry_price` se mantiene limpio a
+-- proposito -- es el precio al que se ejecuto, es lo que se enseña en pantalla y
+-- es lo que miran el stop y el objetivo --, asi que la comision de compra no
+-- cabe ahi; sin esta columna, la venta solo sabria restar su propia comision y cada
+-- operacion cerrada declararia de mas justo lo que costo abrirla.
 create table if not exists sim_positions (
     id               text primary key,
     account_id       text not null references sim_accounts (id) on delete cascade,
     symbol           text not null,
     qty              real not null check (qty > 0),
     avg_entry_price  real not null,
+    entry_commission real not null default 0,
     opened_at        text not null
 );
 

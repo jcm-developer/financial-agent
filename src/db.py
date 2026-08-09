@@ -65,6 +65,12 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "analyst_calls": "integer not null default 0",
         "analyst_failures": "integer not null default 0",
     },
+    "sim_positions": {
+        # The commission paid on opening, which the realized P&L cannot rebuild
+        # afterwards. `default 0` is the truth for anything opened before the
+        # tariff existed: back then the commission really was zero.
+        "entry_commission": "real not null default 0",
+    },
 }
 
 # Columns that changed name after the schema's first version.

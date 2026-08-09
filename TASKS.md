@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (una posicion sin precio ya no se queda sin vigilancia en silencio; F5.8 cerrada)
+Última actualización: 2026-08-10 (comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada)
 
 ---
 
@@ -269,9 +269,34 @@ otra forma y pide su SDK, así que queda en F9.1.
       deja de tener sentido en Europa** y el experimento se queda en ciclos diarios. Es el
       riesgo que asume D8 y hay que medirlo antes de dar por buena la premisa.
 
+      ✅ **Confirmado el 2026-08-10: son los 15 minutos.** La barra de las 9:00 la publica
+      Yahoo a las 9:15. Confirmado por observación del feed, no por una corrida del spike:
+      vale para decidir, pero **no hay `spike_eu_lunes.jsonl` que citar**, así que si algún
+      día hace falta el número exacto —desviación, cola, si el desfase se ensancha al
+      cierre— hay que medirlo de verdad.
+
+      Consecuencias, y son menos de las que el propio apartado temía:
+      - **Los ocho ciclos a las :20 no se tocan.** Esa pauta se eligió antes de medir y
+        precisamente para absorber el desfase: la barra de 10:00–11:00 no está completa hasta
+        las 11:15 y el ciclo entra a las 11:20. La medición la confirma.
+      - **El ingestor y `bars_1m` tampoco.** Un dato retrasado está igual de bien fechado;
+        F9.2 sigue en pie sin cambios.
+      - **Lo que sí se cae es la premisa de F9.3**, apuntado allí: `quotes_live` no es un
+        precio vivo, así que la mejora se encoge de «tiempo real» a «15 minutos».
+      - **Bajar de la hora queda descartado sin condicionales**, no solo desaconsejado.
+
       Segunda pregunta, ahora obligatoria: **`--threads`**. Con 139 símbolos en la franja de
       solape el margen dentro del minuto baja a 2,5× (ver D3), así que ya no vale con
       dejarlo apuntado.
+
+      ⚠️ **Esta sigue abierta, y es lo único que queda de F2.1c.** Lo que ha cambiado es que
+      **ya no bloquea el arranque**, y conviene dejar escrito por qué: los 139 símbolos de D3
+      exigen un perfil europeo **y** uno americano activos a la vez, y el experimento arranca
+      con **uno solo** (`eu-05-muy-agresivo`). Son 89 símbolos, ~15 s en serie dentro del
+      minuto, margen de ~4× y no de 2,5×. `threads=False` —lo que hay hoy, y lo que evita los
+      símbolos vacíos silenciosos de Windows— cabe de sobra. Vuelve a apretar **el día que se
+      active un perfil americano en paralelo**, y ese día hay que medirlo en Docker/Linux
+      antes de cambiarlo: el modo de fallo es silencioso y la alternativa no está rota.
 - [x] **F2.2** Lógica en [src/ingest.py](src/ingest.py), bucle en
       [tools/ingestor.py](tools/ingestor.py). Separados para que los tests no necesiten red ni
       esperar minutos reales. Despierta unos segundos **después** del cambio de minuto: la
@@ -1206,6 +1231,65 @@ diez sesiones en silencio.
 
       **640 tests en verde** (6 nuevos), typecheck limpio, 24 de front.
 
+- [x] **F5.9** ⚠️ **Comisiones reales, y el P&L realizado se estaba declarando de más.**
+      Pedido y cerrado el 2026-08-10, antes de arrancar el experimento y no por casualidad:
+      es lo único que no se puede retrofitar, porque una operación ya ejecutada no se puede
+      recobrar.
+
+      **La tarifa.** La del banco desde el que se opera de verdad, por orden y **por lado**:
+      **4,11 € en las españolas (`.MC`) y 3,00 € en el resto de Europa**; Estados Unidos
+      sigue en cero, que para acciones es cierto. Vive en [src/fees.py](src/fees.py) y se
+      resuelve **por símbolo**, no por cartera: un perfil europeo lleva las dos a la vez, así
+      que un número por cartera no puede ser correcto para ambas.
+
+      **Lo que había era una mentira heredada del mercado americano.** `sim_commission`
+      nacía a 0 y el docstring de [src/sim_broker.py](src/sim_broker.py) decía por qué —«US
+      brokers do not charge for shares»—. Con D8 el experimento se mudó a Europa y ese
+      defecto se quedó: un perfil muy agresivo con ocho ciclos diarios habría operado gratis,
+      y operar gratis favorece justo a la conducta que el experimento quiere medir.
+
+      **Se descartó ponerla en el perfil**, que era la opción que cumple F6 al pie de la
+      letra. La razón es que **no define un experimento**: es un hecho del banco, y el mismo
+      para todo perfil que opere esa bolsa. Con cinco perfiles y cinco tarifas, comparar dos
+      mediría la tarifa en vez de la estrategia. Lo que sí se queda en el perfil es
+      `sim_commission`, que pasa a ser un **recargo sobre la tarifa**: 0 es «el estándar del
+      banco», y otro valor es una desviación deliberada para un supuesto. La pantalla de
+      Ajustes lo dice —el rótulo es «Recargo de comisión por orden»— porque un campo que ya
+      no significa lo que decía es exactamente la trampa de FE.7.
+
+      ⚠️ **El fallo que apareció al medir esto, y que llevaba ahí desde el principio.** La
+      venta hacía `realized = (price - entry) * qty - commission` y restaba **solo la
+      comisión de venta**. La de compra había salido de la caja pero nunca entró en
+      `avg_entry_price`, así que **no llegaba nunca al P&L realizado**: cada operación cerrada
+      declaraba de más exactamente lo que costó abrirla. La caja y el equity siempre
+      estuvieron bien; lo que estaba mal era la cifra por operación, que es justo la que el
+      experimento existe para medir. **Con comisión 0 era invisible**, y por eso ha
+      sobrevivido a 640 tests.
+
+      La arregla una columna nueva, `sim_positions.entry_commission`, con su entrada en
+      `ADDED_COLUMNS` para que la base viva la reciba sola. Se descartó meter la comisión en
+      `avg_entry_price`, que no habría necesitado columna: ese campo es **el precio al que se
+      ejecutó**, se enseña en pantalla y lo miran el stop y el objetivo, así que ensuciarlo
+      habría cambiado en silencio dónde salta un stop. La venta parcial **prorratea** por
+      cantidad; cobrarla entera en la primera dejaría esa operación peor y la última gratis,
+      y el total seguiría cuadrando, que es lo que lo haría difícil de ver.
+
+      **`MIN_ORDER_NOTIONAL` se queda en 100 €, y es deliberado.** Con la tarifa, una ida y
+      vuelta de 100 € paga 8,22 € en españolas y 6,00 € en el resto: **6–8 % de fricción**,
+      o sea que la posición tiene que subir un 8 % solo para empatar. Para bajarlo al 1 %
+      harían falta órdenes de ~850 €, y al 0,5 %, de ~1.650 €. Se deja en 100 € a propósito
+      —queda escrito aquí para no descubrirlo dentro de seis semanas leyendo un P&L— porque
+      con el capital del experimento subirlo dejaría la cartera en dos o tres posiciones y
+      mataría la diversificación que F6.5 dimensiona. El comentario de
+      [src/risk_presets.py](src/risk_presets.py) que dice que el mínimo existe «para que la
+      comisión no se coma el resultado» se escribió con comisión 0; **ahora se la come, y es
+      una decisión, no un descuido.**
+
+      **665 tests en verde** (25 nuevos, [tests/test_fees.py](tests/test_fees.py) entero),
+      typecheck limpio, 24 de front. Uno de los nuevos es de cobertura: si alguien añade una
+      bolsa a `MARKETS` y no le pone tarifa, falla ahí y no seis semanas después en un
+      resultado que salió halagador.
+
 ### F6 — Parámetros del agente
 
 - [x] **F6.1** Tabla `agent_settings` — hecha en F1.2, con `get_settings` / `update_settings`
@@ -1576,8 +1660,12 @@ diez sesiones en silencio.
       porque `app/` ya existe: ahí deja `tools/gen_api_types.py` los tipos del frontend.
       **`app/src/api/types.ts` sí se sube**, para que el frontend compile sin tener que
       ejecutar Python antes. Ya estaban `backup/` y `spike_*.jsonl`.
-- [ ] **F8.5** ⚠️ **Hay un `.env` con claves reales en el directorio.** Está en `.gitignore`,
-      pero conviene confirmar que nunca llegó a subirse.
+- [x] **F8.5** ⚠️ **Hay un `.env` con claves reales en el directorio.** Está en `.gitignore`,
+      pero conviene confirmar que nunca llegó a subirse. ✅ **Confirmado el 2026-08-10:
+      nunca se subió.** No aparece en el índice (`git ls-files --error-unmatch .env` falla)
+      ni en ninguna revisión de toda la historia (`git log --all -- .env`, vacío), y sigue
+      en `.gitignore`. **No hay que reescribir historia ni rotar ninguna clave**, que era la
+      pregunta real detrás de la tarea.
 - [x] **F8.6** **606 en verde dentro de Docker.** Y no fue un trámite: encontró un fallo real
       que el anfitrión no veía.
 
@@ -1886,10 +1974,13 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       - **La decisión sigue usando solo barras completas.** Lo que cambia es dónde se
         ejecuta, no lo que ve el analista; si no, vuelve el sesgo que los tres precios
         evitan.
-      - ⚠️ **Depende de F2.1c.** Si el feed europeo llega con ~15 minutos de desfase, el
-        «precio vivo» tampoco es vivo, y la mejora se queda en pasar de 20–40 minutos de
-        retraso a 15. Sigue siendo mejor, pero hay que saberlo antes de venderlo como
-        ejecución en tiempo real.
+      - ⚠️ ~~**Depende de F2.1c.**~~ **Resuelto, y en contra: el 2026-08-10 se confirmó el
+        desfase de 15 minutos**, así que `quotes_live` **no es un precio vivo** y la mejora
+        se encoge de «tiempo real» a pasar de 20–40 minutos de retraso a 15. **Sigue
+        mereciendo la pena** —conecta los dos relojes y hace la orden ejecutable de verdad,
+        que era el otro motivo— pero **esta tarea no se puede llamar «ejecución intradía
+        real» en Europa**, y el nombre importa porque es lo que la vendía. Renombrarla es
+        parte de hacerla.
 - [ ] **F9.4** Noticias / sentimiento como entrada adicional del analista. **Depende de
       F9.7**: hasta saber qué fuentes hay y con qué cobertura, no se puede diseñar.
 - [ ] **F9.5** Notificaciones (Telegram) al abrir o cerrar posición.
@@ -1967,14 +2058,17 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
 
 **Queda pendiente, en total:**
 
-1. **F2.1c** — lo único bloqueante, y solo se puede medir en sesión: mañana lunes 2026-08-10
-   en cuanto abra Madrid.
+1. ~~**F2.1c** — lo único bloqueante…~~ **Ya no bloquea (2026-08-10).** El retraso está
+   confirmado en 15 minutos y no cambia la pauta de ciclos; lo que queda abierto es
+   `--threads`, y con un solo perfil europeo el margen dentro del minuto es de ~4×, así que
+   se decide con datos y sin prisa. Ver F2.1c.
 2. ~~**Elegir el horario de `europa-01`.**~~ **Hecho el 2026-08-10**: `europa-01` se borró y
    los cinco perfiles nuevos nacen con `18:00 Europe/Madrid`, tras el cierre de Madrid y con
    margen para el desfase del feed europeo (ver decisión nº 5).
 3. **FE.12 / el tope por sector de F6.5** — se calcula y no se aplica, por falta de dato de
    sector por símbolo. La pantalla de Ajustes ya lo dice en voz alta.
-4. **F8.5** — confirmar que el `.env` con claves reales nunca llegó a subirse.
+4. ~~**F8.5**~~ ✅ **Hecho el 2026-08-10**: el `.env` no está en el índice ni en ninguna
+   revisión de la historia. Nada que rotar.
 5. **F1.1 (resto)** — tirar el volumen de Docker con `docker compose down -v`. ⚠️ **No antes
    del experimento**: destruye `trading-data`.
 6. **F9** entera, que no bloquea nada — con **F9.7** recién añadida (spike de noticias y
@@ -2003,13 +2097,20 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
 
 ## 4. Riesgos y puntos a vigilar
 
-- **R1 — Latencia real del dato.** ⚠️ **Ha subido de nivel con D8.** "Cada minuto" solo vale
-  si el dato es de hace un minuto, y **Yahoo suele servir las bolsas europeas con unos 15
-  minutos de retraso mientras da muchos valores americanos en tiempo real**. Hay que
-  **medirlo** (F2.1c), no asumirlo. Si se confirma: el ingestor y el histórico valen igual
-  —siguen sirviendo para backtesting (F9.2)— pero **la ejecución intradía (F9.3) deja de
-  tener sentido en Europa** y el experimento se queda en ciclos diarios. Es el precio que
-  paga D8 a cambio del horario, y conviene saberlo antes y no en octubre.
+- ~~**R1 — Latencia real del dato.**~~ ✅ **Confirmado el 2026-08-10 y deja de ser un riesgo:
+  son los 15 minutos** (la barra de las 9:00 llega a las 9:15). Es el precio que paga D8 a
+  cambio del horario, y ya se sabe.
+
+  ⚠️ **Este apartado decía que entonces «el experimento se queda en ciclos diarios», y eso
+  ya no es verdad**: la decisión del 2026-08-10 fija `bar_interval=1h` con ocho ciclos a las
+  :20, tomada antes de medir y precisamente para absorber el desfase. Confirmarlo **no
+  empuja de vuelta a `1d`**. Se corrige aquí y no se borra porque la frase estuvo escrita y
+  alguien podría acordarse de ella.
+
+  Lo que el desfase sí se lleva por delante está en F9.3: `quotes_live` no es un precio
+  vivo. Y lo que deja tocado, aunque no lo diga ninguna tarea, es el **techo de
+  granularidad**: por debajo de la hora, un ciclo decidiría sobre datos más viejos que su
+  propio periodo, y eso ya no es una sospecha.
 - **R2 — Yahoo puede limitar por IP.** Es una API no oficial, y el spike desmontó la
   mitigación que yo daba por buena: **son ~50 peticiones por minuto, no 1** (ver D3). En una
   sesión son ~19.500 peticiones al día desde la misma IP doméstica. No apareció ningún 429 en

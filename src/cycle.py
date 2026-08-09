@@ -145,7 +145,7 @@ class TradingCycle:
             portfolio_id=portfolio_id,
             initial_cash=settings.initial_budget,
             slippage_bps=settings.sim_slippage_bps,
-            commission_per_order=settings.sim_commission,
+            extra_commission=settings.sim_commission,
         )
 
         return cls(

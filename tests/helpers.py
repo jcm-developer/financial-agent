@@ -117,7 +117,7 @@ def make_cycle(
         database=db, portfolio_id=portfolio_id,
         initial_cash=settings.initial_budget,
         slippage_bps=settings.sim_slippage_bps,
-        commission_per_order=settings.sim_commission,
+        extra_commission=settings.sim_commission,
     )
     return TradingCycle(
         settings=settings, broker=broker, market_data=market_data,

@@ -112,7 +112,7 @@ def test_deleting_a_profile_drags_the_simulated_brokers_ledger_along(db):
     portfolio_id = db.get_profile(profile_id)["portfolio_id"]
     SimBroker(
         database=db, portfolio_id=portfolio_id, initial_cash=10_000.0,
-        slippage_bps=0.0, commission_per_order=0.0,
+        slippage_bps=0.0, extra_commission=0.0,
     ).get_account_state()
 
     assert db.query("select count(1) n from sim_accounts")[0]["n"] == 1
