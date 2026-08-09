@@ -59,7 +59,7 @@ class UniverseMarketData:
         )
         self.limits = ScreenerLimits(
             top_n=screener.top_n,
-            min_dollar_volume=screener.min_dollar_volume,
+            min_turnover=screener.min_turnover,
             min_price=screener.min_price,
             max_volatility_pct=screener.max_volatility_pct,
         )

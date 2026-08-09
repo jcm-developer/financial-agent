@@ -20,7 +20,7 @@ import sqlite3
 import pytest
 
 from src.config import ConfigError, Infra, Settings
-from src.db import ADDED_COLUMNS, Database
+from src.db import ADDED_COLUMNS, RENAMED_COLUMNS, Database, DatabaseError
 from src.profile_settings import (
     cycle_settings,
     import_env_profile,
@@ -396,3 +396,79 @@ def test_the_migration_is_idempotent(tmp_path):
         despues = database._columns("agent_settings")
 
     assert antes == despues
+
+
+# -- Renombrado de columnas (F8.7) -------------------------------------------
+
+
+def test_a_renamed_column_keeps_its_value(tmp_path):
+    """The rename has to carry the value across, not create the column again.
+
+    This is the whole reason `RENAMED_COLUMNS` exists apart from
+    `ADDED_COLUMNS`. Renaming only in `schema.sql` would leave the old column
+    holding the value on a live database, `_add_missing_columns` would then add
+    the new name with the schema's default, and the code would read the empty
+    one. For F8.7 the visible effect would have been FE.11 undone: the European
+    profile's floor back from 5.000.000 to the 20 M default, and the symptom is
+    not an error but 15 of the 89 symbols leaving the analysis.
+    """
+    ruta = tmp_path / "antes-de-f87.db"
+    viejo, nuevo = next(iter(RENAMED_COLUMNS["agent_settings"].items()))
+
+    with Database(path=ruta) as database:
+        database.create_profile(name="europeo")
+        perfil_id = database.list_profiles()[0]["id"]
+        database.update_settings(perfil_id, {nuevo: 5_000_000.0})
+
+    # The pre-F8.7 database is simulated by putting the old name back.
+    plana = sqlite3.connect(ruta)
+    plana.execute(f"alter table agent_settings rename column {nuevo} to {viejo}")
+    plana.commit()
+    columnas = {row[1] for row in plana.execute("pragma table_info(agent_settings)")}
+    plana.close()
+    assert viejo in columnas and nuevo not in columnas, "la simulacion no revirtio"
+
+    with Database(path=ruta) as database:
+        row = database.get_settings(perfil_id)
+
+    assert nuevo in row, "la migracion no renombro la columna"
+    assert viejo not in row, "la columna vieja sigue ahi: se anadio en vez de renombrar"
+    assert row[nuevo] == 5_000_000.0, "el valor no sobrevivio al renombrado"
+
+
+def test_the_rename_is_idempotent(tmp_path):
+    """It runs on every startup, and on a new database there is nothing to do."""
+    ruta = tmp_path / "ya-renombrada.db"
+
+    with Database(path=ruta) as database:
+        antes = database._columns("agent_settings")
+    with Database(path=ruta) as database:
+        despues = database._columns("agent_settings")
+
+    assert antes == despues
+    for viejo, nuevo in RENAMED_COLUMNS["agent_settings"].items():
+        assert nuevo in despues and viejo not in despues
+
+
+def test_having_both_names_stops_instead_of_choosing(tmp_path):
+    """Both columns at once means the value and the one the code reads differ.
+
+    Carrying on would silently use a number nobody chose, which is exactly the
+    failure the rename exists to avoid, so it fails loudly instead.
+    """
+    ruta = tmp_path / "las-dos.db"
+    viejo, nuevo = next(iter(RENAMED_COLUMNS["agent_settings"].items()))
+
+    with Database(path=ruta) as database:
+        database.create_profile(name="confuso")
+
+    plana = sqlite3.connect(ruta)
+    plana.execute(
+        f"alter table agent_settings add column {viejo} real not null default 20000000"
+    )
+    plana.commit()
+    plana.close()
+
+    with pytest.raises(DatabaseError, match=viejo):
+        with Database(path=ruta):
+            pass

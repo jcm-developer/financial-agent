@@ -48,7 +48,7 @@ def make_bars(
 
 
 LIMITS = ScreenerLimits(
-    top_n=3, min_dollar_volume=1_000_000.0, min_price=5.0,
+    top_n=3, min_turnover=1_000_000.0, min_price=5.0,
     max_volatility_pct=120.0, min_bars=60,
 )
 

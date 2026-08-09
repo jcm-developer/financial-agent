@@ -232,7 +232,7 @@ class SettingsUpdate(BaseModel):
     universe_file: str | None = None
     screener_mode: Literal["score", "random"] | None = None
     screener_top_n: int | None = Field(default=None, ge=1, le=200)
-    screener_min_dollar_volume: float | None = Field(default=None, ge=0)
+    screener_min_turnover: float | None = Field(default=None, ge=0)
     screener_min_price: float | None = Field(default=None, ge=0)
     screener_max_volatility_pct: float | None = Field(default=None, ge=1)
     allow_shorts: bool | None = None

@@ -46,7 +46,7 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "agent_settings": {
         "market": "text not null default 'us' check (market in ('us', 'eu'))",
         "universe_file": "text",
-        "screener_min_dollar_volume": "real not null default 20000000",
+        "screener_min_turnover": "real not null default 20000000",
         "screener_min_price": "real not null default 5",
         "screener_max_volatility_pct": "real not null default 120",
         "lookback_days": "integer not null default 200",
@@ -64,6 +64,31 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # calls", which is right: nothing is known about them.
         "analyst_calls": "integer not null default 0",
         "analyst_failures": "integer not null default 0",
+    },
+}
+
+# Columns that changed name after the schema's first version.
+#
+# **This is not the same problem as `ADDED_COLUMNS`, and treating it as one
+# destroys data silently.** Renaming a column in `schema.sql` alone leaves a live
+# database with the old column still holding the value; `_add_missing_columns`
+# then sees the new name missing and *adds* it, empty and carrying the schema's
+# default. Both columns end up there, the code reads the new one, and the
+# experiment's setting has quietly reverted to a default nobody chose.
+#
+# For F8.7 that would have been exactly the failure FE.11 went to the trouble of
+# fixing: the European profile's liquidity floor would have jumped from the
+# 5.000.000 € it was created with back to the 20 M default, and the symptom is
+# not an error — it is 15 of the 89 symbols disappearing from the analysis.
+#
+# So the rename runs first, with ALTER TABLE ... RENAME COLUMN (SQLite 3.25+),
+# and by the time `_add_missing_columns` looks, the new name is already there and
+# it does nothing.
+RENAMED_COLUMNS: dict[str, dict[str, str]] = {
+    "agent_settings": {
+        # F8.7: the figure is in the market's currency since D8, so "dollar"
+        # lied in every European profile.
+        "screener_min_dollar_volume": "screener_min_turnover",
     },
 }
 
@@ -143,7 +168,42 @@ class Database:
             self._conn.executescript(sql)
         except sqlite3.Error as exc:
             raise DatabaseError(f"Fallo al aplicar schema.sql: {exc}") from exc
+        # The order is not a detail: renaming has to happen before the missing
+        # columns are added, or the column that just changed name would be added
+        # again under its new name, empty and with the schema's default. See
+        # `RENAMED_COLUMNS`.
+        self._rename_columns()
         self._add_missing_columns()
+
+    def _rename_columns(self) -> None:
+        """Applies the renames of `RENAMED_COLUMNS` over a live database.
+
+        It runs on every startup and normally does nothing: on a freshly created
+        database the CREATE TABLE already brought the new name, and on one
+        already migrated the old name is gone.
+
+        The three states are told apart on purpose instead of just trying the
+        rename, because they mean different things and only one is routine:
+        neither name present means the table is not this schema's; both present
+        means someone added the new column by hand while the old one still held
+        the value, and continuing would pick the empty one.
+        """
+        for table, renames in RENAMED_COLUMNS.items():
+            existing = self._columns(table)
+            if not existing:
+                continue  # la tabla no existe todavia; el CREATE la traera entera
+            for old, new in renames.items():
+                if old not in existing:
+                    continue  # ya renombrada, o base nueva
+                if new in existing:
+                    raise DatabaseError(
+                        f"{table} tiene a la vez {old} y {new}. La primera es la que "
+                        f"lleva el valor bueno y la segunda la que leeria el codigo, "
+                        f"asi que seguir usaria un valor que nadie eligio. "
+                        f"Copia el valor a mano y borra {old}."
+                    )
+                self._execute(f"alter table {table} rename column {old} to {new}")
+                log.info("Columna %s.%s renombrada a %s.", table, old, new)
 
     def _add_missing_columns(self) -> None:
         """Adds with ALTER TABLE the columns of `ADDED_COLUMNS` that are missing.

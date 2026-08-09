@@ -204,7 +204,7 @@ class ScreenerSettings:
     universe_file: str = ""
     top_n: int = 20
     mode: str = "score"
-    min_dollar_volume: float = 20_000_000.0
+    min_turnover: float = 20_000_000.0
     min_price: float = 5.0
     max_volatility_pct: float = 120.0
 
@@ -224,7 +224,11 @@ class ScreenerSettings:
             universe_file=(os.getenv("UNIVERSE_FILE") or "").strip(),
             top_n=_get_int("SCREENER_TOP_N", 20, minimum=1, maximum=200),
             mode=mode,
-            min_dollar_volume=_get_float("SCREENER_MIN_DOLLAR_VOLUME", 20_000_000.0, minimum=0.0),
+            # The environment variable keeps its old name on purpose: this path
+            # only runs for `import-profile`, which reads a `.env` written by the
+            # previous version. Renaming it here would mean the one file this
+            # code exists to read no longer has the key it looks for (F8.7).
+            min_turnover=_get_float("SCREENER_MIN_DOLLAR_VOLUME", 20_000_000.0, minimum=0.0),
             min_price=_get_float("SCREENER_MIN_PRICE", 5.0, minimum=0.0),
             max_volatility_pct=_get_float("SCREENER_MAX_VOLATILITY_PCT", 120.0, minimum=1.0),
         )

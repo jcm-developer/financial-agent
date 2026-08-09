@@ -34,9 +34,10 @@ class ScreenerLimits:
     """Filtros duros y tamano de la salida."""
 
     top_n: int = 20
-    # Average dollar volume over the last 20 sessions. Below this the execution
-    # simulation is not credible.
-    min_dollar_volume: float = 20_000_000.0
+    # Average turnover over the last 20 sessions, **in the market's currency**
+    # (D8): euros for a European profile, dollars for an American one. Below this
+    # the execution simulation is not credible.
+    min_turnover: float = 20_000_000.0
     min_price: float = 5.0
     # Maximum annualised volatility in %. Above it, the ATR stop would be so wide
     # that the resulting position would be irrelevant.
@@ -201,8 +202,8 @@ def screen(
             continue
 
         avg_volume = indicators.get("avg_volume_20")
-        dollar_volume = (avg_volume or 0.0) * price
-        if dollar_volume < limits.min_dollar_volume:
+        turnover = (avg_volume or 0.0) * price
+        if turnover < limits.min_turnover:
             report.rejected["iliquido"] = report.rejected.get("iliquido", 0) + 1
             continue
 

@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F8.3 cerrada: el .env.example queda solo con infraestructura, y documentaba una variable que nadie lee)
+Última actualización: 2026-08-09 (F8.7 cerrada: screener_min_turnover, con migración de renombrado para no deshacer FE.11 en silencio)
 
 ---
 
@@ -161,9 +161,9 @@ Tres decisiones con consecuencia:
   verdad de mercado —se guarda en `cycles.market_open` y se enseña en el dashboard— y
   `is_operating()` responde la otra pregunta: si nos toca capturar y analizar.
 
-**Consecuencia que hay que asumir:** `screener_min_dollar_volume` sigue llamándose así pero
-la cifra está en la divisa del mercado. Renombrar la columna tocaría esquema, `db.py`,
-`profile_settings.py`, el screener y sus tests para no ganar nada funcional; queda en F8.7.
+~~**Consecuencia que hay que asumir:** `screener_min_dollar_volume` sigue llamándose así pero
+la cifra está en la divisa del mercado.~~ **Resuelto en F8.7** (2026-08-09): la columna se
+llama `screener_min_turnover` y el nombre ya no miente en los perfiles europeos.
 
 ### D5 — API: FastAPI ✅
 
@@ -1270,12 +1270,44 @@ diez sesiones en silencio.
       lobos contra el que se escribió esa medición. Subido a 15, unas 4 veces el coste
       tranquilo del contenedor: lo que se busca detectar es una espera por `busy_timeout`,
       que son cientos de ms por fila, no un disco lento.
-- [ ] **F8.7** Renombrar `screener_min_dollar_volume` → `screener_min_turnover`. Desde D8 la
-      cifra está en la divisa del mercado, así que el nombre miente en los perfiles
-      europeos. No es urgente —hay un comentario en el esquema y otro en el fichero de
-      universo— pero toca esquema, `db.py`, `profile_settings.py`, `config.py`, el screener
-      y sus tests, así que conviene hacerlo de una vez y no a medias. FE.11 ya usa el
-      nombre bueno en `Market.min_turnover`, así que hoy el código convive con los dos.
+- [x] **F8.7** `screener_min_dollar_volume` → `screener_min_turnover` (2026-08-09). Desde D8
+      la cifra está en la divisa del mercado, así que el nombre mentía en los perfiles
+      europeos. Tocaba esquema, `db.py`, `profile_settings.py`, `config.py`, el screener,
+      `universe_data.py`, `api/models.py`, los tipos generados y cuatro tests, y se ha hecho
+      de una vez como estaba previsto.
+
+      ⚠️ **Lo que no estaba previsto, y era lo único peligroso: un renombrado no es un alta,
+      y tratarlo como tal destruye el ajuste en silencio.** `schema.sql` es idempotente para
+      tablas pero `create table if not exists` no renombra nada sobre una base ya creada, así
+      que cambiar solo el esquema habría dejado la columna vieja con el valor bueno,
+      `_add_missing_columns` habría **añadido** la nueva con el default de 20 M, y el código
+      habría leído la vacía. En este caso concreto eso es **FE.11 deshecha**: el suelo del
+      perfil europeo vuelve de 5.000.000 € a 20 M, y el síntoma no es un error sino 15 de los
+      89 símbolos saliendo del análisis sin que nada lo diga.
+
+      De ahí `RENAMED_COLUMNS` en [src/db.py](src/db.py), separado de `ADDED_COLUMNS` porque
+      son problemas distintos, y `_rename_columns()` **antes** de `_add_missing_columns()`:
+      cuando la segunda mira, el nombre nuevo ya está y no hace nada. Los tres estados se
+      distinguen a propósito en vez de intentar el `ALTER` y ver qué pasa —ninguno de los dos
+      nombres, solo el nuevo, o **los dos a la vez**— y el tercero **para en seco con
+      `DatabaseError`** en lugar de elegir: si están las dos columnas, una lleva el valor y la
+      otra es la que leería el código, así que seguir usaría un número que nadie eligió, que
+      es justo lo que este mecanismo existe para evitar.
+
+      Dos decisiones más:
+      - **La variable de entorno `SCREENER_MIN_DOLLAR_VOLUME` conserva su nombre.** Solo la
+        lee `Settings.load()`, o sea `import-profile`, y lo que ese comando lee es un `.env`
+        escrito por la versión anterior. Renombrarla habría dejado al único código que existe
+        para leer ese fichero buscando una clave que el fichero no tiene.
+      - **El historial y los snapshots no se reescriben.** `agent_settings_history` guarda el
+        nombre del campo como texto y `cycles.settings_json` lleva la copia de los parámetros
+        con los que corrió cada ciclo: son el registro de lo que pasó, y cambiarles el nombre
+        del campo a posteriori diría que un ciclo de agosto corrió con una columna que
+        entonces no existía.
+
+      **610 tests en verde** (3 nuevos: que el valor sobrevive al renombrado, que repetirlo no
+      hace nada y que las dos columnas a la vez paran en seco), typecheck limpio, tipos
+      regenerados.
 - [x] **F8.8** Pasar el código existente al inglés (2026-08-09). La convención quedó escrita el
       2026-08-09 en [CLAUDE.md](CLAUDE.md) («El código va en inglés, lo que se lee en
       español») y en [DESIGN.md](DESIGN.md), y **rige para el código nuevo desde ya**; esta

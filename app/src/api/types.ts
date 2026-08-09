@@ -482,7 +482,7 @@ export interface SettingsUpdate {
   universe_file?: string | null;
   screener_mode?: "score" | "random" | null;
   screener_top_n?: number | null;
-  screener_min_dollar_volume?: number | null;
+  screener_min_turnover?: number | null;
   screener_min_price?: number | null;
   screener_max_volatility_pct?: number | null;
   allow_shorts?: boolean | null;

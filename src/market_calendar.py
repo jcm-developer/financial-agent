@@ -82,7 +82,7 @@ class Market:
     benchmark: str
     #: Universe file proposed for this market.
     universe_file: str
-    #: Screener liquidity floor (`agent_settings.screener_min_dollar_volume`) for
+    #: Screener liquidity floor (`agent_settings.screener_min_turnover`) for
     #: a profile of this market, **in the market's currency**: the screener
     #: multiplies price by volume and converts nothing. It lives here because the
     #: number is not a user preference but a property of the universe: 20 M works

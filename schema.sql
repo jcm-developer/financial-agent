@@ -388,7 +388,11 @@ create table if not exists agent_settings (
                            check (screener_mode in ('score', 'random')),
     screener_top_n         integer not null default 20
                            check (screener_top_n between 1 and 200),
-    screener_min_dollar_volume real not null default 20000000,
+    -- Suelo de liquidez, en la DIVISA DEL MERCADO del perfil y no en dolares:
+    -- desde D8 un perfil europeo lo mide en euros. Se llamaba
+    -- `screener_min_dollar_volume` hasta F8.7, y el renombrado sobre una base ya
+    -- creada lo hace `Database._rename_columns`.
+    screener_min_turnover  real not null default 20000000,
     screener_min_price     real not null default 5,
     screener_max_volatility_pct real not null default 120,
 

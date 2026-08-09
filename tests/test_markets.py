@@ -703,9 +703,9 @@ def test_new_profile_sets_the_markets_liquidity_floor(
         settings = database.get_settings(profile_id)
         resuelto = resolve_settings(database, profile_id, infra=INFRA)
 
-    assert settings["screener_min_dollar_volume"] == esperado
+    assert settings["screener_min_turnover"] == esperado
     # And it reaches the screener, which is the only place the number does anything.
-    assert resuelto.screener.min_dollar_volume == esperado
+    assert resuelto.screener.min_turnover == esperado
 
 
 def test_the_split_adds_up_to_the_flat_universe(db, perfil_eu):

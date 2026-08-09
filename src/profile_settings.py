@@ -142,7 +142,7 @@ def resolve_settings(db: Database, profile_id: str, *, infra: Infra) -> Settings
         universe_file=universe_file,
         top_n=int(row["screener_top_n"]),
         mode=str(row["screener_mode"]),
-        min_dollar_volume=float(row["screener_min_dollar_volume"]),
+        min_turnover=float(row["screener_min_turnover"]),
         min_price=float(row["screener_min_price"]),
         max_volatility_pct=float(row["screener_max_volatility_pct"]),
     )
@@ -394,7 +394,7 @@ def create_market_profile(
             # The liquidity floor comes from the market, not from the schema's
             # default (FE.11): with 'us''s 20 M the European screener silently
             # discards 15 of the 89.
-            "screener_min_dollar_volume": market.min_turnover,
+            "screener_min_turnover": market.min_turnover,
             "initial_budget": budget,
         },
     )
@@ -491,7 +491,7 @@ def import_env_profile(
         "universe_file": screener.universe_file or None,
         "screener_mode": screener.mode,
         "screener_top_n": screener.top_n,
-        "screener_min_dollar_volume": screener.min_dollar_volume,
+        "screener_min_turnover": screener.min_turnover,
         "screener_min_price": screener.min_price,
         "screener_max_volatility_pct": screener.max_volatility_pct,
         "advanced_overrides": 1,

@@ -309,7 +309,7 @@ def test_a_created_profile_brings_market_currency_and_limits(profile):
 def test_the_market_sets_the_liquidity_floor(profile):
     """FE.11 from the API too: with 'us''s 20 M the European screener would
     discard 15 of the 89 without saying anything."""
-    assert profile["settings"]["screener_min_dollar_volume"] == 5_000_000
+    assert profile["settings"]["screener_min_turnover"] == 5_000_000
 
 
 def test_the_legacy_dashboard_endpoint_no_longer_exists(client, db_path, profile):
