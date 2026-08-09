@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
-import { Alert, BlockTitle, Button } from "@/components/pieces";
+import { Alert, BlockTitle, Button, cardClasses } from "@/components/pieces";
 
 /**
  * The confirmation dialog (F5.4).
@@ -97,7 +97,15 @@ export function ConfirmDialog({
       // ids in the document and the reference would resolve to whichever came
       // first — which is not the open one.
       aria-label={title}
-      className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-lg border border-border bg-card p-5 text-foreground shadow-[var(--shadow-card)] backdrop:bg-black/50"
+      // The card recipe comes from `cardClasses`, never written out here: that
+      // is the rule pieces.tsx exists for. What is added is only what belongs to
+      // being a dialog — the width, the centring and the backdrop. The scrim is
+      // the same black in both themes on purpose: it darkens the page behind,
+      // and a scrim that changes with the theme stops doing that in one of them.
+      className={cardClasses(
+        "p-5",
+        "m-auto w-[min(32rem,calc(100vw-2rem))] text-foreground backdrop:bg-black/50",
+      )}
       onCancel={(event) => {
         // While the request is in flight Esc would leave the dialog closed and
         // the action running, with nowhere to show its error.

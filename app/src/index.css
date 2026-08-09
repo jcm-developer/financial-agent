@@ -1,23 +1,22 @@
 @import "tailwindcss";
 
-/* shadcn/ui espera la variante `dark` como CLASE y no como media query: el
-   interruptor manual tiene que ganar a la preferencia del sistema en los dos
-   sentidos, que es exactamente lo que ya hacia web/index.html con
-   [data-theme]. */
+/* shadcn/ui expects the `dark` variant as a CLASS and not as a media query: the
+   manual switch has to win over the system preference in both directions, which
+   is exactly what the old web/index.html already did with [data-theme]. */
 @custom-variant dark (&:is(.dark *));
 
 /* ---------------------------------------------------------------------------
-   Paleta heredada del dashboard viejo, valor por valor. No es nostalgia:
+   The palette inherited from the old dashboard, value by value. Not nostalgia:
 
-   * El par positivo/negativo es AZUL/ROJO y no verde/rojo a proposito. Es un
-     divergente con polo frio y polo calido, asi que se sigue leyendo sin
-     distinguir el verde del rojo. Cambiarlo aqui habria deshecho esa decision
-     sin que nadie lo notara hasta tenerlo delante.
-   * `delta-good`/`delta-bad` son APARTE de positive/negative: los usa el texto
-     de las variaciones, donde si hace falta el verde porque no compite con
-     ninguna serie de la grafica.
-   * Los neutros son calidos (#f9f9f7, no #ffffff), que es lo que evita el
-     aspecto de hoja de calculo.
+   * The positive/negative pair is BLUE/RED and not green/red on purpose. It is
+     a diverging pair with a cold pole and a warm one, so it still reads without
+     telling green from red. Changing it here would have undone that decision
+     with nobody noticing until it was on screen.
+   * `delta-good`/`delta-bad` are SEPARATE from positive/negative: they are used
+     by the text of variations, where green is fine because it competes with no
+     chart series.
+   * The neutrals are warm (#f9f9f7, not #ffffff), which is what keeps it from
+     looking like a spreadsheet.
    --------------------------------------------------------------------------- */
 :root {
   --page: #f9f9f7;
@@ -25,8 +24,8 @@
   --surface-sunken: #f2f2ef;
   --text-primary: #0b0b0b;
   --text-secondary: #52514e;
-  /* #898781 heredado daba 3.50:1 sobre la tarjeta: por debajo del 4.5 que pide
-     AA para texto normal, y este token se usa justo en etiquetas de 11-13 px. */
+  /* The inherited #898781 gave 3.50:1 over the card: below the 4.5 AA asks for
+     normal text, and this token is used precisely on 11-13 px labels. */
   --text-muted: #76746f;
   --grid: #e1e0d9;
   --axis: #c3c2b7;
@@ -35,17 +34,17 @@
   --series-2: #eb6834;
   --positive: #2a78d6;
   --negative: #e34948;
-  /* Tinta: los mismos significados cuando quien los lleva es TEXTO y no una
-     marca. Un relleno de gráfica cumple con 3:1 y una etiqueta necesita 4.5, así
-     que el azul y el rojo de arriba, que pasan como marca (4.30 y 3.85), no
-     valen como letra. Es la misma separación que ya hacían delta-good/bad. */
+  /* Ink: the same meanings when what carries them is TEXT and not a mark. A
+     chart fill passes at 3:1 and a label needs 4.5, so the blue and the red
+     above —which pass as marks, at 4.30 and 3.85— do not work as letters. It is
+     the same split delta-good/bad already made. */
   --positive-ink: #2874d0;
   --negative-ink: #c62726;
   --delta-good: #006300;
   --delta-bad: #d03b3b;
-  /* El ámbar de marca es ilegible como texto sobre fondo claro (1.79:1). Aquí
-     solo se usa como letra —avisos, insignias— así que en claro va la versión
-     oscura; en oscuro el original ya da 9.49:1. */
+  /* The mark amber is illegible as text on a light background (1.79:1). Here it
+     is only used as letters —notices, badges— so the light theme carries the
+     dark version; in dark, the original already gives 9.49:1. */
   --warning: #9c6b03;
   --shadow-card: 0 1px 2px rgba(11, 11, 11, 0.04);
   --radius: 0.5rem;
@@ -73,9 +72,9 @@
   --shadow-card: none;
 }
 
-/* Los nombres que espera shadcn/ui a la izquierda, la paleta de arriba a la
-   derecha. Asi los componentes que copie el CLI encajan sin retocarlos, y a la
-   vez no hay dos paletas compitiendo. */
+/* The names shadcn/ui expects on the left, the palette above on the right. That
+   way the components the CLI copies fit with no retouching, and at the same time
+   there are not two palettes competing. */
 @theme inline {
   --color-background: var(--page);
   --color-foreground: var(--text-primary);
@@ -102,8 +101,9 @@
   --color-input: var(--border-subtle);
   --color-ring: var(--series-1);
 
-  /* Vocabulario del dominio. Existe aparte porque una celda de P&L no es
-     "destructive": es negativa, que no significa lo mismo ni se colorea igual. */
+  /* The domain's vocabulary. It exists apart because a P&L cell is not
+     "destructive": it is negative, which does not mean the same thing and is not
+     coloured the same. */
   --color-surface-sunken: var(--surface-sunken);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
@@ -117,7 +117,13 @@
   --color-grid: var(--grid);
   --color-axis: var(--axis);
 
-  /* Series para Recharts (F4.6), en el orden en que deben usarse. */
+  /* Series for Recharts (F4.6), in the order they have to be used. There are
+     two, and that is a limit and not an oversight: green is reserved for
+     `delta-good` and amber for `warning`, so a third hue would have to come out
+     of what is left, and what is left collides with the blue already in use
+     (purple gives dE 3.7-5.8 against --series-1 under deuteranopia, measured in
+     F5.6, against a target of 8). Beyond two series the answer is small
+     multiples, not a third colour. */
   --color-series-1: var(--series-1);
   --color-series-2: var(--series-2);
 
@@ -138,22 +144,22 @@
     line-height: 1.5;
   }
 
-  /* Foco visible en todo lo que reciba foco: es la mitad de F4.9 y cuesta una
-     regla ponerlo desde el principio en lugar de repasarlo al final. */
+  /* Visible focus on anything that can receive it: it is half of F4.9 and costs
+     one rule to have from the start instead of auditing it at the end. */
   :focus-visible {
     @apply outline-2 outline-offset-1 outline-ring;
   }
 
-  /* Las cifras en tablas se comparan en vertical, asi que necesitan ancho fijo
-     por digito. Sin esto las columnas de dinero bailan y la vista no puede
-     recorrerlas de un salto. */
+  /* Figures in tables are compared vertically, so they need a fixed width per
+     digit. Without this the money columns wobble and the eye cannot run down
+     them in one go. */
   .tabular {
     font-variant-numeric: tabular-nums;
   }
 
-  /* Quien pide movimiento reducido lo pide en serio: el punto que late del
-     indicador de datos en vivo es decorativo —el texto ya dice el estado— y a
-     algunas personas les provoca mareo. */
+  /* Whoever asks for reduced motion means it: the pulsing dot of the live-data
+     indicator is decorative —the text already says the state— and it makes some
+     people dizzy. */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -164,13 +170,13 @@
     }
   }
 
-  /* Enlace de salto: primero en el orden de tabulacion y visible solo al
-     enfocarlo. Sin el, llegar al contenido con teclado obliga a recorrer la
-     cabecera y las nueve entradas de la barra lateral en CADA pagina. */
-  .salto {
+  /* Skip link: first in the tab order and visible only when focused.
+     Without it, reaching the content with the keyboard means going through the
+     header and the nine sidebar entries on EVERY page. */
+  .skip-link {
     @apply sr-only;
   }
-  .salto:focus {
+  .skip-link:focus {
     @apply not-sr-only fixed top-2 left-2 z-50 rounded-md border border-border bg-card px-3 py-2 text-[13px];
   }
 }

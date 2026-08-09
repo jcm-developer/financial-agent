@@ -25,7 +25,7 @@ export function Layout() {
 
   return (
     <div className="min-h-dvh">
-      <a className="salto" href="#contenido">
+      <a className="skip-link" href="#content">
         Saltar al contenido
       </a>
       <header className="border-b border-border">
@@ -50,7 +50,7 @@ export function Layout() {
           <Sidebar profile={profile?.name ?? ref} />
         </aside>
 
-        <main id="contenido" tabIndex={-1} className="min-w-0 flex-1 pb-16">
+        <main id="content" tabIndex={-1} className="min-w-0 flex-1 pb-16">
           {notFound ? <ProfileNotFound name={ref!} /> : <Outlet />}
         </main>
       </div>

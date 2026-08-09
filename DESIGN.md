@@ -20,7 +20,8 @@ Tres decisiones lo resumen, y ninguna es estética:
    [app/src/components/pieces.tsx](app/src/components/pieces.tsx).
 
 **Stack:** Tailwind CSS v4.3, `system-ui`, iconos Lucide (v1.x), Recharts v3 solo
-en Analítica. Sin Framer Motion, sin fuentes externas.
+en Analítica y el comparador. Sin Framer Motion, sin fuentes externas y **sin
+shadcn/ui**: está configurado para poder traerlo, pero todavía no ha hecho falta.
 
 ---
 
@@ -51,10 +52,18 @@ Los nombres siguen la tabla de [CLAUDE.md](CLAUDE.md). Lo que afecta a `app/`:
   fichero, sino un juego de piezas del que se importa lo que haga falta.
 - **Hooks → `useAlgo.ts`**, y las carpetas en minúscula y una sola palabra.
 
-`app/` ya cumple la regla entera desde F8.8: carpetas, ficheros, componentes,
-props y comentarios en inglés, y el texto de pantalla en español. Las rutas
-cambiaron con ello (`/p/:profile/positions`), así que los enlaces guardados de
-antes de esa tarea ya no valen.
+`app/` ya cumple la regla entera: carpetas, ficheros, componentes, props y
+comentarios en inglés, y el texto de pantalla en español. F8.8 hizo el grueso y el
+repaso de diseño del 2026-08-09 cerró tres restos que se habían quedado fuera
+—los comentarios de `index.css`, la clave `tema` de `localStorage` y la clase
+`.salto` con su `id="contenido"`—: una clave de almacenamiento y un nombre de
+clase CSS son código, igual que las claves de JSON.
+
+Las rutas cambiaron con la migración (`/p/:profile/positions`). **Los enlaces
+guardados de antes sí valen**: F8.10 redirige las diez rutas viejas, conservando la
+query. Es la única excepción de idioma que hay en `app/`, vive en un solo fichero
+([legacyRoutes.tsx](app/src/legacyRoutes.tsx)) y si algún día se quita, se quita
+entera.
 
 ---
 
@@ -156,11 +165,11 @@ nada que se note en una tabla de cifras.
 |---|---|---|
 | 10 px | `text-[10px]` | `<Tag>`: `VIVO`, `CICLO`, `SIN PRECIO`, `SIN MODELO` |
 | 11 px | `text-[11px]` | Notas secundarias dentro de una celda: regla aplicada, nocional aprobado |
-| 12 px | `text-xs` | Explicaciones de gráfica, notas al pie, tabla alternativa, logs, insignia compacta |
+| 12 px | `text-xs` | Explicaciones de gráfica, notas al pie, tabla alternativa, logs, `<Badge compact>` |
 | 13 px | `text-[13px]` | **El tamaño de la aplicación**: tablas, botones, controles, párrafos, títulos de sección y de bloque |
 | 14 px | *(heredado)* | Lo que no dice otra cosa: nombres de experimento |
 | 15 px | `text-[15px]` | Marca de la cabecera y título de un aviso a página completa |
-| 17 px | `text-[17px]` | `<TituloPagina>` y la cifra grande de una tarjeta de métrica |
+| 17 px | `text-[17px]` | `<PageTitle>` y la cifra grande de una tarjeta de métrica |
 
 No hay `text-sm`, `text-base` ni `text-lg` en el proyecto: los pasos de Tailwind
 caen entre los valores útiles para esta densidad, y mezclarlos daría dos escalas.
@@ -181,8 +190,8 @@ carga suficiente, y el bold engorda la cifra sin hacerla más legible.
 
 | Clase | Uso |
 |---|---|
-| `tracking-tight` | `<TituloPagina>` y la marca de la cabecera |
-| `tracking-wide` + `uppercase` | `<TituloSeccion>` |
+| `tracking-tight` | `<PageTitle>` y la marca de la cabecera |
+| `tracking-wide` + `uppercase` | `<SectionTitle>` |
 
 ### Cifras tabulares
 
@@ -190,7 +199,7 @@ carga suficiente, y el bold engorda la cifra sin hacerla más legible.
 tabular-nums`, definido en `index.css`). Sin ancho fijo por dígito las columnas de
 dinero bailan y la vista no puede recorrerlas de un salto.
 
-`<Td numerica>` ya la aplica junto con `text-right` y `whitespace-nowrap`, así que
+`<Td numeric>` ya la aplica junto con `text-right` y `whitespace-nowrap`, así que
 en una tabla no hay que acordarse. Fuera de las tablas —cifras de tarjeta,
 recuentos en una insignia, listas de definición— se pone a mano.
 
@@ -227,7 +236,7 @@ botones, desplegables y campos.
 Nada por encima de `rounded-lg`: un radio grande come alto útil y en una tarjeta
 de 13 px de texto se nota.
 
-La única sombra es `shadow-[var(--shadow-card)]`, y **la aplica `<Tarjeta>`**, no
+La única sombra es `shadow-[var(--shadow-card)]`, y **la aplica `<Card>`**, no
 cada sitio. En oscuro vale `none` —una sombra negra sobre `#0d0d0d` no se ve y
 solo ensucia el borde— y en claro es un `0 1px 2px` al 4 %. No hay sombras de
 color ni de elevación alta.
@@ -243,22 +252,22 @@ no tenga que tocar ningún componente.
 
 ### Botones
 
-Nunca a mano: `<Boton>` es quien carga el `min-h-8`, el `hover`, el estado
+Nunca a mano: `<Button>` es quien carga el `min-h-8`, el `hover`, el estado
 deshabilitado y el `type="button"`.
 
 | Variante | Uso |
 |---|---|
-| `neutro` *(por defecto)* | Acción normal: lanzar un ciclo, paginar, volver |
-| `sutil` | Acción de menor peso al lado de otra: «Lanzar en seco», interruptor de tema |
-| `peligro` | Acción destructiva: «Parar» |
+| `neutral` *(por defecto)* | Acción normal: lanzar un ciclo, paginar, volver |
+| `subtle` | Acción de menor peso al lado de otra: «Lanzar en seco», interruptor de tema |
+| `danger` | Acción destructiva: «Parar» |
 
 **No hay una variante sólida de marca, y es deliberado:** en una pantalla de datos
 el relleno de color se reserva para las cifras, y un botón azul competiría con las
 series de las gráficas por la misma atención.
 
 ```jsx
-<Boton variante="peligro" disabled={!estado.running} onClick={parar}>Parar</Boton>
-<Boton variante="sutil" icono={Moon} aria-label="Cambiar a tema oscuro">Oscuro</Boton>
+<Button variant="danger" disabled={!state.running} onClick={stop}>Parar</Button>
+<Button variant="subtle" icon={Moon} aria-label="Cambiar a tema oscuro">Oscuro</Button>
 ```
 
 Cuando quien tiene que llevar la apariencia de botón es un `<Link>` del enrutador
@@ -275,12 +284,12 @@ apariencia y no el elemento:
 underline decoration-border transition-colors hover:decoration-current
 ```
 
-Exportado como `CLASES_ENLACE` para los `<Link>`, y como `<BotonEnlace>` para
+Exportado como `LINK_CLASSES` para los `<Link>`, y como `<LinkButton>` para
 cuando la acción no navega (abrir un detalle, plegar un log, cambiar a la vista de
 tabla). El subrayado está **siempre**: quitarlo dejaría el enlace distinguible solo
 por el color. Y es tenue en reposo para no competir con la cifra de al lado.
 
-`<BotonEnlace>` es un `<button>` y no un `<a>` sin `href` porque el teclado y los
+`<LinkButton>` es un `<button>` y no un `<a>` sin `href` porque el teclado y los
 lectores de pantalla tienen que anunciarlo por lo que hace.
 
 ### Tarjeta
@@ -289,88 +298,138 @@ lectores de pantalla tienen que anunciarlo por lo que hace.
 rounded-lg border border-border bg-card shadow-[var(--shadow-card)]
 ```
 
-`<Tarjeta>` con `etiqueta` (`div` / `section` / `article`), `relleno` y
-`discontinua`. Para un `<Link>` con forma de tarjeta, `clasesTarjeta()`.
+`<Card>` con `as` (`div` / `section` / `article`), `padding` y
+`dashed`. Para un `<Link>` con forma de tarjeta, `cardClasses()`.
 
-**El relleno es una prop y no algo que se sobrescriba desde `className`**: `p-4` y
+**El `padding` es una prop y no algo que se sobrescriba desde `className`**: `p-4` y
 `px-4 py-6` no son el mismo grupo de utilidades, así que cuál gana lo decide el
 orden de la hoja de estilos y no el de las clases. Pasarlo como prop es lo que hace
-que `relleno="p-0"` —la tarjeta que envuelve una tabla— sea predecible.
+que `padding="p-0"` —la tarjeta que envuelve una tabla— sea predecible.
 
-`discontinua` añade `border-dashed` y quita la sombra: es el hueco de algo que
+`dashed` añade `border-dashed` y quita la sombra: es el hueco de algo que
 todavía no hay (estado vacío, pantalla pendiente).
+
+`<ProfileCard>` ([ProfileCard.tsx](app/src/components/ProfileCard.tsx)) es su
+aplicación de dominio: un experimento con sus seis cifras (F5.2). **La tarjeta no
+es un `<Link>` y el nombre de dentro sí**, porque un `<button>` dentro de un `<a>`
+es HTML inválido y la tarjeta tiene que poder llevar las acciones de F5.4.
+
+### Cifra con etiqueta
+
+`<Stat label value valueClass>` — un par `dt`/`dd` para los conjuntos de cifras
+que describen una cosa: el detalle de un ciclo, las métricas de un experimento.
+Es una lista de definición y no dos `div` porque leído en voz alta «Capital:
+10.240,00 €» es un par, y sin el emparejamiento un lector de pantalla lee ocho
+etiquetas y luego ocho números. Tiene que ir dentro de un `<dl>`.
+
+`valueClass` sale **siempre** de `signClass()`, nunca escrito a mano.
+
+### Diálogo de confirmación
+
+`<ConfirmDialog>` ([ConfirmDialog.tsx](app/src/components/ConfirmDialog.tsx)) —
+para lo que no se puede deshacer: pausar, archivar, duplicar y borrar (F5.4).
+
+⚠️ **Es el `<dialog>` del navegador, no el de shadcn, y eso cambia lo que decía
+F4.7.** Aquella tarea dejó shadcn fuera anotando que entraría «cuando haga falta
+algo que sí necesita Radix: el diálogo de confirmación de F5.4». Con el diálogo
+delante, lo que Radix aporta ahí —trampa de foco, Esc, el resto de la página
+inerte, apilado por encima de todo— es lo que ya hace `showModal()` de forma
+nativa, en la capa superior. Lo único que daba de más son las entradas animadas,
+que este proyecto no tiene a propósito. **La regla sigue en pie: shadcn entra
+cuando algo necesite Radix de verdad.** Hoy nada lo necesita.
+
+- Lleva `aria-label` y no `aria-labelledby`: una fila de acciones monta varios
+  diálogos a la vez, y un `id` fijo serían `id` duplicados.
+- El botón de confirmar **dice la acción** («Archivar», «Borrar el experimento y
+  su histórico»), nunca «Aceptar».
+- La receta de tarjeta sale de `cardClasses()`; solo se añade lo que es propio de
+  un diálogo: ancho, centrado y `::backdrop`.
 
 ### Tablas
 
 [app/src/components/Table.tsx](app/src/components/Table.tsx): `<Table>`,
-`<Cabecera>`, `<Th>`, `<Td>`, `<Fila>`, `<Vacio>`, `<Paginacion>`.
+`<TableHead>`, `<Th>`, `<Td>`, `<Row>`, `<Empty>`, `<Pagination>`.
 
-- `<Tabla titulo>` — el título es el `<caption class="sr-only">`, obligatorio.
+- `<Table title>` — el título es el `<caption class="sr-only">`, obligatorio.
   El contenedor lleva `overflow-x-auto`, **no la página**: una tabla ancha se
   desplaza dentro de su hueco sin arrastrar el resto de la pantalla.
-- `<Th numerica>` / `<Td numerica>` — alinea a la derecha y aplica `.tabular`.
-- `<Td encabezado>` — la celda que nombra la fila, como `<th scope="row">`. Sin
+- `<Th numeric>` / `<Td numeric>` — alinea a la derecha y aplica `.tabular`.
+- `<Td header>` — la celda que nombra la fila, como `<th scope="row">`. Sin
   ella un lector de pantalla lee «17,42» sin decir de qué símbolo.
-- `<Vacio>` — el texto se redacta **caso por caso**. «No hay posiciones» y «no hay
+- `<Empty>` — el texto se redacta **caso por caso**. «No hay posiciones» y «no hay
   decisiones» significan cosas muy distintas en un experimento de diez días, y un
   texto genérico obliga a ir a mirar la base de datos para saber cuál de las dos es.
-- `<Paginacion>` — enseña «41–80 de 480» y no solo las flechas: saber cuánto hay
+- `<Pagination>` — enseña «41–80 de 480» y no solo las flechas: saber cuánto hay
   detrás es lo que dice si merece la pena seguir mirando.
 
 Son a mano y no de shadcn a propósito: su tabla son envoltorios sobre `<table>`
 sin nada de Radix debajo, así que copiarla aportaría un fichero más y ninguna
-capacidad. shadcn se traerá cuando haga falta algo que sí necesita Radix.
+capacidad. shadcn se traerá cuando haga falta algo que sí necesita Radix — y el
+diálogo de confirmación de F5.4, que era el candidato, resultó no serlo (ver
+«Diálogo de confirmación»).
 
-La tabla **compacta** de dentro de una gráfica (`<TablaSimple>`, `text-xs`,
+La tabla **compacta** de dentro de una gráfica (`<SimpleTable>`, `text-xs`,
 `py-1`) es una densidad aparte y legítima: vive dentro de una tarjeta que ya tiene
 su propio relleno.
 
 ### Estados de carga, error y vacío
 
-`<Seccion titulo consulta>` ([Seccion.tsx](app/src/components/Seccion.tsx))
+`<Section title query>` ([Section.tsx](app/src/components/Section.tsx))
 resuelve los tres estados de una consulta en un sitio. Existe porque la
-alternativa —`datos?.map(...)` en cada pantalla— pinta un error de la API como una
+alternativa —`data?.map(...)` en cada pantalla— pinta un error de la API como una
 sección en blanco, y una sección en blanco se lee como «no hay nada»: en un
 experimento de diez días, la diferencia entre «hoy no operó» y «llevo tres días sin
 ver los datos».
 
-- `<Cargando>` — `role="status"`, «Cargando…». **Es el único indicador que hay.**
+- `<Loading>` — `role="status"`, «Cargando…». **Es el único indicador que hay.**
   Las consultas van contra un SQLite local y terminan antes de que un placeholder
   llegue a pintarse; la única espera larga de verdad es la analítica, que avisa con
   su propio texto.
-- `<Aviso>` — error en línea, con `role="alert"`. Sin él un lector de pantalla no
+- `<Alert>` — error en línea, con `role="alert"`. Sin él un lector de pantalla no
   dice nada: el foco sigue en el botón que acaba de pulsarse y el texto nuevo está
   en otra parte del documento.
-- El caso vacío no está aquí, porque lo redacta cada pantalla (ver `<Vacio>`).
+- El caso vacío no está aquí, porque lo redacta cada pantalla (ver `<Empty>`).
 
 ### Insignias
 
-- `<Insignia>` — píldora con borde, para recuentos y estados de cabecera.
-  `compacta` la baja a 12 px y `py-0.5`.
-- `<Etiqueta>` — la etiqueta diminuta en mayúsculas pegada a una cifra: `VIVO`,
-  `CICLO`, `SIN PRECIO`, `SIN MODELO`. Tonos `hereda` / `neutro` / `bueno` /
-  `atencion` / `malo`.
+- `<Badge>` — píldora con borde, para recuentos y estados de cabecera.
+  `compact` la baja a 12 px y `py-0.5`.
+- `<Tag>` — la etiqueta diminuta en mayúsculas pegada a una cifra: `VIVO`,
+  `CICLO`, `SIN PRECIO`, `SIN MODELO`. Tonos `inherit` / `neutral` / `good` /
+  `warning` / `bad`.
 
-**`<Etiqueta>` siempre lleva `title` con la frase entera.** Cuatro letras en
+**`<Tag>` siempre lleva `title` con la frase entera.** Cuatro letras en
 mayúsculas no explican nada por sí solas, y el color menos.
 
-`<Procedencia>` ([Procedencia.tsx](app/src/components/Procedencia.tsx)) es la
+`<PriceSource>` ([PriceSource.tsx](app/src/components/PriceSource.tsx)) es la
 aplicación de dominio: de dónde sale el precio de una posición (F3.2). Está
 compartida porque las posiciones abiertas salen en dos pantallas y las dos copias
 estaban divergiendo.
 
+`<ProfileStatus>` ([ProfileStatus.tsx](app/src/components/ProfileStatus.tsx)) es
+la otra: el estado de un experimento. **Solo se colorea el que corre**; pintar los
+cuatro dejaría cuatro colores compitiendo en una lista cuya única pregunta es cuál
+está vivo. El `title` lleva la frase entera, que aquí importa especialmente:
+«pausado» y «borrador» significan los dos «no está corriendo» y son problemas muy
+distintos.
+
+La etiqueta `CONTROL` de un perfil con el screener en `random` es un `<Tag>` con
+su `title` (F5.7). No es cosmética: **sus números están pensados para ser
+peores**, así que sin etiqueta se leen como un experimento fallido en lugar de
+como la referencia contra la que se mide.
+
 ### Controles de formulario
 
-`<Campo>`, `<Select>` y `<Entrada>`, todos sobre la misma receta:
+`<Field>`, `<Select>` y `<Input>`, todos sobre la misma receta:
 
 ```
 min-h-8 rounded-md border border-border bg-card px-2 py-1 text-[13px]
 transition-colors hover:bg-surface-sunken
 ```
 
-`<Campo>` es un `<label>` que **envuelve** el control, no un `htmlFor` con un `id`
+`<Field>` es un `<label>` que **envuelve** el control, no un `htmlFor` con un `id`
 inventado: así la asociación no puede romperse al copiar el bloque, y pulsar el
-texto enfoca el campo sin escribir nada más. `fila` pone la etiqueta a la
+texto enfoca el campo sin escribir nada más. `row` pone la etiqueta a la
 izquierda, para la cabecera, donde no hay alto que gastar.
 
 `<Select>` sigue siendo el `<select>` nativo del navegador: las listas de esta
@@ -378,36 +437,48 @@ aplicación tienen tres o cuatro entradas y el nativo ya es accesible con teclad
 sin traerse un popover. Se cambiará cuando haya que enseñar algo dentro de cada
 opción.
 
+`<Slider label value low high>` — el deslizador 1–10 de perfil de riesgo y
+diversificación (F5.3, F6.8). **Lleva el valor siempre a la vista y los dos
+extremos nombrados**, y no es adorno: un deslizador cuyo número no se lee es un
+control que no se puede poner a propósito, y «1» y «10» no dicen por sí solos
+hacia dónde hay más riesgo. Usa `accent-primary`, la utilidad del token, para que
+el interruptor de tema lo repinte solo.
+
+Las casillas son `<input type="checkbox">` nativas con `size-4 accent-primary`.
+No hay componente propio: no habría nada que centralizar más allá de esas dos
+clases.
+
 ### Títulos
 
 | Componente | Resultado |
 |---|---|
-| `<TituloPagina secundario>` | `h1` 17 px semibold tight, con su `mb-5`. `secundario` va a la derecha con las líneas base alineadas |
-| `<TituloSeccion>` | `h2` 13 px semibold, `uppercase tracking-wide`, en `text-secondary` |
-| `<TituloBloque como>` | 13 px semibold para tarjetas y gráficas. `como` fija el nivel del encabezado sin cambiar la apariencia |
+| `<PageTitle aside>` | `h1` 17 px semibold tight, con su `mb-5`. `aside` va a la derecha con las líneas base alineadas |
+| `<SectionTitle>` | `h2` 13 px semibold, `uppercase tracking-wide`, en `text-secondary` |
+| `<BlockTitle as>` | 13 px semibold para tarjetas y gráficas. `as` fija el nivel del encabezado sin cambiar la apariencia |
 
 Los niveles se eligen por jerarquía del documento y no por tamaño: un aviso que
-ocupa la pantalla entera usa `<TituloBloque como="h1" className="text-[15px]">`,
+ocupa la pantalla entera usa `<BlockTitle as="h1" className="text-[15px]">`,
 porque es el `h1` de esa pantalla aunque no tenga el tamaño de un título de página.
 
 ### Bloque preformateado
 
-`<Bloque>` — `overflow-auto rounded-md bg-surface-sunken p-3 text-xs`, para logs,
+`<Block>` — `overflow-auto rounded-md bg-surface-sunken p-3 text-xs`, para logs,
 JSON de parámetros y órdenes de consola.
 
 ---
 
 ## Gráficas
 
-Solo en Analítica, con Recharts v3, cargado con `lazy()` porque pesa casi tanto
-como el resto de la aplicación junta.
+En Analítica y en el comparador (F5.6), con Recharts v3, cargado con `lazy()`
+porque pesa casi tanto como el resto de la aplicación junta. Las dos pantallas
+comparten ese trozo del bundle; ninguna otra lo arrastra.
 
 Lo compartido está en
 [charts/base.tsx](app/src/components/charts/base.tsx): `COLORS`, `AXIS`,
-`<Grafica>`, `<Globo>` y `<TablaSimple>`.
+`<Chart>`, `<ChartTooltip>` y `<SimpleTable>`.
 
 - **Los colores se pasan como `var(--color-…)` y nunca como hexadecimal** (ver la
-  regla dura de arriba). `COLORES.tenue` y `COLORES.cursor` cubren las etiquetas y
+  regla dura de arriba). `COLORS.faint` y `COLORS.cursor` cubren las etiquetas y
   el resalte que Recharts pinta como SVG.
 - **Ejes discretos:** `stroke` en `--axis`, 11 px, sin `tickLine` ni `axisLine`. La
   rejilla es referencia, no protagonista.
@@ -430,6 +501,35 @@ Lo compartido está en
   tres y aquí el gris es lo correcto.
 - Barras horizontales cuando las etiquetas son nombres de regla: en vertical se
   solaparían o habría que girarlas, que es peor.
+- `<Chart height>` fija el alto del área de dibujo. Es prop y no algo que se
+  sobrescriba desde `className`, por lo mismo que el `padding` de `<Card>`: son el
+  mismo grupo de utilidades y ganaría el orden de la hoja de estilos.
+
+### Cuántas series caben, y por qué dos
+
+⚠️ **Como mucho dos series comparten eje, y eso salió de medir.** Solo hay dos
+tonos categóricos validados: el verde está reservado a `delta-good` y el ámbar a
+`warning`, así que un tercero tendría que salir de lo que queda, y **lo que queda
+choca con el azul que ya está en uso**. Medido en F5.6 con el validador, sobre
+`--series-1`: el morado da **ΔE 3,7–5,8 en deuteranopía** —contra un objetivo de 8
+y un suelo duro de 15 en visión normal— y el verde azulado se queda sin croma. Se
+probaron tres combinaciones y las tres fallan.
+
+**A partir de tres, múltiplos pequeños**: una gráfica por entidad, una sola serie
+cada una y **dominio vertical compartido**. Con autoescala, un vaivén del 0,4 % y
+una carrera del 12 % dibujarían la misma forma, que es lo único que una
+comparación no puede hacer.
+
+Los tonos se asignan **en orden fijo y nunca se ciclan**: la entidad 1 es siempre
+`series-1`. Si un filtro cambia cuántas series hay, las que quedan no se repintan.
+
+### Comparar entre unidades
+
+**Dos experimentos con divisas o presupuestos distintos no comparten eje en
+dinero, nunca.** El proyecto no convierte divisa en ningún sitio (D8), así que un
+eje compartido solo puede llevar una cifra **indexada** —la rentabilidad en %—.
+Una tabla sí puede ponerlos lado a lado, porque cada celda lleva su propio símbolo
+(FE.8). Poner euros y dólares en el mismo eje es ese error dibujado a escala.
 
 **Las muestras pequeñas se marcan.** En la calibración, los tramos con menos de
 cinco operaciones salen al 35 % de opacidad y cada barra lleva su `n=` encima. Sin
@@ -449,7 +549,7 @@ El interruptor manual gana a la preferencia del sistema **en los dos sentidos**:
 `@custom-variant dark (&:is(.dark *))` hace que la variante `dark:` sea una clase y
 no una media query.
 
-`<BotonTema>` y el script comparten la clave `tema` de `localStorage`. Si alguien
+`<ThemeButton>` y el script comparten la clave `theme` de `localStorage`. Si alguien
 cambia el nombre en un sitio y no en el otro, el síntoma es que la preferencia deja
 de recordarse entre recargas sin que nada falle.
 
@@ -489,7 +589,7 @@ provoca mareo.
 <!-- Marco de la aplicación: cabecera + barra lateral + contenido -->
 <div class="mx-auto flex max-w-7xl flex-col gap-6 px-5 py-6 md:flex-row">
   <aside class="md:w-52 md:shrink-0">…</aside>
-  <main id="contenido" tabindex="-1" class="min-w-0 flex-1 pb-16">…</main>
+  <main id="content" tabindex="-1" class="min-w-0 flex-1 pb-16">…</main>
 </div>
 ```
 
@@ -525,7 +625,7 @@ de tema.
 - Grosor de trazo por defecto.
 - El color **siempre se hereda** del texto de alrededor.
 - `shrink-0` cuando van dentro de un flex con texto que puede partirse.
-- Siempre `aria-hidden`: lo que dice el elemento es su texto. `<Boton icono>` ya lo
+- Siempre `aria-hidden`: lo que dice el elemento es su texto. `<Button icon>` ya lo
   pone.
 
 ---
@@ -537,7 +637,7 @@ Es la mitad de F4.9 y está en el sistema, no en un repaso final.
 - **Foco visible en todo:** `:focus-visible { outline-2 outline-offset-1
   outline-ring }` en la capa base de `index.css`, así que cubre también cualquier
   control que se escriba a mano.
-- **Enlace de salto:** `.salto` es `sr-only` hasta que recibe foco. Sin él, llegar
+- **Enlace de salto:** `.skip-link` es `sr-only` hasta que recibe foco. Sin él, llegar
   al contenido con teclado obliga a recorrer la cabecera y las nueve entradas de la
   barra lateral **en cada página**.
 - **El color nunca es el único portador del significado.** Todo estado con color

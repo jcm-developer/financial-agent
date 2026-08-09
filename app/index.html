@@ -13,10 +13,15 @@
       // El interruptor manual gana a la preferencia del sistema en los dos
       // sentidos, igual que hacia el dashboard viejo.
       try {
-        const guardado = localStorage.getItem("tema");
-        const oscuro = guardado ? guardado === "dark" : true;
-        document.documentElement.classList.toggle("dark", oscuro);
-        document.documentElement.style.colorScheme = oscuro ? "dark" : "light";
+        // `tema` es la clave de antes de F8.8 y se lee como respaldo: cambiarla
+        // sin mas le habria puesto el tema oscuro a quien tenia guardado el
+        // claro, sin que nada lo explicara. Se puede quitar cuando ya no queden
+        // navegadores con la clave vieja.
+        const saved =
+          localStorage.getItem("theme") ?? localStorage.getItem("tema");
+        const dark = saved ? saved === "dark" : true;
+        document.documentElement.classList.toggle("dark", dark);
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
       } catch {
         /* localStorage bloqueado: se queda el tema por defecto. */
       }

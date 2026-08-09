@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F5.7 cerrada: el grupo de control, y el modo random elegia candidatos distintos en cada ciclo)
+Última actualización: 2026-08-09 (F5 y F6.8 cerradas, mas el repaso del sistema de diseño; queda F2.1c y F6.10)
 
 ---
 
@@ -1700,6 +1700,33 @@ diez sesiones en silencio.
       en lugar de borrarlas de las tareas anteriores. La línea de la lista de decisiones sí
       se corrigió, porque esa describe el presente.
 
+**Repaso del sistema de diseño (2026-08-09, sin id: no estaba en el plan).** Hecho al
+cerrar F5 y F6.8, comprobando en lugar de mirando. Tres comprobaciones automáticas —ningún
+hexadecimal en `className`, ninguna receta de tarjeta escrita fuera de
+[pieces.tsx](app/src/components/pieces.tsx), ningún identificador en español en `app/src`—
+más una lectura de DESIGN.md contra el código. Salieron cuatro cosas:
+
+- ⚠️ **DESIGN.md nombraba los componentes en español**, que es lo que F8.8 renombró:
+  `<Tarjeta>`, `<Insignia>`, `<Etiqueta>`, `<Campo>`, `<Boton>`, `<Seccion>`, `<Vacio>`,
+  `clasesTarjeta()`, `Procedencia.tsx`… **El documento que CLAUDE.md declara obligatorio antes
+  de tocar `app/` describía una interfaz que ya no existe**, y eso es peor que no tenerlo:
+  quien lo leyera primero se pondría a buscar `Tarjeta.tsx`. Sincronizado entero; la prosa se
+  queda en español, que es lo correcto.
+- ⚠️ **Tres restos de F8.8 en el código**, todos de la categoría «esto también es código»: los
+  **comentarios de [index.css](app/src/index.css)** —el fichero que define la paleta— seguían
+  en español, la clave de `localStorage` era `tema` y la clase del enlace de salto era
+  `.salto` con su `id="contenido"`. Una clave de almacenamiento y un nombre de clase CSS son
+  código, igual que las claves de JSON que F8.8 sí renombró en `BarCache.stats()`. El script
+  en línea de `index.html` **lee `tema` como respaldo**: cambiar la clave sin más le habría
+  puesto el tema oscuro a quien tenía guardado el claro, sin que nada lo explicara.
+- **`ConfirmDialog` escribía a mano la receta de tarjeta**, que es exactamente lo que
+  `pieces.tsx` existe para evitar. Pasa por `cardClasses()` y solo añade lo propio de un
+  diálogo.
+- **DESIGN.md no recogía las piezas nuevas ni dos reglas que salieron de medir.** Añadidos
+  `Stat`, `Slider`, `ConfirmDialog`, `ProfileCard`, `ProfileStatus` y `Chart height`, y dos
+  secciones nuevas en Gráficas: **cuántas series caben** (dos, con el ΔE medido) y **comparar
+  entre unidades** (nunca dinero de dos divisas en el mismo eje).
+
 ### F9 — Futuro (no bloquea)
 
 - [ ] **F9.1** Modelo premium cuando el experimento dé señales.
@@ -1737,14 +1764,24 @@ FE se coló delante de F3 porque cambiaba el esquema (`agent_settings.market`) y
 reescribía la pregunta de F2.1c: medir la sesión americana ya no era lo que interesaba.
 Hacerlo después habría significado rehacer los endpoints de F3 y la medición del lunes.
 
-**Dónde estamos (2026-08-09):** F1, F2 (salvo F2.1c), FE, F3, **F4** y F7 cerradas; F6 salvo
-F6.8 y F6.10. La interfaz nueva es la única que hay —`web/` se borró en F4.11— y corre en
-Docker sobre 22 rutas de la API, todas con modelo Pydantic.
+**Dónde estamos (2026-08-09, tarde):** F1, F2 (salvo F2.1c), FE, F3, F4, **F5**, F7 y F8
+cerradas; F6 salvo F6.10. La interfaz nueva es la única que hay —`web/` se borró en F4.11— y
+corre en Docker sobre 24 rutas de la API, todas con modelo Pydantic. **Ya no queda ningún
+cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8.
 
-Lo siguiente, por este orden: **F2.1c** mañana en cuanto abra Madrid, que es lo único
-bloqueante y solo se puede medir en sesión; y luego **F5** (las pantallas de perfiles: alta,
-acciones y comparador) con **F6.8** (el formulario de los 41 parámetros), que son los dos
-huecos que la interfaz enseña hoy con un cartel.
+**Queda pendiente, en total:**
+
+1. **F2.1c** — lo único bloqueante, y solo se puede medir en sesión: mañana lunes 2026-08-10
+   en cuanto abra Madrid.
+2. **F6.10** — `cycle_times` y `cycle_tz` siguen siendo columnas mudas. No bloquea el primer
+   experimento (un solo perfil activo), pero sí correr dos con horarios distintos, que es
+   justo lo que el comparador de F5.6 invita a hacer ahora que existe.
+3. **FE.12 / el tope por sector de F6.5** — se calcula y no se aplica, por falta de dato de
+   sector por símbolo. La pantalla de Ajustes ya lo dice en voz alta.
+4. **F8.5** — confirmar que el `.env` con claves reales nunca llegó a subirse.
+5. **F1.1 (resto)** — tirar el volumen de Docker con `docker compose down -v`. ⚠️ **No antes
+   del experimento**: destruye `trading-data`.
+6. **F9** entera, que no bloquea nada.
 
 **Plan de las dos próximas semanas:**
 

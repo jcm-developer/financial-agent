@@ -8,13 +8,18 @@ type Theme = "dark" | "light";
 /**
  * The theme switch, the other half of F4.2.
  *
- * It shares the `tema` key in `localStorage` with the inline script in
+ * It shares the `theme` key in `localStorage` with the inline script in
  * `index.html`, which is what avoids the flash of the wrong theme on load. If
  * someone changes the key's name in one place and not the other, the symptom is
  * that the preference stops being remembered across reloads without anything
  * failing.
+ *
+ * It was `tema` until the F8.8 sweep was finished off: a `localStorage` key is
+ * code, like the JSON keys of `BarCache.stats()`. The inline script still reads
+ * the old one as a fallback, so nobody's saved light theme flips to dark on the
+ * next load.
  */
-const KEY = "tema";
+const KEY = "theme";
 
 /**
  * Reads the theme already applied to the document.
