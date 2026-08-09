@@ -104,6 +104,24 @@ con reglas fijas. Ese corte es la premisa del proyecto.
 está el valor de tener ocho ciclos al día en vez de uno: no en preguntarle ocho
 veces al modelo, sino en mirar los stops ocho veces.
 
+**Una posición abierta se revisa siempre, aunque el screener no la mire.** Entra
+en cada ciclo como símbolo obligatorio, y **sin gastar una de las 20 plazas**: se
+excluye de la puntuación del screener —para no falsear su informe— y se
+reincorpora para el análisis. Con 4 posiciones abiertas, un ciclo analiza 24
+activos. Así, un valor que no vuelve a salir cribado en dos semanas sigue teniendo
+su stop comprobado y su tesis revisada ocho veces al día.
+
+⚠️ **Salvo que se quede sin precio, y eso ahora se dice.** Si un símbolo en
+cartera no trae cotización en un ciclo —Yahoo deja de servirlo, un festivo local
+cierra una de las seis bolsas, un sufijo se estropea— pasan tres cosas a la vez:
+se valora **a su precio de entrada** (así que su P&L sale 0), **su stop no se
+puede comprobar** porque se compara contra ese precio congelado, y **el modelo no
+lo revisa**. Hasta el 2026-08-10 el ciclo terminaba `completed` sin decir nada.
+Ahora deja aviso en el log, una línea `SIN PRECIO` en el resumen y un
+`risk_event` con regla `no_price`, que sale en la pantalla de Riesgo y en la
+gráfica de rechazos por regla. **No se cierra la posición**: vender al precio que
+justamente no tenemos sería peor que aguantar.
+
 ---
 
 ## 5. Los tres precios, y por qué son tres

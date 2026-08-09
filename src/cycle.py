@@ -59,6 +59,8 @@ class CycleReport:
     screened: str | None = None
     analyst_calls: int = 0
     analyst_failures: int = 0
+    #: Open positions this cycle got no price for. Empty is the normal case.
+    positions_without_price: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
@@ -78,6 +80,16 @@ class CycleReport:
             f"Salidas: {self.exits_forced} forzadas / "
             f"{self.exits_discretionary} discrecionales",
         ]
+        # Same criterion as the analyst's failures below: it is only named when
+        # it happens, so that when it appears it is read. It goes ABOVE the
+        # errors because it is not an error —the cycle completed— and it is the
+        # line that explains why a position did not move.
+        if self.positions_without_price:
+            lines.append(
+                f"SIN PRECIO: {', '.join(self.positions_without_price)} "
+                "(stop no comprobado, tesis no revisada)"
+            )
+
         # Only mentioned when there are failures: "0 of 33" in every summary is
         # noise that ends up unread, and this line has to stand out when it appears.
         if self.analyst_failures:
@@ -535,6 +547,10 @@ class TradingCycle:
         )
         if reconcile_report.adopted_orphans:
             tracked = self.db.get_open_positions(portfolio_id)
+
+        self._report_positions_without_price(
+            report, portfolio_id, cycle_id, tracked, snapshots
+        )
 
         # --- 3. Kill switch ----------------------------------------------
         kill_switch = self.risk.check_kill_switch(account)
@@ -1041,6 +1057,64 @@ class TradingCycle:
         except DatabaseError as exc:
             log.warning("No se pudo guardar la decision de %s: %s", proposal.symbol, exc)
             return None
+
+    def _report_positions_without_price(
+        self,
+        report: CycleReport,
+        portfolio_id: str,
+        cycle_id: str,
+        tracked: dict[str, dict],
+        snapshots: dict[str, MarketSnapshot],
+    ) -> None:
+        """Reports the open positions this cycle got no price for.
+
+        ⚠️ **It is the quietest failure in the whole cycle, and until now it left
+        no trace at all.** An open position with no snapshot —Yahoo stops serving
+        the symbol, a local holiday closes one exchange of the six, a suffix goes
+        bad— is left:
+
+          * **valued at its entry price**, because `SimBroker._mark` falls back to
+            it, so its P&L shows 0 as if it had not moved;
+          * **with its stop unwatched**, because `mandatory_exits` compares that
+            same frozen price against the stop, and it can never breach it;
+          * **unreviewed by the model**, because the discretionary pass skips a
+            symbol with no snapshot.
+
+        Three things go wrong at once and the cycle used to finish `completed`
+        with nothing said. The screen was honest —it labels the position `SIN
+        PRECIO`— but the history was not, and the history is what gets read
+        afterwards.
+
+        **It is not closed automatically**, and that is deliberate: selling blind
+        —at a price we precisely do not have— would be worse than holding. What
+        changes is that it now shouts.
+        """
+        missing = sorted(symbol for symbol in tracked if symbol not in snapshots)
+        if not missing:
+            return
+
+        report.positions_without_price = missing
+        log.warning(
+            "SIN PRECIO en %d posicion(es) abierta(s): %s. No se ha podido "
+            "comprobar su stop ni revisar su tesis en este ciclo; se valoran a su "
+            "precio de entrada.",
+            len(missing), ", ".join(missing),
+        )
+        for symbol in missing:
+            # `rejected` because nothing could be approved for it, and because it
+            # is the only other value `risk_events.verdict` admits: the CHECK has
+            # two, and SQLite cannot alter a constraint (the lesson of F6.9). It
+            # lands in the Riesgo screen and in the rejections-by-rule chart,
+            # which is exactly where an absence like this has to show up.
+            self._save_risk_event(
+                cycle_id, portfolio_id, symbol,
+                _rejection(
+                    "no_price",
+                    "Sin cotizacion en este ciclo: no se comprueba el stop ni se "
+                    "revisa la tesis, y la posicion se valora a su precio de entrada.",
+                ),
+                None,
+            )
 
     def _save_risk_event(
         self, cycle_id: str, portfolio_id: str, symbol: str | None,

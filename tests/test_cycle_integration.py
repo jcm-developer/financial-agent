@@ -273,3 +273,86 @@ def test_the_dashboard_payload_reflects_a_real_cycle(db):
 
 def _portfolio(db: Database) -> str:
     return db.query("select id from portfolios limit 1")[0]["id"]
+
+
+# -- Una posicion que se queda sin precio ------------------------------------
+
+def test_a_position_with_no_price_is_reported_and_not_left_silent(db):
+    """The quietest failure of the cycle: an open position with no quote.
+
+    Yahoo stops serving the symbol, a local holiday closes one of the six
+    exchanges, a suffix goes bad — and three things break at once without a word:
+    `SimBroker._mark` values it at its entry price, so `mandatory_exits` compares
+    that frozen price against the stop and it can never breach it, and the
+    discretionary review skips a symbol with no snapshot.
+
+    The cycle used to finish `completed` with nothing said.
+    """
+    settings = make_settings()
+    llm = StubLLM(entry=BUY, exit_=HOLD_EXIT)
+    market = StubMarketData({s: rising() for s in WATCHLIST})
+    cycle = make_cycle(db, settings, llm, market)
+    assert cycle.run().orders_submitted == 2
+
+    # MSFT stops having bars: it is still held, but this cycle gets no price.
+    mudo = StubMarketData({"AAPL": rising()})
+    report = make_cycle(db, settings, llm, mudo).run()
+
+    assert report.positions_without_price == ["MSFT"]
+    assert "SIN PRECIO" in report.summary()
+    assert "MSFT" in report.summary()
+    # And it is not an error: the cycle did its job with everything else.
+    assert report.status == "completed"
+
+
+def test_the_absence_of_price_leaves_a_trace_in_the_history(db):
+    """The screen already said it; the history did not, and the history is what
+    gets read afterwards."""
+    settings = make_settings()
+    llm = StubLLM(entry=BUY, exit_=HOLD_EXIT)
+    market = StubMarketData({s: rising() for s in WATCHLIST})
+    cycle = make_cycle(db, settings, llm, market)
+    cycle.run()
+
+    report = make_cycle(db, settings, llm, StubMarketData({"AAPL": rising()})).run()
+
+    events = db.query(
+        "select * from risk_events where cycle_id = ? and rule = 'no_price'",
+        (report.cycle_id,),
+    )
+    assert len(events) == 1
+    assert events[0]["symbol"] == "MSFT"
+    # `rejected` so it shows up in the rejections-by-rule chart, which is where
+    # an absence like this has to be visible.
+    assert events[0]["verdict"] == "rejected"
+
+
+def test_the_position_is_not_closed_blind(db):
+    """Selling at a price we precisely do not have would be worse than holding.
+
+    What changes is that it now shouts; the decision to close is left to whoever
+    reads the warning.
+    """
+    settings = make_settings()
+    llm = StubLLM(entry=BUY, exit_=HOLD_EXIT)
+    market = StubMarketData({s: rising() for s in WATCHLIST})
+    cycle = make_cycle(db, settings, llm, market)
+    cycle.run()
+
+    make_cycle(db, settings, llm, StubMarketData({"AAPL": rising()})).run()
+
+    assert "MSFT" in db.get_open_positions(cycle.portfolio_id)
+
+
+def test_nothing_is_reported_when_every_position_has_its_price(db):
+    """A warning that cries wolf stops being read."""
+    settings = make_settings()
+    llm = StubLLM(entry=BUY, exit_=HOLD_EXIT)
+    market = StubMarketData({s: rising() for s in WATCHLIST})
+    cycle = make_cycle(db, settings, llm, market)
+    cycle.run()
+
+    report = make_cycle(db, settings, llm, market).run()
+
+    assert report.positions_without_price == []
+    assert "SIN PRECIO" not in report.summary()

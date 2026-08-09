@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (F5.8 cerrada: «Cerrar experimento» liquida la cartera; el prompt ya no miente con la divisa ni las ventanas)
+Última actualización: 2026-08-10 (una posicion sin precio ya no se queda sin vigilancia en silencio; F5.8 cerrada)
 
 ---
 
@@ -1823,6 +1823,34 @@ más una lectura de DESIGN.md contra el código. Salieron cuatro cosas:
   `Stat`, `Slider`, `ConfirmDialog`, `ProfileCard`, `ProfileStatus` y `Chart height`, y dos
   secciones nuevas en Gráficas: **cuántas series caben** (dos, con el ΔE medido) y **comparar
   entre unidades** (nunca dinero de dos divisas en el mismo eje).
+
+**Una posición sin precio dejaba de estar vigilada, en silencio (2026-08-10, sin id).**
+Salió al verificar una pregunta —si el modelo ve el precio de lo que tiene en cartera cuando
+el screener no lo selecciona—. La respuesta es que **sí**: las posiciones abiertas entran en
+cada ciclo como símbolo obligatorio y **sin ocupar una de las 20 plazas** (se excluyen de la
+puntuación del screener y se reincorporan para el análisis), así que su stop se comprueba y su
+tesis se revisa ocho veces al día aunque no vuelvan a salir cribadas.
+
+⚠️ **Pero si un símbolo en cartera no traía cotización, fallaban tres cosas a la vez y ninguna
+avisaba.** `SimBroker._mark` cae al **precio de entrada**, así que el P&L sale 0 como si no se
+hubiera movido; `mandatory_exits` compara ese precio congelado contra el stop, de modo que
+**el stop no puede saltar por mucho que el valor se desplome**; y la revisión discrecional
+hacía `continue` sin log. El ciclo terminaba `completed`. La pantalla sí era honesta —etiqueta
+`SIN PRECIO`— pero **el histórico no**, y el histórico es lo que se lee después.
+
+No es hipotético con este universo: FE.2 documenta que un sufijo mal escrito **aparece vacío**,
+y D8 que la tabla europea deja pasar los festivos locales de Xetra y Milán como días de
+mercado, con esos símbolos vacíos.
+
+Ahora: aviso en el log nombrando los símbolos, línea **`SIN PRECIO`** en el resumen del ciclo
+—que es lo que se ve en la pantalla de Ciclos— y un **`risk_event` con regla `no_price`**, que
+entra solo en la pantalla de Riesgo y en la gráfica de rechazos por regla. Es `rejected` porque
+`risk_events.verdict` solo admite dos valores y **SQLite no sabe alterar un CHECK** (la
+lección de F6.9); encaja, además, porque no se pudo aprobar nada para ese símbolo.
+
+**La posición no se cierra automáticamente**, y es deliberado: vender al precio que justamente
+no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 tests en verde**
+(4 nuevos).
 
 ### F9 — Futuro (no bloquea)
 
