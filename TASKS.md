@@ -2009,12 +2009,19 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
    en vez de cinco niveles de riesgo sobre los mismos días, un nivel con ocho comprobaciones
    de stop y objetivo al día, que es lo que acumula operaciones cerradas deprisa.
 
-   ⚠️ **Consecuencia que hay que asumir, y es la cara mala del cambio:** ejecutados en
-   serie, **los cinco no serán comparables sobre los mismos datos**. A cada uno le tocará un
-   trozo distinto de mercado, así que una diferencia entre sus curvas no se podrá atribuir al
-   riesgo. **El comparador de F5.6 los pintará juntos igualmente** —no sabe de fechas de
-   arranque— y ahí está el riesgo: parecerán comparables sin serlo. Si en algún momento
-   interesa la comparación limpia, hay que activarlos a la vez y volver a `1d`.
+   ⚠️ **Corregido el 2026-08-10, y la corrección es del objetivo, no del método.** Aquí se
+   escribió que ejecutarlos en serie era «la cara mala del cambio» porque los cinco no
+   quedarían comparables sobre los mismos datos. **Eso daba por supuesto un objetivo que no
+   es el de este experimento.** Dicho por quien lo dirige: lo que se quiere observar es **el
+   comportamiento de cada agente** —qué compra, qué mantiene y qué vende en cada ciclo— y
+   **el resultado final de cada uno**, no aislar el efecto del riesgo con todo lo demás
+   igual. Con ese objetivo, correrlos en serie no pierde nada: cada perfil es su propia
+   tanda y se juzga por su propio registro.
+
+   Lo que sí conviene tener presente es de qué **no** sirve entonces el comparador: pintará
+   las cinco curvas juntas sin saber que arrancaron en fechas distintas, así que **la
+   diferencia entre dos curvas no es atribuible al perfil de riesgo**. Sirve para ver el
+   resultado final de cada uno al lado del de los demás, que es justo para lo que se quiere.
 
    Los cinco, que **se diferencian solo en el perfil de riesgo**, de 1 a 10:
 
