@@ -18,6 +18,7 @@ import {
   Card,
   PageTitle,
   SectionTitle,
+  Stat,
 } from "@/components/pieces";
 import { Section } from "@/components/Section";
 import { TableHead, Row, Pagination, Table, Td, Th, Empty } from "@/components/Table";
@@ -272,10 +273,10 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }) {
         {(cycle) => (
           <>
             <dl className="grid gap-x-6 gap-y-1 text-[13px] sm:grid-cols-3">
-              <Item label="Inicio" value={dateTime(cycle.started_at)} />
-              <Item label="Fin" value={dateTime(cycle.finished_at)} />
-              <Item label="Modelo" value={cycle.llm_model ?? "—"} />
-              <Item
+              <Stat label="Inicio" value={dateTime(cycle.started_at)} />
+              <Stat label="Fin" value={dateTime(cycle.finished_at)} />
+              <Stat label="Modelo" value={cycle.llm_model ?? "—"} />
+              <Stat
                 label="Llamadas al analista"
                 value={
                   (cycle.analyst_calls ?? 0) === 0
@@ -283,11 +284,11 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }) {
                     : `${cycle.analyst_calls} (${cycle.analyst_failures ?? 0} sin respuesta)`
                 }
               />
-              <Item
+              <Stat
                 label="Símbolos analizados"
                 value={String(cycle.symbols_scanned?.length ?? 0)}
               />
-              <Item label="Mercado" value={cycle.market_open ? "abierto" : "cerrado"} />
+              <Stat label="Mercado" value={cycle.market_open ? "abierto" : "cerrado"} />
             </dl>
 
             {cycle.error && <Alert className="mt-3">{cycle.error}</Alert>}
@@ -314,23 +315,6 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }) {
         )}
       </Section>
     </Card>
-  );
-}
-
-/**
- * A label and its value inside the detail panel's definition list.
- *
- * @param props - Item props.
- * @param props.label - Label, in the interface language.
- * @param props.value - Value, already formatted.
- * @return The rendered pair.
- */
-function Item({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-text-muted">{label}</dt>
-      <dd className="tabular">{value}</dd>
-    </div>
   );
 }
 

@@ -930,8 +930,41 @@ diez sesiones en silencio.
 - [x] **F5.1** Tabla `profiles` — hecha en F1.2, con sus métodos en
       [src/db.py](src/db.py) (`create_profile`, `list_profiles`, `set_profile_status`,
       `delete_profile`) y tests de cascada.
-- [ ] **F5.2** Listado en tarjetas con las métricas clave: capital, P&L total y del día, nº
-      de posiciones, win rate, último ciclo. (En consola ya existe: `run.py profiles`.)
+- [x] **F5.2** Listado en tarjetas con las métricas clave (2026-08-09): capital, P&L total y
+      del día, nº de posiciones, win rate y último ciclo.
+
+      **El backend no ha hecho falta tocarlo.** `ProfileMetrics` ya traía las doce cifras
+      calculadas —su docstring dice literalmente «The figures on the profile card (F5.2)»— así
+      que la tarjeta no pide nada nuevo. Eso importa más de lo que parece: si la tarjeta
+      calculara su propia rentabilidad, la pantalla de Resumen y esta acabarían contando cosas
+      distintas del mismo experimento.
+
+      Cuatro decisiones:
+      - ⚠️ **La tarjeta no es un `<Link>`; el nombre de dentro sí.** La versión obvia —la
+        tarjeta entera navegando, que es lo que hacía el listado mínimo— **no puede sostener
+        las acciones de F5.4**: un `<button>` dentro de un `<a>` es HTML inválido y los
+        navegadores que lo pintan hacen el clic ambiguo. Con el nombre como enlace, además, el
+        lector de pantalla anuncia «enlace: europa-01» y no la tarjeta entera de corrido.
+      - **El orden no es el de la API.** `/api/profiles` devuelve por fecha de creación, que a
+        las pocas semanas entierra el experimento vivo bajo tres borradores. Aquí van activos,
+        pausados, borradores y archivados, y dentro de cada grupo el más reciente: la pregunta
+        que contesta esta pantalla es cuál está corriendo.
+      - **El número de operaciones viaja siempre pegado al win rate.** Un 100 % sobre dos
+        cerradas y un 100 % sobre treinta son el mismo número y no la misma afirmación, y esta
+        es justo la pantalla donde se comparan dos experimentos por esa cifra.
+      - **Solo se colorea el estado que corre.** Pintar los cuatro dejaría cuatro colores
+        compitiendo en una lista cuya única pregunta es cuál está vivo. La insignia lleva la
+        frase entera en el `title` (F4.9): «pausado» y «borrador» significan los dos «no está
+        corriendo» y son problemas muy distintos.
+
+      **Se ha promovido `Stat` a [pieces.tsx](app/src/components/pieces.tsx) en vez de escribir
+      una tercera copia.** El par etiqueta/cifra ya existía dos veces escrito a mano —`Figure`
+      en Resumen y `Item` en Ciclos—, que es exactamente la deriva por la que ese módulo
+      existe. `Item` se ha retirado y Ciclos usa el compartido; `Figure` se queda porque es
+      otra cosa (una tarjeta-cifra, no un `dt`/`dd`).
+
+      **610 tests en verde, typecheck limpio, 24 de front, build correcto**, y comprobado
+      contra la API de verdad con la base de demostración (`tools/seed_demo.py`).
 - [ ] **F5.3** Alta de perfil **en un solo formulario**: nombre, descripción, **mercado**
       (`eu` / `us`), capital inicial, universo, cuántos símbolos seguir en vivo, y las
       decisiones de estrategia y modelo —perfil de riesgo 1–10, diversificación 1–10,

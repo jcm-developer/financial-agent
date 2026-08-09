@@ -305,6 +305,52 @@ export function BlockTitle({
   );
 }
 
+/**
+ * A label with its figure underneath, as a `<dt>`/`<dd>` pair.
+ *
+ * It is the shape a figure takes when it belongs to a set describing one thing
+ * —the cycle's detail, an experiment's metrics— which is why it is a description
+ * list and not two `<div>`s: read aloud, "Capital: 10.240,00 €" is a pair, and
+ * without the pairing a screen reader just reads eight labels and then eight
+ * numbers.
+ *
+ * It lives here because it already existed twice, written by hand, and a third
+ * copy is exactly the drift this module was created to stop. It has to sit
+ * inside a `<dl>`.
+ *
+ * @param props - Stat props.
+ * @param props.label - The label, in the interface language.
+ * @param props.value - The figure, already formatted.
+ * @param props.valueClass - Extra classes for the figure, for the P&L colour.
+ *     It always comes from `signClass()`, never written by hand.
+ * @param props.title - The whole sentence, when the figure needs one to be read.
+ * @param props.children - What goes under the figure, for the line that explains it.
+ * @return The rendered pair.
+ */
+export function Stat({
+  label,
+  value,
+  valueClass,
+  title,
+  children,
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+  title?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div>
+      <dt className="text-text-muted">{label}</dt>
+      <dd className={cn("tabular", valueClass)} title={title}>
+        {value}
+      </dd>
+      {children && <dd className="text-xs leading-snug text-text-muted">{children}</dd>}
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* States and notices                                                         */
 /* -------------------------------------------------------------------------- */
