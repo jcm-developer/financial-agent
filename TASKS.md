@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-09 (F8.8 cerrada: el código está entero en inglés; F8.10 abre la pregunta de si redirigir las rutas viejas, con la recomendación de no hacerlo)
+Última actualización: 2026-08-09 (F8.8 cerrada: el código está entero en inglés; queda F8.10, redirigir las diez rutas viejas a las nuevas)
 
 ---
 
@@ -1320,33 +1320,55 @@ diez sesiones en silencio.
       siete dependencias de `requirements.txt` están todas en uso. `src/dashboard.py`
       parecía huérfano tras F4.11 y no lo es: lo usa `run.py report`, que es la analítica de
       consola.
-- [ ] **F8.10** ¿Redirigir las rutas viejas en español? **Recomendación: no, y por eso está
-      abierta en lugar de hecha.**
+- [ ] **F8.10** Redirigir las rutas viejas en español a las nuevas, para que un enlace
+      guardado antes de F8.8 siga llevando a su sitio.
 
-      F8.8 cambió las siete rutas del perfil (`/p/europa-01/posiciones` → `/positions`), las
-      dos generales (`/perfiles` → `/profiles`, `/diagnostico` → `/diagnostics`) y el
-      parámetro `?ciclo=` → `?cycle=`.
-
-      **Qué pasa hoy con un enlace guardado, comprobado y no supuesto:** el servidor
+      **Qué pasa hoy, comprobado contra la aplicación en marcha y no supuesto:** el servidor
       devuelve 200 con el `index.html` —la vuelta al SPA de F3.7 no distingue rutas del
-      router— y el enrutador cae en la ruta comodín, así que se pinta `NotFound`, que
-      **nombra la ruta pedida** y ofrece volver al inicio. No es un error del servidor ni
-      una pantalla en blanco: es un callejón sin salida que se explica solo.
+      router— y el enrutador cae en la ruta comodín, así que se pinta `NotFound`. Nombra la
+      ruta pedida y ofrece volver al inicio, o sea que no es una pantalla en blanco, pero es
+      un callejón sin salida: el enlace no lleva a donde llevaba.
 
-      **Lo que costaría arreglarlo:** nueve `<Route path="posiciones" element={<Navigate
-      to="../positions" replace />} />` en [app/src/App.tsx](app/src/App.tsx). Diez minutos.
+      **Las diez rutas que cambiaron.** Ocho del perfil, bajo `/p/:profile/`:
 
-      **Por qué aun así se recomienda no hacerlo.** Reintroduce los nueve nombres de ruta en
-      español en el fichero que F8.8 acaba de dejar entero en inglés, y las capas de
-      compatibilidad no las quita nadie: dentro de seis meses seguirían ahí, con la
-      convención de idioma rota justo en el sitio donde se enuncia. A cambio protege a **un
-      solo usuario, en local**, de un inconveniente que se cura escribiendo la URL nueva una
-      vez y dejando que el navegador la aprenda.
+      | Antes | Ahora |
+      |---|---|
+      | `resumen` | `summary` |
+      | `analitica` | `analytics` |
+      | `posiciones` | `positions` |
+      | `decisiones` | `decisions` |
+      | `ordenes` | `orders` |
+      | `riesgo` | `risk` |
+      | `ciclos` | `cycles` |
+      | `ajustes` | `settings` |
 
-      **Lo que sí inclinaría la balanza,** y por eso queda escrito en vez de cerrado: que
-      esto dejara de ser de un usuario, o que el autocompletado del navegador siga colando
-      las rutas viejas durante semanas y resulte molesto de verdad. Es una molestia medible
-      en uso, no en teoría, así que se decide usándolo.
+      Y dos generales: `/perfiles` → `/profiles` y `/diagnostico` → `/diagnostics`.
+
+      **Cómo:** una ruta de redirección por cada una en [app/src/App.tsx](app/src/App.tsx),
+      con `<Navigate replace />` para no dejar el salto en el historial —si no, el botón de
+      volver atrás rebota entre la ruta vieja y la nueva, que es el mismo motivo por el que
+      `Home` ya usa `replace`.
+
+      **Tres cosas que hay que mirar, porque fallan en silencio:**
+
+      - **El `..` de una ruta anidada resuelve por ruta, no por URL.** Dentro de
+        `p/:profile`, un `to="../positions"` da `/p/:profile/positions`, que es lo que se
+        quiere; pero si alguien le pone `relative="path"` pasa a resolver sobre el segmento
+        y acaba en `/p/positions`. Conviene un test que abra una ruta vieja y compruebe
+        dónde termina, en lugar de fiarse de leerlo.
+      - **`<Navigate>` no arrastra la query.** `/p/x/ciclos?ciclo=<id>` perdería el ciclo
+        seleccionado por el camino, así que la redirección tiene que conservar el
+        `location.search`.
+      - **El parámetro también se renombró** (`?ciclo=` → `?cycle=`), de modo que además hay
+        que traducirlo: o en la redirección, o aceptando `ciclo` como respaldo en
+        [Cycles.tsx](app/src/pages/Cycles.tsx). Sin esto, el enlace de un ciclo concreto
+        redirige bien pero abre la pantalla sin el detalle desplegado.
+
+      **Consecuencia que se asume:** vuelven los diez nombres en español al fichero que F8.8
+      dejó entero en inglés. Es una excepción a la convención de idioma y conviene que esté
+      escrita aquí y no solo en el código, porque una capa de compatibilidad no la retira
+      nadie por su cuenta. Si algún día se quita, se quita entera y de una vez, igual que se
+      hizo la migración.
 
       **No se tocan** las menciones a las rutas viejas dentro de los registros de F4.3 y
       F5.5: eran ciertas cuando se escribieron y este fichero es un registro, no un espejo
