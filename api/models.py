@@ -681,7 +681,15 @@ class CycleControl(BaseModel):
     """
 
     enabled: bool
+    #: A cycle **this API launched** is alive. It is what decides whether another
+    #: one may be fired and whether it can be stopped from here.
     running: bool
+    #: A cycle is running that this API did **not** launch — the scheduler's, in
+    #: its own container. Kept apart from `running` because the two answer
+    #: different questions: `running` is "may I launch one?", `external` is "may I
+    #: stop it?", and the answer to the second is no. Folding them together would
+    #: leave the Parar button enabled over a process this API cannot signal.
+    external: bool = False
     profile: str | None = None
     dry_run: bool = False
     stage: str

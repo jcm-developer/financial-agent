@@ -18,8 +18,9 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from src.db import Database, DatabaseError
+from src.db import Database
 
+from .. import queries
 from ..deps import ReadDb, find_profile, get_runner
 from ..models import ActionResult, CycleControl, CycleRunRequest
 from ..runner import DISABLED_STATUS
@@ -30,8 +31,34 @@ Runner = Annotated[Any, Depends(get_runner)]
 
 
 @router.get("/control/status", response_model=CycleControl)
-def control_status(runner: Runner):
-    return runner.status() if runner is not None else DISABLED_STATUS
+def control_status(db: ReadDb, runner: Runner):
+    """The cycle's state, from **both** sources and not just from this process.
+
+    The runner only knows about the subprocess it spawned itself, and that was a
+    lie by omission on screen: a cycle launched by the scheduler —another
+    container— left this endpoint answering `running: false`, so the panel said
+    "Sin ciclo en marcha" while one was running and the Parar button sat disabled
+    with nothing to explain why. Reported, and it is the worst kind of wrong: the
+    interface was not broken, it was confident.
+
+    `external` is the missing bit, and it is separate from `running` on purpose
+    rather than folded into it. They mean different things to every consumer:
+    `running` answers "may I launch one?" and `external` answers "may I stop
+    it?". Setting `running: true` for a scheduler cycle would have fixed the
+    label and left the Parar button enabled on a process this API cannot signal —
+    a button that always fails, which F3.8 already decided is worse than no
+    button.
+    """
+    if runner is None:
+        return DISABLED_STATUS
+    state = runner.status()
+    if not state["running"] and _cycle_running_elsewhere(db):
+        state = {
+            **state,
+            "external": True,
+            "stage": "en marcha, lanzado por el planificador",
+        }
+    return state
 
 
 @router.post("/run", response_model=CycleControl)
@@ -121,11 +148,5 @@ def _require_controls(runner: Any) -> None:
 
 
 def _cycle_running_elsewhere(db: Database) -> bool:
-    try:
-        return bool(
-            db.query("select count(1) as n from cycles where status = 'running'")[0]["n"]
-        )
-    except DatabaseError:
-        # If it cannot be read, the start is not blocked: the cycle has its own
-        # check (`find_running_cycle`) and that is the one that really decides.
-        return False
+    """Moved to `queries` so the stream can ask the same question (F4.19)."""
+    return queries.cycle_running_elsewhere(db)

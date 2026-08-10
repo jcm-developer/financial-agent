@@ -155,8 +155,22 @@ function Control({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-body-sm">
-            <span className={state.running ? "font-semibold text-warning" : "text-text-secondary"}>
-              {state.running ? "Ciclo en marcha" : "Sin ciclo en marcha"}
+            {/* `external` is a cycle the scheduler launched, in its own
+                container. It has to read as "in progress" —it is— while the
+                buttons keep treating it as untouchable, which is why the two
+                flags stay separate (F4.19). */}
+            <span
+              className={
+                state.running || state.external
+                  ? "font-semibold text-warning"
+                  : "text-text-secondary"
+              }
+            >
+              {state.running
+                ? "Ciclo en marcha"
+                : state.external
+                  ? "Ciclo en marcha (del planificador)"
+                  : "Sin ciclo en marcha"}
             </span>
             {" — "}
             {state.stage}
@@ -178,7 +192,7 @@ function Control({
         <div className="flex flex-wrap gap-2">
           <Button
             variant="primary"
-            disabled={state.running || run.isPending || !profile}
+            disabled={state.running || state.external || run.isPending || !profile}
             onClick={() => run.mutate({})}
           >
             Lanzar ciclo
@@ -187,7 +201,7 @@ function Control({
               see what the model would do without moving the experiment's book. */}
           <Button
             variant="ghost"
-            disabled={state.running || run.isPending || !profile}
+            disabled={state.running || state.external || run.isPending || !profile}
             onClick={() => run.mutate({ dry_run: true })}
           >
             Lanzar en seco
@@ -195,6 +209,15 @@ function Control({
           <Button
             variant="destructive"
             disabled={!state.running || stop.isPending}
+            // A disabled button with no reason is what got reported: it said
+            // nothing while a cycle was plainly running on the same screen.
+            title={
+              state.external
+                ? "Este ciclo lo lanzo el planificador, en otro contenedor: la API no puede pararlo. Se para con `docker compose restart scheduler`."
+                : !state.running
+                  ? "No hay ningun ciclo en marcha que parar"
+                  : undefined
+            }
             onClick={() => stop.mutate()}
           >
             Parar
@@ -205,7 +228,7 @@ function Control({
               time may touch a book. */}
           <Button
             variant="destructive"
-            disabled={state.running || close.isPending || !profile}
+            disabled={state.running || state.external || close.isPending || !profile}
             onClick={() => setClosing(true)}
           >
             Cerrar experimento

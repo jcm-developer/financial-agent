@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from src import market_calendar, risk_presets
-from src.db import Database
+from src.db import Database, DatabaseError
 from src.profile_settings import mask_secret
 
 #: Cap on rows per page. It is not paranoia: `decisions` stores the model's raw
@@ -252,6 +252,28 @@ def derived_limits(settings: dict[str, Any]) -> dict[str, Any]:
     ]
     payload["summary"] = risk_presets.describe(settings)
     return payload
+
+
+def cycle_running_elsewhere(db: Database) -> bool:
+    """Whether a cycle is running that this process did not launch.
+
+    The API's `CycleRunner` only knows about the subprocess it spawned itself, so
+    a cycle fired by the scheduler —another container— was invisible to it. This
+    is the second source, and it lives here rather than in a route because **two
+    routes need it**: `/run` to refuse a second cycle over the same book, and
+    `/control/status` and the stream to stop claiming that nothing is running.
+
+    A failure to read is **not** treated as "one is running": the start has its own
+    check inside the cycle (`find_running_cycle`) and that is the one that really
+    decides, so being wrong here in the cautious direction would only block a
+    legitimate launch.
+    """
+    try:
+        return bool(
+            db.query("select count(1) as n from cycles where status = 'running'")[0]["n"]
+        )
+    except DatabaseError:
+        return False
 
 
 # ----------------------------------------------------------------------

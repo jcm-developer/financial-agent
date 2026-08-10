@@ -275,6 +275,29 @@
     font-feature-settings: "tnum";
   }
 
+  /* Anything clickable shows the hand, and this has to be said because
+     **Tailwind v4 stopped saying it**: its Preflight no longer restores
+     `cursor: pointer` on buttons, so every button in the app was showing the
+     plain arrow and reading as text rather than as a control.
+
+     It goes here, in the base layer, and not into `BUTTON_BASE`: the buttons are
+     not the only clickable thing —the profile selector, the checkboxes, the radio
+     groups and the table's unfold links are all `<button>` or `<label>`— and
+     fixing the recipe would have fixed the ones that go through the recipe and
+     left the rest. The `:disabled` reset comes right after because a disabled
+     control must not invite the click, and here that beats specificity games in
+     the variants. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  label[for],
+  summary {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
   /* Focus is the input spec generalised: the 2 px navy edge plus its 3 px halo,
      on anything that can take focus and not just on the fields. */
   :focus-visible {

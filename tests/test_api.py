@@ -1078,3 +1078,55 @@ def test_by_default_it_listens_on_loopback_only(monkeypatch):
 
     assert config.host == "127.0.0.1"
     assert config.controls is True
+
+
+def test_the_status_reports_a_cycle_this_api_did_not_launch(client, db_path, profile):
+    """It answered `running: false` while the scheduler's cycle was running.
+
+    Reported from the screen: the panel said "Sin ciclo en marcha" and the Parar
+    button sat disabled with nothing explaining why. The runner only knows about
+    the subprocess it spawned itself, so a cycle from the other container was
+    invisible — and the interface was not broken, it was confident.
+
+    `external` is separate from `running` because they answer different
+    questions: `running` is "may I launch one?", `external` is "may I stop it?",
+    and the answer to the second is no.
+    """
+    seeded = seed_history(db_path, profile["id"])
+    with Database(path=db_path) as db:
+        db.execute(
+            "update cycles set status = 'running' where id = ?", (seeded["cycle_id"],)
+        )
+
+    state = client.get("/api/cycles/control/status").json()
+
+    assert state["external"] is True
+    # Not `running`: nothing here can signal that process.
+    assert state["running"] is False
+    assert "planificador" in state["stage"]
+
+
+def test_the_status_says_nothing_is_running_when_nothing_is(client, db_path, profile):
+    """The seeded cycle is `completed`, so it must not be mistaken for a live one."""
+    seed_history(db_path, profile["id"])
+
+    state = client.get("/api/cycles/control/status").json()
+
+    assert state["external"] is False
+    assert state["running"] is False
+
+
+def test_a_cycle_running_elsewhere_blocks_launching_another(client, db_path, profile):
+    """Two cycles over one book step on each other's positions and cash."""
+    seeded = seed_history(db_path, profile["id"])
+    with Database(path=db_path) as db:
+        db.execute(
+            "update cycles set status = 'running' where id = ?", (seeded["cycle_id"],)
+        )
+
+    respuesta = client.post(
+        "/api/cycles/run", json={"profile": profile["name"], "dry_run": True}
+    )
+
+    assert respuesta.status_code == 409
+    assert "planificador" in respuesta.json()["detail"]

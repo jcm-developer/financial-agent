@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero)
+Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones)
 
 ---
 
@@ -1205,6 +1205,50 @@ diez sesiones en silencio.
       ausencia de etiqueta pasa a ser la afirmación «este precio es vivo»**, así que la frescura
       tenía que seguir siendo alcanzable — la hora exacta se mueve al `title` de la celda, en
       Posiciones y en Resumen. Sin eso, quitar la etiqueta habría sido quitar el dato.
+
+- [x] **F4.19** **El panel decía «Sin ciclo en marcha» con un ciclo en marcha, y el botón de
+      Parar salía bloqueado sin explicar por qué** (2026-08-10). Reportado desde la pantalla, y es
+      el peor tipo de error: la interfaz no estaba rota, estaba **segura**.
+
+      **La causa.** `CycleRunner.running` es `self._process is not None and poll() is None`, o sea
+      «¿sigue vivo el subproceso que lancé yo?». El planificador corre en **otro contenedor**, así
+      que un ciclo suyo es invisible para la API: `/control/status` respondía `running: false`, el
+      rótulo decía que no pasaba nada y `Parar` —que es `disabled={!state.running}`— se quedaba
+      apagado sin nada que lo justificara. Lo curioso es que `/run` **sí** consultaba las dos
+      fuentes desde F3.4, para no lanzar dos ciclos sobre el mismo libro; lo que faltaba era
+      contárselo a la pantalla.
+
+      **`external` es un campo aparte y no un `running: true`**, y esa es la decisión. Responden
+      preguntas distintas: `running` es «¿puedo lanzar uno?» y `external` es «¿puedo pararlo?», y
+      la respuesta a la segunda es no. Marcarlo como `running` habría arreglado el rótulo y dejado
+      el botón de Parar **habilitado sobre un proceso al que esta API no puede mandar señales**, o
+      sea un botón que siempre falla, que es lo que F3.8 ya decidió que es peor que no tener botón.
+
+      **Hubo que tocarlo en tres sitios, y el tercero es el que no se ve:** el endpoint, el modelo
+      Pydantic y **el SSE**. El evento `cycle` reescribe esa entrada de la caché cada vez que se
+      manda, así que un ciclo detectado por la consulta lo des-detectaba el evento siguiente, y el
+      síntoma habría sido un panel que dice la verdad durante dos segundos después de recargar.
+      `_cycle_running_elsewhere` sube de `routes/control.py` a `queries.py` para que las dos rutas
+      pregunten lo mismo.
+
+      Los tres botones de acción se apagan también con `external`: lanzar un ciclo sobre un libro
+      que ya tiene uno lo rechaza el `409` de todos modos, y cerrar el experimento a mitad de
+      ciclo dejaría las dos cosas a medias. Y `Parar` gana un `title` que dice **por qué** no se
+      puede y cómo se para de verdad (`docker compose restart scheduler`), que era la mitad que
+      faltaba del reporte.
+
+      **688 tests en verde (+3), typecheck limpio, tipos regenerados.**
+- [x] **F4.20** **Los botones no ponían el cursor de mano, y no era nuestro fallo del todo**
+      (2026-08-10). **Tailwind v4 dejó de restaurar `cursor: pointer` en `<button>`** en su
+      Preflight, así que todos los controles de la aplicación mostraban la flecha y se leían como
+      texto en vez de como algo pulsable.
+
+      Va en la capa `base` de [app/src/index.css](app/src/index.css) y **no en `BUTTON_BASE`**:
+      los botones no son lo único pulsable —el selector de perfil, las casillas, los grupos de
+      radio y el enlace que despliega la tesis son `<button>` o `<label>`— así que arreglar la
+      receta habría arreglado lo que pasa por la receta y dejado el resto igual. El
+      `cursor: not-allowed` de lo deshabilitado va justo detrás, porque un control apagado no debe
+      invitar al clic.
 
 ### F5 — Pantalla de perfiles / experimentos
 
