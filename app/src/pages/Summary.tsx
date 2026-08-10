@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { useCycles, usePositions } from "@/api/hooks";
 import type { CycleRow, PositionRow, ProfileSummary } from "@/api/types";
 import { CycleStatus } from "@/components/CycleStatus";
-import { Alert, Loading, LINK_CLASSES, Card, PageTitle } from "@/components/pieces";
+import { Alert, Figure, Loading, LINK_CLASSES, PageTitle } from "@/components/pieces";
 import { PriceSource } from "@/components/PriceSource";
 import { Section } from "@/components/Section";
 import { TableHead, Row, Table, Td, Th, Empty } from "@/components/Table";
@@ -14,7 +14,6 @@ import {
   dateTime,
   percent,
 } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 import { useTitle } from "@/layout/useTitle";
 
@@ -192,36 +191,6 @@ function Figures({ profile }: { profile: ProfileSummary }) {
         </span>
       </Figure>
     </div>
-  );
-}
-
-/**
- * One headline figure, as a card.
- *
- * @param props - Figure props.
- * @param props.label - Label, in the interface language.
- * @param props.value - The figure, already formatted with its currency symbol.
- * @param props.className - Extra classes for the figure, to colour it by sign.
- * @param props.children - The footnote below it, when the figure needs one.
- * @return The rendered card.
- */
-function Figure({
-  label,
-  value,
-  className,
-  children,
-}: {
-  label: string;
-  value: string;
-  className?: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <Card padding="p-6">
-      <p className="text-caption text-text-muted">{label}</p>
-      <p className={cn("tabular mt-0.5 text-h3 font-semibold", className)}>{value}</p>
-      {children && <p className="mt-1 text-caption leading-snug">{children}</p>}
-    </Card>
   );
 }
 

@@ -265,6 +265,53 @@ export function CardHeaderStrip({ className, children, ...rest }: ComponentProps
 }
 
 /**
+ * One headline figure, as a card: the label small above, the number large below
+ * and, when it needs one, the line that explains it.
+ *
+ * **It lives here and not in a screen** because it now appears on two —the row
+ * of eight on Resumen and the row of four over the open book on Posiciones— and
+ * the project already learned this with `PriceSource`: two copies of the same
+ * card drift, and the one read more often ends up being the one that informs
+ * worse. Anything that changes about a figure changes here for both.
+ *
+ * It is deliberately **not** `Stat`. `Stat` is a `<dt>`/`<dd>` pair for a set
+ * describing one thing —a cycle's detail— and belongs inside a `<dl>`; this is
+ * a card that stands on its own in a grid.
+ *
+ * @param props - Figure props.
+ * @param props.label - Label, in the interface language.
+ * @param props.value - The figure, already formatted with its currency symbol.
+ * @param props.className - Extra classes for the figure, to colour it by sign.
+ *     It comes from `signClass()`, never written by hand.
+ * @param props.title - The whole sentence, when the figure needs one to be read.
+ * @param props.children - The footnote below it, when the figure needs one.
+ * @return The rendered card.
+ */
+export function Figure({
+  label,
+  value,
+  className,
+  title,
+  children,
+}: {
+  label: string;
+  value: string;
+  className?: string;
+  title?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <Card padding="p-6">
+      <p className="text-caption text-text-muted">{label}</p>
+      <p className={cn("tabular mt-0.5 text-h3 font-semibold", className)} title={title}>
+        {value}
+      </p>
+      {children && <p className="mt-1 text-caption leading-snug">{children}</p>}
+    </Card>
+  );
+}
+
+/**
  * Preformatted text: logs, parameter JSON and console commands.
  *
  * @param props - Everything a `<pre>` accepts.

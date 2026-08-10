@@ -3,7 +3,7 @@ import { ChevronRight } from "lucide-react";
 
 import { usePositions } from "@/api/hooks";
 import type { PositionRow } from "@/api/types";
-import { LinkButton, PageTitle } from "@/components/pieces";
+import { Figure, LinkButton, PageTitle } from "@/components/pieces";
 import { PriceSource } from "@/components/PriceSource";
 import { Section } from "@/components/Section";
 import {
@@ -24,6 +24,7 @@ import {
   dateTime,
   percent,
 } from "@/lib/format";
+import { summarizeOpen, type OpenSummary } from "@/lib/portfolio";
 import { cn } from "@/lib/utils";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 import { useTitle } from "@/layout/useTitle";
@@ -66,23 +67,26 @@ export function Positions() {
           page.items.length === 0 ? (
             <Empty>Ninguna posición abierta ahora mismo.</Empty>
           ) : (
-            <Table title="Posiciones abiertas">
-              <TableHead>
-                <Th>Símbolo</Th>
-                <Th>Abierta</Th>
-                <Th numeric>Cantidad</Th>
-                <Th numeric>Entrada</Th>
-                <Th numeric>Último</Th>
-                <Th numeric>P&L</Th>
-                <Th numeric>Stop</Th>
-                <Th numeric>Objetivo</Th>
-              </TableHead>
-              <tbody>
-                {page.items.map((row) => (
-                  <OpenPositionTableRow key={row.id} row={row} symbol={symbol} />
-                ))}
-              </tbody>
-            </Table>
+            <>
+              <Totals summary={summarizeOpen(page.items)} symbol={symbol} />
+              <Table title="Posiciones abiertas">
+                <TableHead>
+                  <Th>Símbolo</Th>
+                  <Th>Abierta</Th>
+                  <Th numeric>Cantidad</Th>
+                  <Th numeric>Entrada</Th>
+                  <Th numeric>Último</Th>
+                  <Th numeric>P&L</Th>
+                  <Th numeric>Stop</Th>
+                  <Th numeric>Objetivo</Th>
+                </TableHead>
+                <tbody>
+                  {page.items.map((row) => (
+                    <OpenPositionTableRow key={row.id} row={row} symbol={symbol} />
+                  ))}
+                </tbody>
+              </Table>
+            </>
           )
         }
       </Section>
@@ -124,6 +128,78 @@ export function Positions() {
         )}
       </Section>
     </>
+  );
+}
+
+/**
+ * The four figures of the open book, over the table they add up.
+ *
+ * **They are computed from the rows on screen and not read from `metrics`.** The
+ * reasoning is in `summarizeOpen`, and it is worth repeating because it is the
+ * trap this screen invites: `/api/profiles` also carries a portfolio value, but
+ * marked at the price of the last cycle's bar, while every row underneath is
+ * marked at the ingestor's minute price. A card showing 9989,63 € over a table
+ * of positions adding up to 9985,13 € would read as a broken sum. Here the
+ * cards and the column below them are, by construction, the same arithmetic.
+ *
+ * **What is deliberately not here is a "cambio del día".** The reference this
+ * was modelled on has one, and this project cannot honestly produce it: the row
+ * carries no previous close, so the only daily figure available is
+ * `metrics.day_pnl_pct`, which is the other clock. Half a card on the live price
+ * and half on the cycle price is the FE.8 mistake in a different unit.
+ *
+ * @param props - Totals props.
+ * @param props.summary - The totals, already computed by `summarizeOpen`.
+ * @param props.symbol - Currency symbol of the profile's market, never assumed.
+ * @return The rendered row of cards.
+ */
+function Totals({ summary, symbol }: { summary: OpenSummary; symbol: string }) {
+  const { withoutPrice, withoutStop } = summary;
+
+  return (
+    <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <Figure label="Invertido" value={money(summary.invested, symbol)}>
+        <span className="text-text-muted">
+          coste de entrada de {summary.count === 1 ? "1 posición" : `${summary.count} posiciones`},
+          sin comisiones
+        </span>
+      </Figure>
+
+      <Figure label="Valor de mercado" value={money(summary.marketValue, symbol)}>
+        <span className={withoutPrice ? "font-medium text-delta-bad" : "text-text-muted"}>
+          {withoutPrice
+            ? `${withoutPrice} sin precio, fuera del total`
+            : "al último precio del ingestor"}
+        </span>
+      </Figure>
+
+      <Figure
+        label="P&L latente"
+        value={signedMoney(summary.unrealizedPnl, symbol)}
+        className={signClass(summary.unrealizedPnl)}
+      >
+        <span className="text-text-muted">
+          {percent(summary.unrealizedPnlPct, { sign: true })} sobre lo invertido
+        </span>
+      </Figure>
+
+      {/* This one is not painted by sign, and the asymmetry is on purpose: the
+          other three say what is, this one says what would happen. Painted red
+          it would be red on every healthy portfolio —a stop below the entry is
+          the normal case— and a colour that is always on stops meaning
+          anything. */}
+      <Figure
+        label="Si saltan los stops"
+        value={signedMoney(summary.stopOutcome, symbol)}
+        title="Lo que se realizaría si todas las posiciones salieran hoy por su stop, sin contar la comisión de salida"
+      >
+        <span className={withoutStop ? "font-medium text-warning" : "text-text-muted"}>
+          {withoutStop
+            ? `${withoutStop} sin stop, fuera del total`
+            : "contra el precio de entrada"}
+        </span>
+      </Figure>
+    </div>
   );
 }
 
@@ -207,9 +283,13 @@ function OpenPositionTableRow({ row, symbol }: { row: PositionRow; symbol: strin
 
       {thesis && open && (
         <DetailRow columns={OPEN_COLUMNS}>
-          <p className="max-w-prose text-caption leading-snug text-text-secondary">
-            {thesis}
-          </p>
+          {/* No `max-w-prose`: the thesis takes the width of the table it is
+              unfolding inside. The measure of 65 characters is the typographic
+              rule for a page of running text, and this is not one — it is four
+              lines that are read once, right under the numbers they explain, and
+              a column half the width of the screen made it look like a second
+              table with the rest of the row missing. */}
+          <p className="text-caption leading-snug text-text-secondary">{thesis}</p>
         </DetailRow>
       )}
     </>

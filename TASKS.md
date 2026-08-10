@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera)
+Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal)
 
 ---
 
@@ -1044,6 +1044,60 @@ diez sesiones en silencio.
         la pone al día.
 
       **670 tests en verde, typecheck limpio, 50 tests del frontend.**
+- [x] **F4.15** **Cuatro tarjetas con el resumen de la cartera sobre la tabla de Abiertas**, en
+      Posiciones (2026-08-10). Pedido con una referencia visual de otra aplicación:
+      «Invested / Portfolio value / Daily change / Total P&L».
+
+      **De dónde salen las cifras es la decisión, no cuáles son.** Se calculan de las filas que
+      la pantalla ya tiene, con `summarizeOpen` en
+      [app/src/lib/portfolio.ts](app/src/lib/portfolio.ts), y **no** se leen de `metrics`. El
+      motivo es el de F4.14 visto desde el otro lado: `/api/profiles` también trae un valor de
+      cartera, pero marcado al precio de la barra del último ciclo, mientras que cada fila de
+      debajo va al precio del ingestor. Una tarjeta diciendo 9.989,63 € encima de una tabla que
+      suma 9.985,13 € se lee como una suma rota, y deja al que mira comprobando a mano una
+      resta que nunca estuvo mal. Así la tarjeta y la columna son la misma aritmética por
+      construcción, y las cifras a precio de ciclo se quedan donde ya estaban: en Resumen.
+
+      **La cuarta tarjeta de la referencia no se pudo copiar, y en su lugar va otra pregunta.**
+      No hay «cambio del día» honesto en esta pantalla: la fila no lleva el cierre anterior, así
+      que la única cifra diaria disponible es `metrics.day_pnl_pct`, que es el otro reloj —media
+      tarjeta a precio vivo y media a precio de ciclo es el error de FE.8 en otra unidad—. La
+      que se ha puesto es **«Si saltan los stops»**: `(stop − entrada) × cantidad` sumado, o sea
+      lo que se realizaría si todo el libro saliera hoy por su stop. Es la pregunta que el Risk
+      Manager contesta implícitamente en cada ciclo y que la interfaz no enseñaba en ningún
+      sitio. **No se pinta por signo**, y la asimetría es deliberada: un stop por debajo de la
+      entrada es el caso sano, así que el rojo estaría siempre encendido, y un color que está
+      siempre encendido deja de significar nada. Las otras tres dicen lo que es; esa dice lo que
+      pasaría.
+
+      **Un hueco no es un cero, y por eso el cálculo tiene tests.** Una posición que Yahoo dejó
+      de cotizar sumada como 0 encoge la cartera e infla la pérdida: un número equivocado con
+      aspecto de correcto, que no falla en ninguna parte. Se quedan fuera del total y vuelven
+      como `withoutPrice` para que la tarjeta pueda decir «N sin precio, fuera del total»; igual
+      con `withoutStop`. El porcentaje se divide por el coste de **las posiciones valoradas**, no
+      por el de todas, que era el otro error silencioso. Ocho tests en
+      [portfolio.test.ts](app/src/lib/portfolio.test.ts), y están escritos porque es exactamente
+      el tipo de suma que nadie vuelve a revisar una vez está en pantalla.
+
+      **`Figure` sube a [pieces.tsx](app/src/components/pieces.tsx).** Era local de Summary y
+      copiarla habría repetido la historia de `PriceSource`: dos copias de la misma tarjeta
+      divergen y la que más se mira acaba siendo la que peor informa. No se ha reutilizado
+      `Stat` porque no es lo mismo — `Stat` es un par `<dt>`/`<dd>` que vive dentro de un `<dl>`
+      describiendo una cosa, y esto es una tarjeta suelta en una rejilla.
+
+      **Y la tesis pierde el `max-w-prose`**, pedido en la misma vuelta: ocupa el ancho de la
+      tabla en la que se despliega. Los 65 caracteres son la regla de un texto corrido y esto no
+      lo es —son cuatro líneas que se leen una vez, justo debajo de las cifras que explican— y a
+      media pantalla parecía una segunda tabla a la que le faltaba el resto de la fila. Es un
+      ajuste de F10.6, que fue quien la plegó.
+
+      Lo que **no** cubre y queda apuntado en F9.8: ninguna de las tarjetas descuenta
+      comisiones, porque la fila no las lleva (`entry_commission` se queda en `sim_positions` y
+      no llega a la API). Adivinarlas aquí por el sufijo del símbolo sería
+      [src/fees.py](src/fees.py) reimplementado en TypeScript, que es lo que F6.8 existe para
+      impedir. Las dos tarjetas afectadas lo dicen en su pie.
+
+      **670 tests en verde, typecheck limpio, 58 tests del frontend (+8).**
 
 ### F5 — Pantalla de perfiles / experimentos
 
@@ -2267,6 +2321,37 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       **Consecuencia de método si sale adelante:** deja de ser el mismo experimento. El
       grupo de control de F5.7 compara screener con y sin criterio; comparar «con noticias»
       contra «sin noticias» pide **otro perfil más**, no cambiar el que corre.
+- [ ] **F9.8** ⚠️ **Tres sitios donde la interfaz enseña un número correcto que se lee mal.**
+      Apuntado el 2026-08-10 al explicar las cifras de `eu-05-muy-agresivo` una por una: los
+      tres son ciertos, ninguno es un fallo de cálculo, y los tres necesitaron que alguien
+      mirara la base para entenderse. Eso los convierte en trabajo de interfaz, no en dudas.
+
+      1. **La columna «Δ capital» de Ciclos no captura lo que pasa entre ciclos, y la columna
+         invita a sumarla.** `equity_start` y `equity_end` se miden al principio y al final del
+         ciclo, y el precio de valoración está **congelado durante todo el ciclo** (`_quotes` se
+         carga una vez en `_prime_broker`). O sea que un ciclo que no compra ni vende da 0,00 €
+         **por construcción**, aunque el precio se haya movido, y el movimiento real cae en el
+         hueco entre dos ciclos y no aparece en ninguna fila. Caso medido: el ciclo de las 11:20
+         marcó 0,00 € mientras el capital caía 6,30 € entre las 10:33 y las 11:20. La suma de la
+         columna **no da el resultado del experimento**, y hoy nada lo dice. La curva de
+         Analítica sí lo tiene.
+      2. **Resumen enseña dos precios distintos a la vez sin avisar.** Capital, Rentabilidad y
+         P&L del día salen de `equity_snapshots` —una fila por ciclo, a precio de la barra del
+         ciclo— y la tabla de debajo va al precio del ingestor. Es la decisión correcta y es la
+         de los tres precios de [EXPERIMENT.md](EXPERIMENT.md), pero en pantalla son dos cifras
+         del mismo experimento que no cuadran entre sí y nada las distingue. F4.15 lo evitó en
+         Posiciones calculando las tarjetas de las filas; en Resumen sigue abierto, y la
+         solución **no** es unificar el precio: es decirlo, probablemente en el pie de las
+         cifras que vienen del ciclo, con la hora del último.
+      3. **Las comisiones no se ven en ninguna pantalla.** Se cobran (3,00 € por leg en Europa,
+         4,11 € en Madrid) y se notan —los 4,07 € del primer ciclo de `eu-05-muy-agresivo` son
+         3,00 € de comisión y 1,07 € de deslizamiento, o sea fricción entera— pero
+         `entry_commission` se queda en `sim_positions` y no llega a la API. Con `MIN_ORDER_
+         NOTIONAL` de 100 € eso es hasta un 8 % de fricción invisible. Requisito previo para lo
+         demás: **exponerla en `PositionRow` y en `OrderRow`**, que es backend y no maquillaje.
+
+      Las tres comparten causa y por eso van juntas: la interfaz enseña resultados de un
+      sistema con **dos relojes** y los presenta como si tuviera uno.
 
 ---
 
