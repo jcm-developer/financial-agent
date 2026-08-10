@@ -310,28 +310,12 @@
     background: rgb(15 23 42 / 0.12);
   }
 
-  /* Calm scrollbars: the track disappears and the thumb is a slate capsule. */
+  /* Scrolling still works everywhere; the bar itself never renders. */
   * {
-    scrollbar-width: thin;
-    scrollbar-color: var(--slate-300) transparent;
+    scrollbar-width: none;
   }
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: var(--slate-300);
-    border: 3px solid transparent;
-    background-clip: content-box;
-    border-radius: 9999px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: var(--slate-400);
-    border: 3px solid transparent;
-    background-clip: content-box;
+    display: none;
   }
 
   /* The 1–10 sliders. The filled portion is a gradient stop driven by `--fill`,
