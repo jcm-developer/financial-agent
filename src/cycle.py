@@ -166,6 +166,9 @@ class TradingCycle:
                 # "USD" para todo, asi que un experimento europeo le contaba al
                 # modelo que SAN.MC cotiza en dolares.
                 currency=market_calendar.get_market(settings.market).currency,
+                # The prompt states what operating costs, so the model stops
+                # proposing targets whose whole gain is the commission (F9.9).
+                commission_for=broker.commission_for,
             ),
             # Same reason as the analyst's currency right above: the verdict's
             # text is stored and printed as it is, so an approval in a European

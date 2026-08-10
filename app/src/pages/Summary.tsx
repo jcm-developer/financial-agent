@@ -211,7 +211,9 @@ function OpenPositionTableRow({ row, symbol }: { row: PositionRow; symbol: strin
       </Td>
       <Td numeric>{row.qty}</Td>
       <Td numeric>{money(row.entry_price, symbol)}</Td>
-      <Td numeric>
+      {/* Same as on Posiciones: with no tag on a live price, the freshness lives
+          in the cell's `title` (F4.18). */}
+      <Td numeric title={row.last_price_as_of ?? undefined}>
         {money(row.last_price, symbol)}
         <PriceSource row={row} />
       </Td>

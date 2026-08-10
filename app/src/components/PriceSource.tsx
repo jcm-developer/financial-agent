@@ -3,13 +3,25 @@ import { Tag } from "@/components/pieces";
 import { dateTime } from "@/lib/format";
 
 /**
- * The price provenance tag (F3.2).
+ * The price provenance tag (F3.2), shown **only when the price is not the normal
+ * one** (F4.18).
  *
- * It is shown whenever there is a price, because it is the difference between a
- * P&L that means something and one that mixes the close from two days ago with
- * a price from a minute ago. And when there is none, it says so: the position is
- * valued at its entry price, which means its P&L is zero for lack of data, not
- * because it did not move.
+ * It used to label all three cases, `VIVO` included, and that was the mistake:
+ * with the ingestor healthy `VIVO` appears on every row of every table, so it
+ * stopped being information and became a green column repeated down the screen.
+ * An always-on label is read as decoration, and then the two labels that do carry
+ * a warning get read as decoration too.
+ *
+ * **The other two stay, and they are the reason this component still exists.**
+ * `CICLO` says the row is valued with the price the analyst saw on its last
+ * cycle, which can be from the day before yesterday; `SIN PRECIO` says the
+ * position is valued at its entry, so its P&L is zero for lack of data and not
+ * because it did not move. Those are exactly the cases where the figure next to
+ * the tag does not mean what it appears to mean.
+ *
+ * **The absence of a tag is therefore the claim "this price is live"**, which is
+ * why the freshness has to keep travelling somewhere: the exact timestamp stays
+ * in the cell's `title`, and the Ingesta screen carries the ingestor's health.
  *
  * It lives here and not inside a screen because open positions appear on two
  * —the summary and the positions screen— and they were diverging: the summary
@@ -20,8 +32,8 @@ import { dateTime } from "@/lib/format";
  * @param props - Provenance props.
  * @param props.row - Position row, of which the price source and its timestamp
  *     are read.
- * @return The tag saying where the price came from, always with the full
- *     sentence in its `title`.
+ * @return The tag when the price is stale or missing, and nothing when it is
+ *     live.
  */
 export function PriceSource({ row }: { row: PositionRow }) {
   if (!row.price_source) {
@@ -32,18 +44,14 @@ export function PriceSource({ row }: { row: PositionRow }) {
     );
   }
 
-  const live = row.price_source === "live";
+  if (row.price_source === "live") return null;
 
   return (
     <Tag
-      tone={live ? "good" : "warning"}
-      title={
-        live
-          ? `Cotización del ingestor (${dateTime(row.last_price_as_of)})`
-          : `El precio que vio el analista en su último ciclo (${dateTime(row.last_price_as_of)})`
-      }
+      tone="warning"
+      title={`El precio que vio el analista en su último ciclo (${dateTime(row.last_price_as_of)})`}
     >
-      {live ? "VIVO" : "CICLO"}
+      CICLO
     </Tag>
   );
 }

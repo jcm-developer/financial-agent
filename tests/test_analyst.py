@@ -66,14 +66,67 @@ def test_the_entry_prompt_carries_the_profiles_currency(snapshot, account):
 
 
 def test_the_exit_prompt_carries_it_too(snapshot, position):
-    """Three prices travel here —entry, current and P&L— and all three said USD."""
+    """Three prices travel here —entry, current and P&L— and all three said USD.
+
+    Four amounts since F9.9: the cost of closing joined them, and it is money in
+    the profile's currency like the rest.
+    """
     prompt = _render_exit_prompt(
         position, snapshot, "Tendencia intacta.", 4.2, 5.4,
-        INTERVAL_LABELS["1h"], "EUR",
+        INTERVAL_LABELS["1h"], "EUR", 4.11,
     )
 
     assert "USD" not in prompt
-    assert prompt.count("EUR") == 3
+    assert prompt.count("EUR") == 4
+
+
+# -- Las comisiones estan en el prompt (F9.9) --------------------------------
+
+def test_the_entry_prompt_states_what_operating_costs(snapshot, account):
+    """The model proposed targets whose whole gain was the commission.
+
+    Measured before this: CABK.MC at 12,90 with a target at 13,20, which is
+    +2,3 % on a 2.038 EUR position where the round trip eats 17 % of the gain. It
+    was not a mistake by the model — it was optimising a ratio with a term
+    missing.
+    """
+    prompt = _render_entry_prompt(
+        snapshot, account, INTERVAL_LABELS["1h"], "EUR", 4.11
+    )
+
+    assert "4.11 EUR por orden" in prompt
+    # Both legs, because a position that is opened gets closed.
+    assert "8.22 EUR de ida y vuelta" in prompt
+
+
+def test_the_exit_prompt_says_that_closing_costs_money(snapshot, position):
+    """Leaving a flat position is losing the commission and nothing else.
+
+    It is the discretionary exit of F9.11: the stop and the target are watched by
+    a rule, but "the thesis has degraded" is a judgement, and it was being made
+    without knowing it had a price.
+    """
+    prompt = _render_exit_prompt(
+        position, snapshot, "Tendencia intacta.", 4.2, 5.4,
+        INTERVAL_LABELS["1h"], "EUR", 4.11,
+    )
+
+    assert "Coste de cerrar: 4.11 EUR" in prompt
+
+
+def test_the_analyst_never_tells_the_model_that_trading_is_free(snapshot, account):
+    """The default tariff is the bank's and not zero (F9.9).
+
+    A zero would be the one lie that matters here: the model would go back to
+    proposing symbolic targets, and nothing downstream would flag it.
+    """
+    from src.analyst import Analyst
+
+    analyst = Analyst(llm=None, interval="1h", currency="EUR")  # type: ignore[arg-type]
+
+    assert analyst._commission_for("SAN.MC") == pytest.approx(4.11)
+    assert analyst._commission_for("ALV.DE") == pytest.approx(3.00)
+    assert analyst._commission_for("AAPL") == 0.0
 
 
 # -- Las ventanas se cuentan en barras, no en dias ---------------------------

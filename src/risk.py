@@ -24,6 +24,18 @@ from .config import RiskLimits
 from .models import AccountState, BrokerPosition, ExitSignal, Proposal, RiskVerdict
 
 
+#: What fraction of the allowance a proposal at exactly `min_conviction` gets
+#: (F9.10). Conviction interpolates between this and 1,0 at 100.
+#:
+#: **It is not zero, and that is the whole reason it is a constant with a
+#: comment.** At zero, a proposal that just cleared the conviction gate would be
+#: sized at zero shares and rejected, so the gate would stop meaning "this is
+#: worth trading" and start meaning "this is worth trading, but not really". Half
+#: keeps the gate meaning what it says: everything that passes gets a position,
+#: and conviction decides how much of the allowance it takes.
+CONVICTION_FLOOR = 0.5
+
+
 @dataclass(frozen=True)
 class KillSwitch:
     triggered: bool
@@ -253,6 +265,31 @@ class RiskManager:
         if cash_qty < qty:
             qty, binding_rule = cash_qty, "insufficient_cash"
 
+        # --- La conviccion modula, dentro de lo que los topes permiten --------
+        #
+        # **It scales the result of every cap and not the risk budget** (F9.10),
+        # and the order matters. Measured on this experiment, the risk budget was
+        # never what bound: 300 EUR of budget against 43-94 EUR of risk actually
+        # taken, because `max_position_pct` cut in far earlier. So a conviction
+        # factor applied to the budget would have changed nothing at all — the
+        # same inertia the risk slider already had.
+        #
+        # Applied here it can only ever shrink an already-approved size, so no
+        # limit can be crossed by raising conviction: the caps say "never more
+        # than this" and conviction says "how much of that this idea deserves".
+        #
+        # ⚠️ **The model is not told about this**, and it is deliberate. Telling it
+        # that conviction moves money turns conviction into a lever instead of an
+        # estimate, and the calibration of F5.7 —is a 70 really right 7 times out
+        # of 10?— is measured on exactly that number. The prompt's promise still
+        # holds literally: it does not decide the size.
+        span = 100.0 - limits.min_conviction
+        reach = (proposal.conviction - limits.min_conviction) / span if span > 0 else 1.0
+        conviction_factor = CONVICTION_FLOOR + (1.0 - CONVICTION_FLOOR) * min(1.0, reach)
+        scaled = math.floor(qty * conviction_factor)
+        if scaled < qty:
+            qty, binding_rule = scaled, "conviction"
+
         if qty < 1:
             return _reject(
                 binding_rule if binding_rule != "risk_per_trade" else "qty_below_one",
@@ -329,6 +366,9 @@ class RiskManager:
                 "risk_amount": round(qty * risk_per_share + round_trip, 2),
                 "reward_risk": round(reward_risk, 2),
                 "round_trip_commission": round(round_trip, 2),
+                # So the Riesgo screen can tell a position that was cut by a limit
+                # from one the analyst simply did not believe in much.
+                "conviction_factor": round(conviction_factor, 3),
                 "stop_source": stop_source,
                 "target_source": target_source,
                 "binding_rule": binding_rule,

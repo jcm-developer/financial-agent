@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
+from . import fees
 from .llm import LLMClient, LLMError
 from .models import AccountState, BrokerPosition, MarketSnapshot, Proposal
 
@@ -31,6 +33,16 @@ Frontera de tu rol, no la cruces:
 riesgo determinista lo calcula despues a partir de la volatilidad. Si mencionas \
 cantidades, se ignoran.
 - NO ejecutas nada. Tu salida es una recomendacion que puede ser rechazada.
+
+Operar cuesta dinero, y el objetivo tiene que tenerlo en cuenta:
+- Cada orden paga una comision FIJA, en la compra y otra vez en la venta. El \
+coste concreto de este activo te lo doy abajo.
+- El motor de riesgo calcula el ratio beneficio/riesgo DESPUES de comisiones y \
+rechaza la propuesta si no llega al minimo. Un objetivo pegado al precio de \
+entrada hace que la operacion se descarte por buena que sea la tesis.
+- Asi que no propongas objetivos de recorrido simbolico: si el movimiento que \
+esperas no supera con holgura la comision de ida y vuelta, la respuesta correcta \
+es "hold".
 
 Reglas de honestidad intelectual, son lo que hace util este sistema:
 - Solo puedes usar los datos numericos que te doy. No tienes acceso a noticias, \
@@ -69,6 +81,9 @@ antes de que el precio llegue al stop, o que sigue intacta y hay que aguantar.
 
 Reglas:
 - Solo puedes usar los datos numericos que te doy. No inventes noticias.
+- Cerrar cuesta una comision fija, que te doy abajo y que se resta del \
+resultado. Salir de una posicion plana es perder esa comision sin mas, asi que \
+no cierres por ruido: hace falta deterioro de la tesis, no un dia malo.
 - No cortes ganadoras por nerviosismo ni mantengas perdedoras por esperanza. \
 Justifica con los datos.
 - "hold" es una respuesta legitima y frecuente.
@@ -132,10 +147,20 @@ class Analyst:
     """
 
     def __init__(
-        self, llm: LLMClient, *, interval: str = "1d", currency: str = "USD"
+        self,
+        llm: LLMClient,
+        *,
+        interval: str = "1d",
+        currency: str = "USD",
+        commission_for: Callable[[str], float] | None = None,
     ) -> None:
         self.llm = llm
         self.interval = interval
+        #: What one leg costs, so the prompt can state it (F9.9). Injected for the
+        #: same reason as in `RiskManager`: `cycle.py` passes the broker's own,
+        #: which adds the profile's surcharge. Default is the bank's tariff and
+        #: never zero, which would tell the model that trading is free.
+        self._commission_for = commission_for or fees.standard_commission
         #: Currency of the profile's market. **It is passed, never assumed**
         #: (FE.8): the prompt used to say "USD" for every price, so a European
         #: experiment told the model that SAN.MC trades in dollars. It is the
@@ -155,7 +180,10 @@ class Analyst:
     ) -> Proposal | None:
         """Analyses one candidate. Returns None if the model fails: a symbol with
         no analysis is skipped, not traded blind."""
-        user_prompt = _render_entry_prompt(snapshot, account, self.labels, self.currency)
+        user_prompt = _render_entry_prompt(
+            snapshot, account, self.labels, self.currency,
+            self._commission_for(snapshot.symbol),
+        )
         self.calls += 1
         try:
             response = self.llm.complete_json(
@@ -204,7 +232,7 @@ class Analyst:
     ) -> Proposal | None:
         user_prompt = _render_exit_prompt(
             position, snapshot, entry_thesis, stop_price, target_price,
-            self.labels, self.currency,
+            self.labels, self.currency, self._commission_for(position.symbol),
         )
         self.calls += 1
         try:
@@ -245,6 +273,7 @@ def _render_entry_prompt(
     account: AccountState,
     labels: tuple[str, str],
     currency: str = "USD",
+    commission: float = 0.0,
 ) -> str:
     bar_label, window_label = labels
     units = _window_units_note(bar_label)
@@ -261,6 +290,10 @@ INDICADORES TECNICOS (calculados sobre {bar_label}; null = no disponible):
 {units}
 ULTIMAS 10 {window_label} (fecha, apertura, maximo, minimo, cierre, volumen):
 {_format_bars(snapshot.recent_bars)}
+
+COSTE DE OPERAR {snapshot.symbol}: {commission:.2f} {currency} por orden, o sea
+{commission * 2:.2f} {currency} de ida y vuelta. Es un importe fijo, no un
+porcentaje, y se descuenta del resultado.
 
 ESTADO DE LA CARTERA (contexto, no es tu decision):
 - Posiciones ya abiertas: {open_positions}
@@ -280,6 +313,7 @@ def _render_exit_prompt(
     target_price: float | None,
     labels: tuple[str, str],
     currency: str = "USD",
+    commission: float = 0.0,
 ) -> str:
     bar_label, window_label = labels
     units = _window_units_note(bar_label)
@@ -293,6 +327,7 @@ POSICION ABIERTA: {position.symbol}
 - P&L no realizado: {position.unrealized_pl:+.2f} {currency} ({position.unrealized_pl_pct:+.2f}%)
 - Stop vigilado automaticamente: {_fmt(stop_price)}
 - Objetivo vigilado automaticamente: {_fmt(target_price)}
+- Coste de cerrar: {commission:.2f} {currency} de comision, que se resta del resultado
 
 TESIS ORIGINAL DE LA ENTRADA:
 {entry_thesis or "(no registrada)"}

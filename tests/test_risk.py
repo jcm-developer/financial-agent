@@ -50,11 +50,16 @@ def position(symbol="AAPL", qty=10.0, entry=100.0, price=100.0):
 
 
 def proposal(**overrides):
+    # Conviction 100 by default since F9.10, and it is a decision and not a round
+    # number: conviction now scales the size, so any other value would multiply
+    # every expected quantity below by a factor that has nothing to do with the
+    # rule each test is about. At 100 the factor is exactly 1 and each cap can be
+    # read in isolation. The scaling has its own tests further down.
     defaults = dict(
         symbol="AAPL",
         kind="entry",
         action="buy",
-        conviction=80,
+        conviction=100,
         thesis="Tendencia alcista intacta.",
         reference_price=100.0,
     )
@@ -193,6 +198,73 @@ def test_poor_reward_risk_is_rejected(manager):
 
     assert not verdict.approved
     assert verdict.rule == "min_reward_risk"
+
+
+# -- Conviccion y tamano (F9.10) ---------------------------------------------
+
+def test_conviction_scales_the_size_within_the_caps(manager):
+    """Same trade, three convictions, three sizes.
+
+    Before F9.10 the three were identical: conviction was a gate and nothing
+    else, so a 65 and a 100 got exactly the same money.
+    """
+    sizes = {}
+    for conviction in (65, 80, 100):
+        verdict = manager.evaluate_entry(
+            proposal(conviction=conviction, reference_price=20.0), account(), atr=2.0
+        )
+        assert verdict.approved
+        sizes[conviction] = verdict.qty
+
+    # 250 shares is what the risk budget allows; conviction takes a fraction.
+    assert sizes[100] == 250          # factor 1,0
+    assert sizes[80] == 178           # factor 0,5 + 0,5 × (15/35) = 0,714
+    assert sizes[65] == 125           # factor 0,5, the floor
+    assert sizes[65] < sizes[80] < sizes[100]
+
+
+def test_the_conviction_floor_is_not_zero(manager):
+    """A proposal that just cleared the gate still gets a position.
+
+    At a floor of zero the gate would stop meaning "this is worth trading" and
+    start meaning "worth trading, but not really": the size would come out at
+    zero shares and the trade would be rejected by the very threshold it passed.
+    """
+    verdict = manager.evaluate_entry(
+        proposal(conviction=LIMITS.min_conviction, reference_price=20.0),
+        account(),
+        atr=2.0,
+    )
+
+    assert verdict.approved
+    assert verdict.qty == 125
+    assert verdict.details["conviction_factor"] == pytest.approx(0.5)
+
+
+def test_conviction_can_only_shrink_never_cross_a_limit(manager):
+    """It scales what the caps already allowed, so no limit can be raised by it.
+
+    The cap is checked against the *unscaled* size: 20 % of 100k at 100 the share
+    is 200 shares, and the highest conviction cannot buy 201.
+    """
+    verdict = manager.evaluate_entry(proposal(conviction=100), account(), atr=2.0)
+
+    assert verdict.approved
+    # max_position_pct 20 % over a price of 100 -> 200 shares, and not one more.
+    assert verdict.qty == 200
+    assert verdict.rule == "max_position_pct"
+
+
+def test_the_binding_rule_says_conviction_when_conviction_is_what_cut(manager):
+    """Otherwise the Riesgo screen cannot tell a position cut by a limit from one
+    the analyst simply did not believe in much."""
+    verdict = manager.evaluate_entry(
+        proposal(conviction=70, reference_price=20.0), account(), atr=2.0
+    )
+
+    assert verdict.approved
+    assert verdict.rule == "conviction"
+    assert "limita: conviction" in verdict.reason
 
 
 # -- Comisiones (F9.9) -------------------------------------------------------

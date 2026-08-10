@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; apuntadas F4.18 (quitar el `VIVO` de Posiciones), F9.10 (el tamaño lo decide el tope y no la conviccion, medido) y F9.11 (auditar la comision en todo el circuito, no solo en la entrada))
+Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero)
 
 ---
 
@@ -1182,7 +1182,7 @@ diez sesiones en silencio.
 
       **673 tests en verde (+3), typecheck limpio, 73 tests del frontend (+2), tipos
       regenerados.**
-- [ ] **F4.18** **Quitar la etiqueta `VIVO` de la columna Último** en
+- [x] **F4.18** **Quitar la etiqueta `VIVO` de la columna Último** en
       [app/src/pages/Positions.tsx](app/src/pages/Positions.tsx). Pedido el 2026-08-10: con el
       ingestor sano es el caso normal en todas las filas, así que es una columna de ruido verde
       repetida que no informa de nada.
@@ -1199,6 +1199,12 @@ diez sesiones en silencio.
       los otros dos. Con eso la etiqueta pasa de decorar a avisar, que es lo que hace útil una
       etiqueta. Afecta también a Resumen, que usa el mismo componente, y eso es deseado —se
       compartió en su día precisamente para que las dos pantallas no divergieran.
+
+      **Hecho así el 2026-08-10.** `PriceSource` devuelve `null` cuando la fuente es `live` y
+      sigue pintando `CICLO` y `SIN PRECIO`. La consecuencia que había que atender: **la
+      ausencia de etiqueta pasa a ser la afirmación «este precio es vivo»**, así que la frescura
+      tenía que seguir siendo alcanzable — la hora exacta se mueve al `title` de la celda, en
+      Posiciones y en Resumen. Sin eso, quitar la etiqueta habría sido quitar el dato.
 
 ### F5 — Pantalla de perfiles / experimentos
 
@@ -2514,10 +2520,23 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
          de 100 € hunden el ratio solos. `MIN_ORDER_NOTIONAL` deja de ser el guardarraíl y pasa
          a ser lo que su comentario decía que era, un suelo de cordura. Cambiarlo ahora sería
          apretar dos veces la misma tuerca.
-      4. **El prompt del analista no las menciona.** El modelo propone stop y objetivo sin
-         saber que operar cuesta dinero. **Es lo único que queda de F9.9**, y no se hizo con lo
-         demás porque no es del mismo tipo: los tres de arriba son reglas deterministas y este
-         es un dato nuevo en el prompt. Ojo con la regla de honestidad de F9.7 antes de tocarlo.
+      4. ~~**El prompt del analista no las menciona.**~~ ✅ **Hecho el 2026-08-10.** Los dos
+         prompts llevan ahora el coste: el de entrada dice lo que cuesta una orden y la ida y
+         vuelta del símbolo concreto, y **que el motor calcula el R/R después de comisiones y
+         rechaza si no llega**, que es la parte accionable —el modelo no puede computar el ratio
+         neto porque no sabe el tamaño, pero sí puede dejar de proponer objetivos simbólicos—. El
+         de salida dice lo que cuesta cerrar y que salir de una posición plana es perder esa
+         comisión sin más, que es el punto de F9.11 sobre la salida discrecional.
+
+         La tarifa se inyecta igual que en el Risk Manager: `commission_for` en el constructor de
+         `Analyst`, `cycle.py` le pasa la del bróker, y **el defecto es la tarifa del banco y
+         nunca cero**, porque cero le diría al modelo que operar es gratis.
+
+         ⚠️ **No se le dice que la convicción mueve el tamaño**, aunque desde F9.10 lo haga, y es
+         deliberado: convertiría la convicción en una palanca en vez de una estimación, y la
+         calibración de F5.7 se mide sobre ese número exacto. La frase del prompt sigue siendo
+         literalmente cierta —no decide el tamaño— y esta decisión está escrita también en
+         `risk.py`, donde se aplica el factor, para que no parezca un olvido.
 
          **Y hay medición, del 2026-08-10.** Los tres veredictos aprobados llevan
          `target_source: 'llm'` y `stop_source: 'llm_wider'`: **los objetivos y los stops los
@@ -2539,7 +2558,7 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       método por lo mismo que tiene los demás: el Risk Manager dimensiona con él y no puede
       saber con qué bróker habla. **El valor por defecto es la tarifa estándar y no cero**,
       porque cero sería la única mentira silenciosa que este módulo no se puede permitir.
-- [ ] **F9.10** ⚠️ **El tamaño de la posición no lo decide ni la convicción ni el riesgo por
+- [x] **F9.10** ✅ **El tamaño de la posición no lo decidía ni la convicción ni el riesgo por
       operación: lo decide siempre el tope.** Planteado el 2026-08-10 —«el agente cada vez que
       puede compra el máximo permitido por posición»— y **confirmado en los tres veredictos**:
 
@@ -2572,7 +2591,65 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
         además con la calibración de F5.7: si el tamaño depende de la convicción, la convicción
         deja de ser una variable observada y pasa a ser parte del sistema.
 
-      ⚠️ Cualquiera de las dos vuelve a partir el histórico, como F9.9.
+      **Hecha la pedida, el 2026-08-10.** La convicción interpola entre `CONVICTION_FLOOR`
+      (0,5) y 1,0 sobre el tamaño **que los topes ya han aprobado**, y el orden es la decisión:
+      aplicar el factor al presupuesto de riesgo no habría cambiado nada, porque el presupuesto
+      no era lo que ataba —es exactamente la inercia que la tabla de arriba mide—. Aplicado al
+      final solo puede encoger, así que **ningún tope se puede cruzar subiendo la convicción**:
+      los topes dicen «nunca más de esto» y la convicción dice «cuánto de eso merece esta idea».
+
+      El suelo **no es cero**, y por eso es una constante con su comentario: a cero, una
+      propuesta que acaba de pasar la puerta de convicción se dimensionaría en cero acciones y
+      se rechazaría, o sea que la puerta dejaría de significar «esto merece operarse» y pasaría a
+      significar «esto merece operarse, pero no del todo».
+
+      `binding_rule` dice `conviction` cuando es ella la que recorta, para que la pantalla de
+      Riesgo distinga una posición cortada por un límite de una en la que el analista no creía
+      mucho. Y `conviction_factor` viaja en los detalles del veredicto.
+
+      Los 12 tests que se rompieron son la prueba de que el cambio es real: la convicción por
+      defecto del helper de tests era 80 y recortaba todas las cantidades esperadas. Se sube a
+      100 —factor exactamente 1— **para aislar la variable**, no para esquivar el problema: cada
+      test de tope vuelve a medir su tope, y el escalado tiene cuatro tests propios.
+
+      ⚠️ Esto vuelve a partir el histórico, como F9.9, y por eso se reseteó el experimento el
+      mismo día (ver abajo).
+- [x] **F9.12** **El experimento se resetea sin borrarse, y hay herramienta para ello**
+      (2026-08-10). Pedido al cerrar F9.9 y F9.10: los dos cambian las reglas con las que se
+      aprueba una compra, así que los cinco ciclos y las 85 decisiones que llevaba
+      `eu-05-muy-agresivo` **estaban aprobados por un filtro que ya no existe**. Mezclar esas dos
+      mitades en una calibración no mide ninguna de las dos.
+
+      **Es una herramienta y no un puñado de `delete from` escritos a mano**, y el motivo es
+      concreto: el histórico de un perfil vive en seis tablas más el libro del bróker, y **dos de
+      ellas no las alcanza ninguna cascada**. `sim_accounts.id` *es* el `portfolio_id` pero no
+      lleva `references`, así que `sim_positions` y `sim_fills` cuelgan de una fila a la que nada
+      apunta. Hacerlo a mano deja el efectivo y las posiciones simuladas detrás, y el ciclo
+      siguiente arranca con un libro que no cuadra con el histórico: el peor estado posible,
+      porque todo parece correcto.
+
+      [tools/reset_experiment.py](tools/reset_experiment.py) borra `positions`, `orders`,
+      `risk_events`, `decisions`, `equity_snapshots`, `cycles`, `sim_positions`, `sim_fills` y
+      `sim_accounts`, y **no toca** `profiles`, `agent_settings`, `agent_settings_history`,
+      `profile_universe` ni `portfolios` — eso es lo que separa un reseteo de un
+      `delete_profile`. Tres salvaguardas: `--dry-run` cuenta sin borrar, hay que **repetir el
+      nombre** en `--confirm` (la regla de `delete_profile`, por la misma razón), y al terminar
+      comprueba que no quedó nada y que las cinco tablas preservadas siguen con filas.
+
+      **El efectivo no se repone a mano.** Se borra la fila de `sim_accounts` y `SimBroker` la
+      recrea con `initial_cash` en el ciclo siguiente. Escribir 10.000 aquí sería una segunda
+      definición del capital inicial, y la que se desviaría el día que cambiara el presupuesto
+      del perfil.
+
+      Resultado: **113 filas borradas**, 89 símbolos del universo y los 41 parámetros intactos,
+      el perfil sigue `active`. De paso se limpió una cartera huérfana que creó `run.py check`
+      —es el único comando que corre sin perfil, así que `ensure_portfolio` le fabricó un
+      `experimento-01` sin `profile_id`—, comprobando antes que no tenía histórico.
+
+      ⚠️ **El ciclo de las 14:20 se perdió**: la reconstrucción de la imagen recreó el
+      planificador a las 14:24, después de la ventana. El primer ciclo del experimento nuevo es
+      el de las **15:20**.
+
 - [ ] **F9.11** **Auditar que las comisiones entran en *todas* las decisiones, no solo en la
       entrada.** Pedido el 2026-08-10. F9.9 cubrió el dimensionado y el R/R de una compra; lo
       que no se ha revisado es el resto del circuito, y son sitios distintos con respuestas
@@ -2589,8 +2666,25 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       - **El screener y `min_order_notional`**, ya revisados de refilón en F9.9.3.
 
       La forma de cerrarla no es tocar los cinco: es **decidir y dejar escrito** en cuáles entra
-      la comisión y en cuáles no, con el motivo. Hoy la respuesta a «¿lo tiene en cuenta?» es
-      «en la entrada sí, en lo demás no lo sé», y eso es lo que hay que quitar.
+      la comisión y en cuáles no, con el motivo.
+
+      **Auditado el 2026-08-10, con tres decididos y dos abiertos:**
+      - ✅ **Las salidas obligatorias se quedan como están, y ahora por escrito.** Un stop es un
+        precio, no un resultado: meterle la comisión sería moverlo, y entonces el stop que el
+        analista propuso y el que se vigila serían dos números distintos. El coste aparece donde
+        le toca, en el `realized_pnl` de la operación cerrada, que descuenta las dos patas desde
+        F5.9.
+      - ✅ **La salida discrecional ya lo sabe:** el prompt de salida dice lo que cuesta cerrar y
+        que salir de una posición plana es perder esa comisión sin más (F9.9.4).
+      - ✅ **El suelo de `min_order_notional`**, decidido en F9.9.3: se queda, porque con la
+        fricción dentro del R/R una orden pequeña ya no pasa el filtro.
+      - ❌ **La subida de stop** (`_maybe_raise_stop`) sigue sin mirarla. El analista puede
+        elevar el stop hasta un punto donde lo que se realiza no cubre la ida y vuelta, o sea
+        **un stop que garantiza una pérdida**. Es el que queda con más filo de los dos.
+      - ❌ **El cierre del experimento** (F5.8) liquida el libro entero: son N comisiones de
+        golpe y el informe final no las separa del resultado de la estrategia.
+
+      Ya no hay «no lo sé»: hay tres decisiones escritas y dos huecos con nombre.
 
 ---
 
