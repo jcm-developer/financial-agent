@@ -16,6 +16,39 @@ const NUMBER = new Intl.NumberFormat("es-ES", {
 const INTEGER = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 });
 
 /**
+ * The sign the **printed** number deserves, which is not always the sign of the
+ * number underneath.
+ *
+ * This exists because of a real bug: a position 17 céntimos under water on 3.950 €
+ * is −0,00442 %, the API rounds it to two decimals and sends `-0.0`, and the
+ * screen showed **`+0,00%`** next to a loss in red. Two separate reasons, both of
+ * them worth writing down:
+ *
+ *   * **In JavaScript `-0 >= 0` is `true`**, so any check of the shape
+ *     `value >= 0 ? "+" : "−"` calls negative zero positive. It is not a rounding
+ *     error, it is the sign bit surviving a comparison that cannot see it.
+ *   * **`Intl` keeps the minus on a number that rounds to zero**: it formats
+ *     −0,0044 as `-0,00`. That is the same lie in the other direction, and it was
+ *     live in the distance-to-stop column.
+ *
+ * The rule this settles: **a number that prints as zero carries no sign.** Not
+ * `+0,00%`, not `−0,00%`, just `0,00%`. Both are claims about a direction the
+ * figure does not show.
+ *
+ * The magnitude is what gets rounded, never the signed value: `Math.round`
+ * rounds half **towards +∞**, so `Math.round(-0.5)` is `-0` and a value of half a
+ * cent would lose the sign that `Intl` —which rounds half away from zero— is
+ * about to print. Rounding `Math.abs` first keeps the two agreeing.
+ *
+ * @param value - The value about to be formatted to two decimals.
+ * @return `+`, `−`, or the empty string when it prints as zero.
+ */
+function displayedSign(value: number): "+" | "−" | "" {
+  if (Math.round(Math.abs(value) * 100) === 0) return "";
+  return value < 0 ? "−" : "+";
+}
+
+/**
  * Formats a monetary amount followed by its currency symbol.
  *
  * @param value - Amount to format. Null or undefined renders as an em dash.
@@ -30,7 +63,8 @@ export function money(value: number | null | undefined, symbol: string): string 
 /**
  * Formats a monetary amount with an explicit leading sign.
  *
- * A leading sign is what you want to read in a P&L.
+ * A leading sign is what you want to read in a P&L — except on an amount that
+ * prints as zero, which gets none: see {@link displayedSign}.
  *
  * @param value - Amount to format. Null or undefined renders as an em dash.
  * @param symbol - Currency symbol of the profile's market.
@@ -41,7 +75,7 @@ export function signedMoney(
   symbol: string,
 ): string {
   if (value === null || value === undefined) return "—";
-  return `${value >= 0 ? "+" : "−"}${NUMBER.format(Math.abs(value))} ${symbol}`;
+  return `${displayedSign(value)}${NUMBER.format(Math.abs(value))} ${symbol}`;
 }
 
 /**
@@ -57,9 +91,13 @@ export function percent(
   { sign = false }: { sign?: boolean } = {},
 ): string {
   if (value === null || value === undefined) return "—";
-  const body = `${NUMBER.format(Math.abs(value))}%`;
-  if (!sign) return `${NUMBER.format(value)}%`;
-  return `${value >= 0 ? "+" : "−"}${body}`;
+  const mark = displayedSign(value);
+  if (sign) return `${mark}${NUMBER.format(Math.abs(value))}%`;
+  // Without an explicit sign the formatter's own minus is kept, so the glyph of
+  // every negative percentage in the app stays as it was. `Math.abs` only comes
+  // into play for the value that rounds to zero, which is the one whose minus
+  // has to go.
+  return `${NUMBER.format(mark === "" ? Math.abs(value) : value)}%`;
 }
 
 /**
@@ -150,12 +188,19 @@ export function duration(seconds: number | null | undefined): string {
  * different colours, because a P&L of zero for want of a price is not a P&L of
  * zero.
  *
+ * It rounds through {@link displayedSign} for the same reason the signs do: red
+ * on a figure reading `0,00 €` says the position is losing while the number next
+ * to it says it is not, and the colour is the half nobody re-reads. The rule is
+ * one and the same — **the sign, the colour and the digits describe the printed
+ * number.**
+ *
  * @param value - Signed value the colour describes.
  * @return The Tailwind text-colour class for that sign.
  */
 export function signClass(value: number | null | undefined): string {
   if (value === null || value === undefined) return "text-text-muted";
-  if (value > 0) return "text-delta-good";
-  if (value < 0) return "text-delta-bad";
+  const mark = displayedSign(value);
+  if (mark === "+") return "text-delta-good";
+  if (mark === "−") return "text-delta-bad";
   return "text-text-secondary";
 }

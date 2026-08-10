@@ -5,6 +5,7 @@ import { Card, BlockTitle, PageTitle } from "@/components/pieces";
 import { Section } from "@/components/Section";
 import { TableHead, Row, Table, Td, Th } from "@/components/Table";
 import { useTitle } from "@/layout/useTitle";
+import { percent, signClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -189,24 +190,17 @@ function QuoteTableRow({
   receivedAt: number | null;
 }) {
   const age = realAge(row, receivedAt);
-  const change = row.change_pct;
-  const noChange = change === null || change === undefined;
 
   return (
     <Row>
       <Td header>{row.symbol}</Td>
       <Td numeric>{row.price.toFixed(2)}</Td>
-      <Td
-        numeric
-        className={
-          noChange
-            ? "text-text-muted"
-            : change >= 0
-              ? "text-delta-good"
-              : "text-delta-bad"
-        }
-      >
-        {noChange ? "—" : `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
+      {/* The sign and the colour go through `format`, which is where the rule
+          lives, and not written out here: this cell had the `change >= 0` of its
+          own and therefore the same bug, printing `+0,00%` in green for a
+          negative zero. Two copies of a sign are two chances to get it wrong. */}
+      <Td numeric className={signClass(row.change_pct)}>
+        {percent(row.change_pct, { sign: true })}
       </Td>
       {/* Warned from 5 minutes on: that is the threshold where "live" stops
           being live with one-minute bars. */}

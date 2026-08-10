@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal)
+Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript)
 
 ---
 
@@ -1098,6 +1098,42 @@ diez sesiones en silencio.
       impedir. Las dos tarjetas afectadas lo dicen en su pie.
 
       **670 tests en verde, typecheck limpio, 58 tests del frontend (+8).**
+- [x] **F4.16** **`+0,00%` sobre una pérdida: el signo describía el número de dentro y no el
+      que se imprime** (2026-08-10). Visto en Posiciones, en la celda de P&L: `−0,17 €` en rojo
+      y, al lado, `+0,00%`.
+
+      **Son dos fallos distintos apuntando en direcciones opuestas**, y ninguno se ve leyendo
+      el código:
+      - **`-0 >= 0` es `true` en JavaScript.** Una posición 17 céntimos por debajo sobre 3.950 €
+        es −0,00442 %; `_value_position` lo redondea a dos decimales, Python devuelve `-0.0` y
+        el JSON lo transporta con su bit de signo. El `value >= 0 ? "+" : "−"` de `signedMoney`
+        y `percent` llamaba positivo al cero negativo. No es un error de redondeo: es el bit de
+        signo sobreviviendo a una comparación que no lo ve.
+      - **`Intl` conserva el menos de un cero.** `NUMBER.format(-0.0044)` da `-0,00`, así que la
+        rama **sin** signo de `percent` imprimía `-0,00%` — la misma mentira del otro lado, y
+        estaba viva en la columna de distancia al stop.
+
+      La regla que queda escrita en [format.ts](app/src/lib/format.ts): **el signo, el color y
+      las cifras describen el número impreso.** Lo que se imprime como cero no lleva signo —ni
+      `+0,00%` ni `−0,00%`, solo `0,00%`— porque las dos son afirmaciones sobre una dirección
+      que la cifra no enseña. `signClass` se suma a la regla por lo mismo: rojo sobre un
+      `0,00 €` dice que la posición pierde mientras el número de al lado dice que no, y el color
+      es la mitad que nadie relee.
+
+      Se redondea **la magnitud y no el valor con signo**, y ese detalle importa: `Math.round`
+      redondea la mitad hacia +∞, así que `Math.round(-0.5)` es `-0` y medio céntimo perdería el
+      signo que `Intl` —que redondea alejándose del cero— está a punto de imprimir. Hay test.
+
+      **El mismo fallo estaba escrito a mano en Ingesta** (`change >= 0 ? "+" : ""` con su propio
+      color), y ahí la corrección es no tener una segunda copia: la celda pasa por `percent()` y
+      `signClass()`. Dos copias de un signo son dos oportunidades de equivocarlo.
+
+      Y **`format.ts` no tenía tests**, siendo el módulo que decide lo que se lee en todas las
+      pantallas: van 21, incluido que en español los números de cuatro cifras **no se agrupan**
+      (`3950,27` pero `39.500,00`, que es `minimumGroupingDigits: 2` de CLDR y no un fallo). Eso
+      lo descubrió el primer test, que estaba mal escrito.
+
+      **670 tests en verde, typecheck limpio, 71 tests del frontend (+13).**
 
 ### F5 — Pantalla de perfiles / experimentos
 
