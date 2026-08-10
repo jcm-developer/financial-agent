@@ -173,6 +173,11 @@ class TradingCycle:
             risk_manager=RiskManager(
                 settings.risk,
                 currency_symbol=market_calendar.get_market(settings.market).currency_symbol,
+                # The broker's own tariff and not `fees.standard_commission`
+                # directly: this one adds the profile's `sim_commission`
+                # surcharge, so a what-if with heavier friction is sized and
+                # filtered with the friction it declares (F9.9).
+                commission_for=broker.commission_for,
             ),
             portfolio_id=portfolio_id,
         )

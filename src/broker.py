@@ -47,6 +47,18 @@ class Broker(Protocol):
     def is_tradable(self, symbol: str) -> bool:
         ...
 
+    def commission_for(self, symbol: str) -> float:
+        """What one leg on `symbol` costs, before executing it.
+
+        It is on the protocol and not read from `fees.py` by whoever needs it
+        because **the Risk Manager sizes with this number** (F9.9): the commission
+        comes out of the same cash that pays for the shares, and the round trip is
+        what decides whether a reward/risk ratio is real. A broker that charges
+        differently —or not at all— has to be able to say so without the risk
+        rules knowing which broker they are talking to.
+        """
+        ...
+
     def buy_market(self, symbol: str, qty: float) -> SubmittedOrder:
         ...
 

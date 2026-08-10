@@ -16,8 +16,10 @@ and the final verdict come from here.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 
+from . import fees
 from .config import RiskLimits
 from .models import AccountState, BrokerPosition, ExitSignal, Proposal, RiskVerdict
 
@@ -30,8 +32,24 @@ class KillSwitch:
 
 
 class RiskManager:
-    def __init__(self, limits: RiskLimits, currency_symbol: str = "") -> None:
+    def __init__(
+        self,
+        limits: RiskLimits,
+        currency_symbol: str = "",
+        commission_for: Callable[[str], float] | None = None,
+    ) -> None:
         self.limits = limits
+        #: What one leg costs, injected by whoever knows: `cycle.py` passes the
+        #: broker's own method, which adds the profile's surcharge on top of the
+        #: bank's tariff.
+        #:
+        #: **The default is the bank's standard tariff and not zero** (F9.9).
+        #: Zero would be the one silent lie this module cannot afford: it would
+        #: approve orders the cash cannot pay for and clear reward/risk ratios
+        #: that friction turns negative, which is the bug this parameter exists
+        #: to fix. `fees.standard_commission` raises on an exchange nobody has
+        #: priced, so the failure is loud rather than free.
+        self._commission_for = commission_for or fees.standard_commission
         #: What the profile's market prices in, for the text of the verdict.
         #:
         #: The verdict's `reason` is not a log line: it is stored in
@@ -183,21 +201,13 @@ class RiskManager:
         if risk_per_share <= 0:
             return _reject("non_positive_risk", "La distancia hasta el stop no es positiva.")
 
-        # --- Objetivo y ratio beneficio/riesgo ---------------------------
-        target = proposal.suggested_target
-        target_source = "llm"
-        if target is None or target <= price:
-            target = price + risk_per_share * limits.min_reward_risk
-            target_source = "derived"
-
-        reward_risk = (target - price) / risk_per_share
-        if reward_risk < limits.min_reward_risk:
-            return _reject(
-                "min_reward_risk",
-                f"Ratio beneficio/riesgo {reward_risk:.2f} por debajo del minimo "
-                f"{limits.min_reward_risk:.2f}.",
-                details={"target": round(target, 4), "stop": round(stop, 4)},
-            )
+        # --- Coste de operar ----------------------------------------------
+        # Both legs, because a position that is opened gets closed: the entry is
+        # charged now and the exit is charged whether it leaves by the stop, by
+        # the target or by the analyst. Sizing it as one leg would flatter every
+        # ratio below by half of the friction.
+        commission = self._commission_for(symbol)
+        round_trip = commission * 2
 
         # --- Risk-based sizing --------------------------------------------
         # A fixed % of equity is risked down to the stop. The result is that
@@ -227,7 +237,19 @@ class RiskManager:
             qty, binding_rule = exposure_qty, "max_total_exposure_pct"
 
         # Cap by available cash. Cash and not buying_power: no leverage.
-        cash_qty = math.floor(account.cash / price)
+        #
+        # **The commission is reserved before dividing** (F9.9): it comes out of
+        # this same cash, `sim_broker.buy_market` charges `qty × precio +
+        # comision` and raises if it does not fit, so `floor(cash / price)` could
+        # approve an order the broker then refused — a rejection appearing at
+        # execution, after the Risk Manager had already said yes.
+        #
+        # It is a reservation and not a guarantee, and the difference is worth
+        # knowing: the fill happens at the **next bar's open**, which is unknown
+        # here, so a gap up can still break it. That is why the broker keeps its
+        # own check instead of trusting this one.
+        affordable = account.cash - commission
+        cash_qty = math.floor(affordable / price) if affordable > 0 else 0
         if cash_qty < qty:
             qty, binding_rule = cash_qty, "insufficient_cash"
 
@@ -252,6 +274,41 @@ class RiskManager:
                 details={"qty": qty, "price": round(price, 4)},
             )
 
+        # --- Objetivo y ratio beneficio/riesgo, con la friccion dentro ------
+        #
+        # **This runs after the sizing and not before, and the order is the whole
+        # point** (F9.9). The commission is a fixed amount per order, not a cost
+        # per share, so the ratio it produces depends on how many shares are
+        # bought: the same trade is ruinous at 100 EUR and fine at 2.000 EUR. A
+        # ratio computed before the quantity exists cannot know that, which is
+        # why the check used to pass trades that were losers by construction —
+        # measured on this experiment, a paper 1,02 was really 0,72.
+        target = proposal.suggested_target
+        target_source = "llm"
+        if target is None or target <= price:
+            target = _target_for_ratio(price, stop, qty, round_trip, limits.min_reward_risk)
+            target_source = "derived"
+
+        gain = (target - price) * qty - round_trip
+        loss = risk_per_share * qty + round_trip
+        reward_risk = gain / loss
+        if reward_risk < limits.min_reward_risk:
+            return _reject(
+                "min_reward_risk",
+                f"Ratio beneficio/riesgo {reward_risk:.2f} por debajo del minimo "
+                f"{limits.min_reward_risk:.2f} contando {money}{round_trip:,.2f} de "
+                f"comisiones de ida y vuelta.",
+                details={
+                    "target": round(target, 4),
+                    "stop": round(stop, 4),
+                    "qty": qty,
+                    "round_trip_commission": round(round_trip, 2),
+                    # What it would have been without friction, so a rejection can
+                    # be told from one caused by the thesis itself.
+                    "reward_risk_gross": round((target - price) / risk_per_share, 2),
+                },
+            )
+
         return RiskVerdict(
             approved=True,
             reason=(
@@ -267,8 +324,11 @@ class RiskManager:
             details={
                 "risk_budget": round(risk_budget, 2),
                 "risk_per_share": round(risk_per_share, 4),
-                "risk_amount": round(qty * risk_per_share, 2),
+                # What the stop would cost including the commissions, which is
+                # what would actually be booked.
+                "risk_amount": round(qty * risk_per_share + round_trip, 2),
                 "reward_risk": round(reward_risk, 2),
+                "round_trip_commission": round(round_trip, 2),
                 "stop_source": stop_source,
                 "target_source": target_source,
                 "binding_rule": binding_rule,
@@ -276,6 +336,34 @@ class RiskManager:
                 "conviction": proposal.conviction,
             },
         )
+
+
+def _target_for_ratio(
+    price: float, stop: float, qty: int, round_trip: float, minimum: float
+) -> float:
+    """The target a proposal with none of its own gets, friction included.
+
+    The old derivation was `price + risk_per_share * min_reward_risk`, which
+    produced exactly the minimum ratio **before** commissions. Left as it was, it
+    would now land just under the net check and **every proposal without a target
+    would be rejected** — a change of behaviour disguised as a rounding error, and
+    the analyst leaves the target out often.
+
+    So the ratio is solved for the target instead of the target being guessed:
+    from `((t − p)·q − rt) / ((p − s)·q + rt) = m` follows
+    `t = p + (m·((p − s)·q + rt) + rt) / q`. It gives back the old formula exactly
+    when `rt` is zero, which is the American case.
+
+    @param price: Reference price.
+    @param stop: Stop level, below the price.
+    @param qty: Shares being bought, which is what turns a fixed cost into a
+        per-share one.
+    @param round_trip: Both legs' commission.
+    @param minimum: The net ratio the target has to reach.
+    @return: The target price.
+    """
+    loss = (price - stop) * qty + round_trip
+    return price + (minimum * loss + round_trip) / qty
 
 
 def _reject(rule: str, reason: str, details: dict | None = None) -> RiskVerdict:

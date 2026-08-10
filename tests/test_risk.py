@@ -195,6 +195,124 @@ def test_poor_reward_risk_is_rejected(manager):
     assert verdict.rule == "min_reward_risk"
 
 
+# -- Comisiones (F9.9) -------------------------------------------------------
+#
+# The symbols above are American and cost nothing, which is why none of the tests
+# so far notice this. These use `.MC` (4,11 EUR a leg) and `.DE` (3,00 EUR), which
+# is the tariff the experiment actually runs against.
+
+def test_the_reward_risk_counts_both_legs_commission():
+    """A ratio that clears the bar gross and does not clear it net.
+
+    It is the case that was passing trades that were losers by construction: on
+    the running experiment a paper 1,02 was a real 0,72.
+    """
+    # Risk budget 100k × 0,04% = 40 EUR over 4 of risk per share -> 10 shares,
+    # 200 EUR of notional, well clear of the 100 minimum so that rule does not
+    # bite first.
+    small = RiskLimits(**{**LIMITS.__dict__, "risk_per_trade_pct": 0.04})
+    manager = RiskManager(small, currency_symbol="€")
+
+    # Gross: gain (26,40 − 20) × 10 = 64, loss 4 × 10 = 40 -> 1,60, over the 1,5
+    # minimum. Net: (64 − 8,22) / (40 + 8,22) = 1,16, under it. Same trade, same
+    # prices; the only thing that changed is that operating costs money.
+    verdict = manager.evaluate_entry(
+        proposal(symbol="SAN.MC", reference_price=20.0, suggested_target=26.4),
+        account(),
+        atr=2.0,
+    )
+
+    assert not verdict.approved
+    assert verdict.rule == "min_reward_risk"
+    assert verdict.details["round_trip_commission"] == pytest.approx(8.22)
+    # The gross ratio travels too, so a rejection caused by friction can be told
+    # from one caused by the thesis.
+    assert verdict.details["reward_risk_gross"] == pytest.approx(1.6)
+    assert "8.22" in verdict.reason
+
+
+def test_the_same_trade_is_approved_once_it_is_big_enough():
+    """The ratio depends on the size, and that is the economics, not a quirk.
+
+    A fixed cost is ruinous on two shares and irrelevant on two hundred. It is
+    the reason the check had to move after the sizing.
+    """
+    manager = RiskManager(LIMITS, currency_symbol="€")
+
+    verdict = manager.evaluate_entry(
+        proposal(symbol="SAN.MC", reference_price=20.0, suggested_target=30.0),
+        account(),
+        atr=2.0,
+    )
+
+    # 250 shares: gain 2500 − 8,22 over loss 1000 + 8,22 -> 2,47, still over 1,5.
+    assert verdict.approved
+    assert verdict.qty == 250
+    assert verdict.details["reward_risk"] == pytest.approx(2.47, abs=0.01)
+    # What the stop would really cost: 250 × 4 plus both commissions.
+    assert verdict.details["risk_amount"] == pytest.approx(1008.22)
+
+
+def test_a_derived_target_clears_the_net_minimum_exactly():
+    """Otherwise every proposal without a target would now be rejected.
+
+    The old derivation produced the minimum ratio **before** commissions, so
+    under the net check it would land just below it — a change of behaviour
+    disguised as a rounding error, and the analyst leaves the target out often.
+    """
+    manager = RiskManager(LIMITS, currency_symbol="€")
+
+    verdict = manager.evaluate_entry(
+        proposal(symbol="SAN.MC", reference_price=20.0), account(), atr=2.0
+    )
+
+    assert verdict.approved
+    assert verdict.details["target_source"] == "derived"
+    assert verdict.details["reward_risk"] == pytest.approx(LIMITS.min_reward_risk)
+
+
+def test_the_cash_cap_reserves_the_commission():
+    """`floor(cash / price)` approved orders the broker then refused.
+
+    `sim_broker.buy_market` charges `qty × precio + comision` and raises if it
+    does not fit, so the rejection appeared at execution, after the Risk Manager
+    had already said yes.
+    """
+    manager = RiskManager(LIMITS, currency_symbol="€")
+
+    # 402 EUR of cash at 20 the share: 20 shares would fit on the price alone and
+    # cost 400 + 4,11 = 404,11, which does not. With the commission reserved,
+    # (402 − 4,11) / 20 -> 19.
+    verdict = manager.evaluate_entry(
+        proposal(symbol="SAN.MC", reference_price=20.0, suggested_target=30.0),
+        account(equity=100_000.0, cash=402.0),
+        atr=2.0,
+    )
+
+    assert verdict.approved
+    assert verdict.qty == 19
+    assert verdict.rule == "insufficient_cash"
+    assert verdict.qty * 20.0 + 4.11 <= 402.0
+
+
+def test_an_american_symbol_behaves_exactly_as_before():
+    """The tariff is zero there, so none of the above changes anything.
+
+    It is asserted rather than assumed: the whole suite above runs on `AAPL`, and
+    if the commission ever leaked in as a non-zero default every one of those
+    numbers would shift at once.
+    """
+    manager = RiskManager(LIMITS, currency_symbol="$")
+
+    verdict = manager.evaluate_entry(
+        proposal(reference_price=20.0, suggested_target=30.0), account(), atr=2.0
+    )
+
+    assert verdict.approved
+    assert verdict.details["round_trip_commission"] == 0.0
+    assert verdict.details["reward_risk"] == pytest.approx(2.5)
+
+
 def test_order_below_min_notional_is_rejected(manager):
     tight = RiskLimits(**{**LIMITS.__dict__, "min_order_notional": 100_000.0})
     verdict = RiskManager(tight).evaluate_entry(proposal(), account(), atr=2.0)
