@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada)
+Última actualización: 2026-08-10 (comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos)
 
 ---
 
@@ -1507,6 +1507,11 @@ diez sesiones en silencio.
       con margen para el desfase del feed. Si F2.1c manda pasar a `1h`, hay que rehacer el
       horario **y** contar cinco ciclos de veinte minutos, que ya no caben seguidos.
 
+      ⚠️ **Superado el mismo 2026-08-10:** los cinco están ya en `1h` con los ocho ciclos de
+      `10:20` a `17:20 Europe/Madrid`. El problema de que cinco rondas no quepan seguidas
+      **no llega a darse porque solo hay un perfil activo**: los otros cuatro se corren
+      después, de uno en uno.
+
       **626 tests en verde** (9 nuevos).
       Existen en `agent_settings` (con defecto `22:15` / `Europe/Madrid`) y en
       `SettingsUpdate`, así que la API los acepta y los guarda — pero
@@ -2063,8 +2068,10 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
    `--threads`, y con un solo perfil europeo el margen dentro del minuto es de ~4×, así que
    se decide con datos y sin prisa. Ver F2.1c.
 2. ~~**Elegir el horario de `europa-01`.**~~ **Hecho el 2026-08-10**: `europa-01` se borró y
-   los cinco perfiles nuevos nacen con `18:00 Europe/Madrid`, tras el cierre de Madrid y con
-   margen para el desfase del feed europeo (ver decisión nº 5).
+   los cinco perfiles nuevos nacieron con `18:00 Europe/Madrid`. **Ese mismo día pasaron los
+   cinco a `bar_interval=1h` con los ocho ciclos de `10:20` a `17:20`**, que es la pauta
+   decidida; los cuatro en pausa se cambian ahora y no al activarlos para que una comparación
+   entre niveles de riesgo no acabe midiendo también la cadencia.
 3. **FE.12 / el tope por sector de F6.5** — se calcula y no se aplica, por falta de dato de
    sector por símbolo. La pantalla de Ajustes ya lo dice en voz alta.
 4. ~~**F8.5**~~ ✅ **Hecho el 2026-08-10**: el `.env` no está en el índice ni en ninguna
@@ -2223,10 +2230,16 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
 
    ⚠️ ~~**Hoy ese horario no se pone en el perfil: ver F6.10.**~~ **Ya sí** (F6.10,
    2026-08-09): se pone en la pantalla de Ajustes de cada experimento y el planificador lo
-   recoge sin reiniciar nada. Los cinco perfiles en marcha (decisión nº 5) van a las **18:00
-   de Madrid** con barras diarias. ⚠️ **Pasar a `1h` ya no es solo cambiar el intervalo**:
-   cinco ciclos de ~20 minutos seguidos son ~100, así que u ocho rondas no caben en la
-   ventana, o hay que bajar el número de perfiles.
+   recoge sin reiniciar nada. ~~Los cinco perfiles en marcha (decisión nº 5) van a las
+   **18:00 de Madrid** con barras diarias.~~ **Ya no** (2026-08-10): los cinco están en `1h`
+   con `10:20,11:20,…,17:20 Europe/Madrid`, aplicado por `PATCH .../settings`, así que queda
+   en `agent_settings_history` y se puede deshacer desde Ajustes.
+
+   ⚠️ **Pasar a `1h` no es solo cambiar el intervalo**: cinco ciclos de ~20 minutos seguidos
+   son ~100, así que u ocho rondas no caben en la ventana, o hay que bajar el número de
+   perfiles. **No llega a morder porque solo hay un perfil activo** — ocho rondas de ~20
+   minutos son 160 de los 510 de la ventana—. El aviso sigue vigente para el día que se
+   active un segundo perfil sin pausar el primero.
 
    ~~**Lo que sigue dependiendo de F2.1c** es solo si se queda en `1d` o pasa a `1h`…~~
    ⚠️ **Decidido el 2026-08-10, y decidido antes de F2.1c a propósito:** `bar_interval=1h`
@@ -2290,8 +2303,11 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
    | `eu-05-muy-agresivo` | 10/10 | 3,00 % | 40 % | 100 % | 45 | 1,2× ATR | 1,0 | −10 % |
 
    **Todo lo demás es idéntico** —bolsa `eu`, universo de 89, 10.000 € de capital, 89
-   símbolos en vivo, `nvidia/meta/llama-3.3-70b-instruct`, screener `score`, barras `1d`,
-   **diversificación 5/10** y ciclo a las **18:00 Europe/Madrid**—. Que la diversificación
+   símbolos en vivo, `nvidia/meta/llama-3.3-70b-instruct`, screener `score`, barras `1h`,
+   **diversificación 5/10** y los **ocho ciclos de 10:20 a 17:20 Europe/Madrid**—. Que la
+   cadencia sea también idéntica en los cinco es parte del mismo argumento: si el que se
+   corre después llevara un ciclo diario, la brecha entre las dos curvas sería del nivel de
+   riesgo **y** del número de veces que se miran los stops. Que la diversificación
    también sea fija es lo que hace atribuible una diferencia: moviendo las dos, una brecha
    entre dos curvas no sería ni del riesgo ni del reparto.
 
