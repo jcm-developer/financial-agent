@@ -24,7 +24,7 @@ import {
 } from "@/components/pieces";
 import { Section } from "@/components/Section";
 import { TableHead, Row, Pagination, Table, Td, Th, Empty } from "@/components/Table";
-import { signClass, signedMoney, duration, dateTime } from "@/lib/format";
+import { signClass, signedMoney, duration, dateTime, sentence } from "@/lib/format";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 import { useTitle } from "@/layout/useTitle";
 
@@ -36,6 +36,10 @@ const LIMIT = 30;
  * This screen does not request the log: it arrives over the stream the Layout
  * opens and is read from the cache with `useCycleControl`. That is why it keeps
  * moving even after switching tabs and coming back.
+ *
+ * Since F4.22 the log is the one of **whatever** cycle is running and not only of
+ * the one the API launched: the server reads it from a file in the shared volume,
+ * so a cycle from the scheduler's container is no longer a blank panel.
  *
  * @return The rendered screen.
  */
@@ -140,6 +144,11 @@ function Control({
   const close = useCloseExperiment(profile);
   const [closing, setClosing] = useState(false);
   const failure = run.error ?? stop.error ?? close.error;
+  // `running` is "the cycle is mine" and `external` is "it is the scheduler's",
+  // and the two flags stay separate because they answer different questions
+  // (F4.19). For everything the panel says out loud there is only one question —
+  // is a cycle running? — so it is asked once and answered here.
+  const live = state.running || state.external;
 
   if (!state.enabled) {
     return (
@@ -155,26 +164,18 @@ function Control({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-body-sm">
-            {/* `external` is a cycle the scheduler launched, in its own
-                container. It has to read as "in progress" —it is— while the
-                buttons keep treating it as untouchable, which is why the two
-                flags stay separate (F4.19). */}
+            {/* The label says whether a cycle is running and the stage says what
+                it is doing, and who launched it belongs to the second: the
+                parenthesis said "(del planificador)" right before a stage that
+                repeated "lanzado por el planificador" word for word. */}
             <span
-              className={
-                state.running || state.external
-                  ? "font-semibold text-warning"
-                  : "text-text-secondary"
-              }
+              className={live ? "font-semibold text-warning" : "text-text-secondary"}
             >
-              {state.running
-                ? "Ciclo en marcha"
-                : state.external
-                  ? "Ciclo en marcha (del planificador)"
-                  : "Sin ciclo en marcha"}
+              {live ? "Ciclo en marcha" : "Sin ciclo en marcha"}
             </span>
             {" — "}
-            {state.stage}
-            {state.running && state.elapsed_seconds !== null && state.elapsed_seconds !== undefined
+            {sentence(state.stage)}
+            {live && state.elapsed_seconds !== null && state.elapsed_seconds !== undefined
               ? ` · ${duration(state.elapsed_seconds)}`
               : ""}
           </p>
@@ -187,12 +188,21 @@ function Control({
                 : ""}
             </p>
           )}
+          {/* The request leaves no line in the log —it is a file the cycle has
+              not read yet— so without saying it here the panel would look
+              untouched after pressing Parar, and a button that seems to have done
+              nothing gets pressed again. */}
+          {state.stop_requested && (
+            <p className="mt-0.5 text-caption font-semibold text-warning">
+              Parada pedida: el ciclo se detendrá en su siguiente punto de control.
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-2">
           <Button
             variant="primary"
-            disabled={state.running || state.external || run.isPending || !profile}
+            disabled={live || run.isPending || !profile}
             onClick={() => run.mutate({})}
           >
             Lanzar ciclo
@@ -201,22 +211,24 @@ function Control({
               see what the model would do without moving the experiment's book. */}
           <Button
             variant="ghost"
-            disabled={state.running || state.external || run.isPending || !profile}
+            disabled={live || run.isPending || !profile}
             onClick={() => run.mutate({ dry_run: true })}
           >
             Lanzar en seco
           </Button>
+          {/* Enabled for the scheduler's cycle too since F4.21: the request
+              travels through the database and not through a signal, so it reaches
+              the other container. What it cannot promise is that it is instant,
+              and that is what the title says instead of leaving it to be guessed. */}
           <Button
             variant="destructive"
-            disabled={!state.running || stop.isPending}
-            // A disabled button with no reason is what got reported: it said
-            // nothing while a cycle was plainly running on the same screen.
+            disabled={!live || state.stop_requested || stop.isPending}
             title={
-              state.external
-                ? "Este ciclo lo lanzo el planificador, en otro contenedor: la API no puede pararlo. Se para con `docker compose restart scheduler`."
-                : !state.running
-                  ? "No hay ningun ciclo en marcha que parar"
-                  : undefined
+              state.stop_requested
+                ? "La parada ya está pedida: el ciclo se detendrá en su siguiente punto de control"
+                : !live
+                  ? "No hay ningún ciclo en marcha que parar"
+                  : "El ciclo se detiene en su siguiente punto de control, antes de la próxima consulta al modelo, y cierra su registro con el motivo"
             }
             onClick={() => stop.mutate()}
           >
@@ -228,7 +240,7 @@ function Control({
               time may touch a book. */}
           <Button
             variant="destructive"
-            disabled={state.running || state.external || close.isPending || !profile}
+            disabled={live || close.isPending || !profile}
             onClick={() => setClosing(true)}
           >
             Cerrar experimento

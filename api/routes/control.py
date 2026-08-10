@@ -23,7 +23,7 @@ from src.db import Database
 from .. import queries
 from ..deps import ReadDb, find_profile, get_runner
 from ..models import ActionResult, CycleControl, CycleRunRequest
-from ..runner import DISABLED_STATUS
+from ..runner import DISABLED_STATUS, with_external
 
 router = APIRouter(prefix="/api/cycles", tags=["control"])
 
@@ -43,22 +43,13 @@ def control_status(db: ReadDb, runner: Runner):
 
     `external` is the missing bit, and it is separate from `running` on purpose
     rather than folded into it. They mean different things to every consumer:
-    `running` answers "may I launch one?" and `external` answers "may I stop
-    it?". Setting `running: true` for a scheduler cycle would have fixed the
-    label and left the Parar button enabled on a process this API cannot signal —
-    a button that always fails, which F3.8 already decided is worse than no
-    button.
+    `running` answers "may I launch one?" and `external` answers "is the one
+    running mine?". The shape is assembled in `with_external`, next to the runner,
+    because the SSE has to answer exactly the same thing (F4.19).
     """
     if runner is None:
         return DISABLED_STATUS
-    state = runner.status()
-    if not state["running"] and _cycle_running_elsewhere(db):
-        state = {
-            **state,
-            "external": True,
-            "stage": "en marcha, lanzado por el planificador",
-        }
-    return state
+    return with_external(runner.status(), queries.running_cycle(db))
 
 
 @router.post("/run", response_model=CycleControl)
@@ -125,14 +116,22 @@ def close_experiment(db: ReadDb, runner: Runner, body: CycleRunRequest):
 
 
 @router.post("/stop", response_model=ActionResult)
-def stop_cycle(runner: Runner):
-    """Asks the cycle this API launched to stop.
+def stop_cycle(db: ReadDb, runner: Runner):
+    """Asks the running cycle to stop, **whoever launched it** (F4.21).
 
-    It can only stop its own: the scheduler's runs in another container. That is
-    said in the message rather than pretending there is none.
+    Until now it could only stop its own: it was a `terminate()` over this
+    process's subprocess, so a cycle from the scheduler's container had no button
+    at all and the screen sent you to restart the container — which stops the
+    container, not the cycle, and leaves the row in 'running' until it ages out.
+
+    The id of the cycle to stop comes **from the table** and not from the runner,
+    and that is what makes the button work for both cases with one code path: the
+    row is the only thing the two containers share. With it, the request goes out
+    through `src/stop_signal.py` and the cycle closes itself down in order.
     """
     _require_controls(runner)
-    ok, message = runner.stop()
+    cycle = queries.running_cycle(db)
+    ok, message = runner.stop(cycle_id=cycle["id"] if cycle else None)
     if not ok:
         raise HTTPException(status.HTTP_409_CONFLICT, message)
     return {"ok": True, "message": message}

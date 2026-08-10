@@ -111,6 +111,32 @@ reincorpora para el análisis. Con 4 posiciones abiertas, un ciclo analiza 24
 activos. Así, un valor que no vuelve a salir cribado en dos semanas sigue teniendo
 su stop comprobado y su tesis revisada ocho veces al día.
 
+**Un ciclo se puede parar a mitad, y para en un sitio elegido** (F4.21). Antes de
+cada llamada al modelo —pasos 7 y 8, que son donde se va el tiempo— el ciclo mira
+si alguien ha pedido la parada desde la pantalla de Ciclos. Si la hay, se salta lo
+que quede, guarda su `equity_snapshot` y cierra su fila como `halted` con
+`error = "Parada solicitada desde la interfaz."`, que es lo que la distingue del
+`halted` del kill switch —ese deja `error` vacío y un `risk_event`.
+
+Tres consecuencias que hay que asumir:
+
+- **No es instantáneo.** Cae en el punto de control siguiente, así que con una
+  llamada al modelo en vuelo puede tardar hasta lo que tarde esa llamada. La
+  pantalla lo dice («Parada pedida: el ciclo se detendrá en su siguiente punto de
+  control») en vez de dar el clic por hecho.
+- **Lo que ya hizo, hecho está.** Las órdenes enviadas antes de la parada siguen
+  enviadas y las posiciones abiertas, abiertas, con su stop. Deshacerlas sería
+  operar por decisión de nadie.
+- **Es un ciclo parcial en el histórico.** Analizó unos símbolos y no otros, y eso
+  se lee en `decisions`: no es una sesión tranquila, es una sesión cortada.
+
+La petición no es una señal al proceso —el planificador corre en **otro
+contenedor**— sino un fichero con el id del ciclo junto a la base
+([src/stop_signal.py](src/stop_signal.py)). Por eso funciona igual para el ciclo
+que lanza la interfaz y para el que lanza el planificador, y por eso el ciclo cierra
+su fila en orden: un SIGTERM lo cortaría donde estuviera y dejaría la fila en
+`running` hasta que caducara a los 90 minutos.
+
 ⚠️ **Salvo que se quede sin precio, y eso ahora se dice.** Si un símbolo en
 cartera no trae cotización en un ciclo —Yahoo deja de servirlo, un festivo local
 cierra una de las seis bolsas, un sufijo se estropea— pasan tres cosas a la vez:
@@ -261,7 +287,14 @@ parámetros (Ajustes) y se **activa**. El planificador lo recoge en menos de un
 minuto, sin reiniciar nada.
 
 **Mirar.** Resumen, Posiciones, Decisiones, Órdenes, Riesgo, Ciclos y Analítica.
-La pantalla de Ciclos enseña el log en vivo del que esté corriendo.
+La pantalla de Ciclos enseña **el log en vivo del ciclo que esté corriendo, lo haya
+lanzado quien lo haya lanzado** (F4.22): el ciclo escribe su salida en un fichero
+junto a la base ([src/cycle_log.py](src/cycle_log.py)) y la API lee la cola, así
+que el del planificador —que corre en otro contenedor y antes dejaba el panel en
+blanco— se sigue igual que el que se lanza a mano.
+
+**Parar.** Botón **«Parar»**, también para el ciclo del planificador (F4.21). Cómo
+para y qué deja a medias está en la sección 4.
 
 **Cerrar.** Botón **«Cerrar experimento»** en la pantalla de Ciclos (F5.8): vende
 todas las posiciones abiertas **por el broker**, a la apertura de la barra

@@ -509,7 +509,8 @@ sin verla parecería que el analista no propuso nada.
 80 % de los rechazos son del mismo límite, o el modelo insiste en algo que no cabe
 o ese límite está mal puesto.
 
-**Ciclos** — Cada ejecución con su log en vivo y el detalle de los parámetros con
+**Ciclos** — Cada ejecución con su log en vivo —el del ciclo que esté corriendo,
+lo haya lanzado la interfaz o el planificador— y el detalle de los parámetros con
 los que corrió. Un ciclo marcado `SIN MODELO` es uno en el que **ninguna llamada
 al analista obtuvo respuesta** — cuota agotada o proveedor caído —; sin esa
 etiqueta se leería como un día tranquilo, que es la trampa que cerró F6.9.
@@ -518,11 +519,18 @@ etiqueta se leería como un día tranquilo, que es la trampa que cerró F6.9.
 solo vale si el dato es de hace un minuto, así que la antigüedad se avisa en
 ámbar a partir de cinco.
 
-### Lanzar un ciclo desde la interfaz
+### Lanzar y parar un ciclo desde la interfaz
 
 En la pantalla de Ciclos, **Lanzar ciclo** arranca uno sin tocar la terminal y
 **Lanzar en seco** hace lo mismo con `--dry-run`. Puedes cerrar la pestaña: el
 proceso corre en el servidor.
+
+**Parar** detiene el ciclo en marcha, **incluido el del planificador**, que corre
+en otro contenedor. No es una señal al proceso sino una petición que el ciclo
+atiende en su siguiente punto de control —antes de la próxima consulta al modelo—,
+así que puede tardar un poco y la pantalla lo dice mientras espera. A cambio el
+ciclo se cierra en orden: guarda su curva de capital y deja su fila terminada con
+el motivo, en vez de morir a medias. Lo que ya había ejecutado sigue ejecutado.
 
 La API **no puede escribir en el histórico aunque quiera**: las lecturas abren
 SQLite en modo `ro` y las escrituras pasan por un autorizador que solo admite las

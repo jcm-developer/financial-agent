@@ -41,7 +41,7 @@ from src.db import Database, DatabaseError
 
 from .. import queries
 from ..deps import ApiConfig, get_config, get_runner
-from ..runner import DISABLED_STATUS
+from ..runner import DISABLED_STATUS, with_external
 
 log = logging.getLogger(__name__)
 
@@ -59,20 +59,10 @@ def _event(name: str, payload: Any) -> str:
     return f"event: {name}\ndata: {body}\n\n"
 
 
-def _with_external(state: dict[str, Any], external: bool) -> dict[str, Any]:
-    """Adds the scheduler's cycle to the runner's own state.
-
-    The stage text is replaced too: `inactivo` is what the runner says about
-    itself, and it is what read as "nothing is happening" while a cycle ran in
-    another container.
-    """
-    if not external or state["running"]:
-        return state
-    return {
-        **state,
-        "external": True,
-        "stage": "en marcha, lanzado por el planificador",
-    }
+def _cycle_id(cycle: dict[str, Any] | None) -> str | None:
+    """The id, for comparing two reads. The rest of the row does not change while
+    a cycle lasts, and the elapsed time is recomputed on every pass anyway."""
+    return cycle.get("id") if cycle else None
 
 
 def _read_state(db_path: str, symbols: list[str] | None) -> dict[str, Any]:
@@ -92,11 +82,11 @@ def _read_state(db_path: str, symbols: list[str] | None) -> dict[str, Any]:
         # scheduler cycle detected by the query would be un-detected by the next
         # `cycle` event, and the symptom would be a panel that tells the truth for
         # two seconds after a reload (F4.19).
-        externo = queries.cycle_running_elsewhere(db)
+        externo = queries.running_cycle(db)
     return {
         "quotes": rows,
         "mark": marca,
-        "cycle_external": externo,
+        "running_cycle": externo,
         "ingest": {
             "healthy": salud["healthy"],
             "message": salud["message"],
@@ -137,11 +127,14 @@ async def stream(
         ingest_msg = estado["ingest"]["message"]
         yield _event("quotes", {"quotes": estado["quotes"], "mark": marca})
         yield _event("ingest", estado["ingest"])
-        estado_ciclo = runner.status() if runner is not None else DISABLED_STATUS
-        externo = bool(estado.get("cycle_external"))
+        externo = estado.get("running_cycle")
+        estado_ciclo = with_external(
+            runner.status() if runner is not None else DISABLED_STATUS, externo
+        )
         cursor = len(estado_ciclo["lines"])
         corriendo = bool(estado_ciclo["running"])
-        yield _event("cycle", _with_external(estado_ciclo, externo))
+        parada = bool(estado_ciclo["stop_requested"])
+        yield _event("cycle", estado_ciclo)
 
         vencimiento = time.monotonic() + config.stream_max_seconds
         while True:
@@ -175,27 +168,46 @@ async def stream(
                     novedad = True
 
             if estado is not None:
-                nuevo_externo = bool(estado.get("cycle_external"))
-                if nuevo_externo != externo:
+                nuevo_externo = estado.get("running_cycle")
+                if _cycle_id(nuevo_externo) != _cycle_id(externo):
                     externo = nuevo_externo
                     novedad = True
 
             if runner is not None:
                 total, nuevas = runner.lines_since(cursor)
-                estado_ciclo = runner.status()
+                # The log is emptied at the start of every cycle, so a tail
+                # shorter than what this client has already seen means a new cycle
+                # began. It goes out whole, **without `from`**, so the client
+                # replaces its lines instead of splicing the new ones over the
+                # previous cycle's and ending up with a log that reads as
+                # continuous without being so (see `mergeCycle`).
+                reiniciado = total < cursor
+                estado_ciclo = with_external(runner.status(), externo)
+                # Asking for the stop leaves no line in the log —it is a file the
+                # cycle has not read yet— so without this the panel would look
+                # unchanged for up to a minute after pressing Parar, in the tabs
+                # that did not press it.
+                nueva_parada = bool(estado_ciclo["stop_requested"])
                 # The state is sent when there are new lines or when the cycle
                 # has just started or finished; the rest of the time nothing
                 # changes, and repeating it every two seconds only burns bandwidth.
-                if nuevas or bool(estado_ciclo["running"]) != corriendo or novedad:
+                if (
+                    reiniciado
+                    or nuevas
+                    or bool(estado_ciclo["running"]) != corriendo
+                    or nueva_parada != parada
+                    or novedad
+                ):
                     cursor = total
                     corriendo = bool(estado_ciclo["running"])
+                    parada = nueva_parada
                     # `lines` carries only what is new and `from` says where it
-                    # starts: resending the 400 lines of the buffer every two
+                    # starts: resending the 400 lines of the tail every two
                     # seconds would turn "live" into a trickle of megabytes.
                     yield _event(
                         "cycle",
-                        {
-                            **_with_external(estado_ciclo, externo),
+                        estado_ciclo if reiniciado else {
+                            **estado_ciclo,
                             "lines": nuevas,
                             "from": total - len(nuevas),
                         },

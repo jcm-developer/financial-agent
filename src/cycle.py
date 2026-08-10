@@ -20,7 +20,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from . import market_calendar
+from . import market_calendar, stop_signal
 from .analyst import Analyst
 from .broker import Broker, BrokerError
 from .config import Settings
@@ -37,6 +37,22 @@ log = logging.getLogger(__name__)
 # A normal cycle with the funnel takes ~20; 90 leaves plenty of room without
 # leaving the agent stopped all night because of a container that died.
 STALE_CYCLE_MINUTES = 90
+
+#: What is recorded and shown when the stop came from the interface. It ends up in
+#: `cycles.error` and in the summary, both of which are read on screen, so it is
+#: screen text (and it is what tells this 'halted' from the kill switch's).
+STOP_REASON = "Parada solicitada desde la interfaz."
+
+
+class CycleStopped(Exception):
+    """A stop was requested from the interface and honoured at a checkpoint.
+
+    An exception and not a `return`, because the request has to be honoured from
+    inside two nested loops **and** the closing block —equity snapshot and
+    `finish_cycle`— has to run all the same: a cycle that stops without closing
+    its row blocks the next one for the 90 minutes of `STALE_CYCLE_MINUTES`. It is
+    caught in `run()` and never leaves this module.
+    """
 
 
 @dataclass
@@ -61,6 +77,10 @@ class CycleReport:
     exits_forced: int = 0
     exits_discretionary: int = 0
     halted_reason: str | None = None
+    #: True when the cycle was cut short because it was asked to stop. Kept apart
+    #: from `halted_reason` so the summary does not print "KILL SWITCH" over a stop
+    #: somebody asked for: they are opposite readings of the same short cycle.
+    stopped: bool = False
     screened: str | None = None
     analyst_calls: int = 0
     analyst_failures: int = 0
@@ -103,7 +123,9 @@ class CycleReport:
                 f"Analista: {self.analyst_failures} de {self.analyst_calls} "
                 "llamadas sin respuesta"
             )
-        if self.halted_reason:
+        if self.stopped:
+            lines.append(f"PARADA: {self.halted_reason}")
+        elif self.halted_reason:
             lines.append(f"KILL SWITCH: {self.halted_reason}")
         for error in self.errors:
             lines.append(f"Error: {error}")
@@ -260,6 +282,10 @@ class TradingCycle:
             settings=settings.snapshot(),
         )
         report.cycle_id = cycle_id
+        # Any request still lying around is for an earlier cycle: this one did not
+        # exist a line ago. Cleared here so a Parar that arrived a second too late
+        # does not stop the cycle that comes after the one it was meant for.
+        stop_signal.clear(settings.db_path)
         log.info("Ciclo %s iniciado. %s", cycle_id, settings.describe())
         if settings.risk_summary:
             log.info("Riesgo: %s", settings.risk_summary)
@@ -274,6 +300,19 @@ class TradingCycle:
             self._run_phases(
                 report, portfolio_id, cycle_id, account, symbols, market_open, snapshots
             )
+        except CycleStopped:
+            # 'halted' and not a status of its own: `cycles.status` has a CHECK with
+            # four values and SQLite cannot alter a constraint, so 'stopped' would
+            # mean rebuilding the table six others hang off — and on an already
+            # created database the old CHECK would reject the value on the very day
+            # somebody presses the button. Same call `_grade_analyst` documents.
+            # What separates the two 'halted' is `error`: the kill switch leaves it
+            # empty and records a `risk_event`; this writes the reason.
+            report.status = "halted"
+            report.stopped = True
+            report.halted_reason = STOP_REASON
+            report.errors.append(STOP_REASON)
+            log.warning("Ciclo detenido: %s", STOP_REASON)
         except (BrokerError, MarketDataError, DatabaseError) as exc:
             report.status = "failed"
             report.errors.append(str(exc))
@@ -624,6 +663,7 @@ class TradingCycle:
             if snapshot is None or row is None:
                 continue
 
+            self._check_stop(cycle_id)
             proposal = self.analyst.evaluate_exit(
                 position=position,
                 snapshot=snapshot,
@@ -666,6 +706,11 @@ class TradingCycle:
                 closed_this_cycle.add(symbol)
 
         # --- 6. Entradas --------------------------------------------------
+        # Checked before the phase and not only inside its loop: the entries are
+        # what open positions, so a stop asked for during the exits must not buy
+        # anything on its way out.
+        self._check_stop(cycle_id)
+
         if kill_switch.triggered:
             log.info("No se evaluan entradas: el kill switch esta activo.")
             report.status = "halted"
@@ -695,6 +740,7 @@ class TradingCycle:
                 log.info("Limite de posiciones abiertas alcanzado; se detiene la busqueda.")
                 break
 
+            self._check_stop(cycle_id)
             snapshot = snapshots[symbol]
             proposal = self.analyst.evaluate_entry(snapshot, account)
             if proposal is None:
@@ -741,6 +787,23 @@ class TradingCycle:
     # ------------------------------------------------------------------
     # Ejecucion
     # ------------------------------------------------------------------
+
+    def _check_stop(self, cycle_id: str) -> None:
+        """Honours a stop asked for from the interface, if it is for this cycle.
+
+        Called **right before each call to the model**, which is where the time
+        goes: a cycle spends its twenty minutes waiting for the analyst, so
+        checking here makes the stop land within seconds and never in the middle
+        of sending an order — the two things a SIGTERM cannot promise
+        (`src/stop_signal.py`).
+
+        The request is deleted as it is honoured so the same file cannot stop the
+        next cycle too.
+        """
+        if not stop_signal.requested_for(self.settings.db_path, cycle_id):
+            return
+        stop_signal.clear(self.settings.db_path)
+        raise CycleStopped
 
     def _can_execute(self, market_open: bool) -> bool:
         if self.settings.dry_run:

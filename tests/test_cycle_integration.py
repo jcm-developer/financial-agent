@@ -21,6 +21,7 @@ from helpers import (
     make_settings,
     rising,
 )
+from src import stop_signal
 from src.config import RiskLimits
 from src.cycle import CycleReport
 from src.db import Database
@@ -388,3 +389,74 @@ def test_nothing_is_reported_when_every_position_has_its_price(db):
 
     assert report.positions_without_price == []
     assert "SIN PRECIO" not in report.summary()
+
+
+# ----------------------------------------------------------------------
+# F4.21 -- Parada pedida desde la interfaz
+# ----------------------------------------------------------------------
+
+def test_a_stop_asked_for_mid_cycle_is_honoured_and_the_row_is_closed(db, tmp_path):
+    """The request is written while the analyst is being asked, which is where the
+    twenty minutes of a cycle go and therefore where Parar is pressed.
+
+    Three things are asserted together because they are the whole promise of a
+    cooperative stop, and a signal gives none of them: **the candidates after the
+    request are not analysed**, **the row is closed** —left in 'running' it would
+    block the next cycle for the 90 minutes of `STALE_CYCLE_MINUTES`— and **the
+    reason is recorded**, which is what tells this 'halted' from the kill switch's.
+    """
+    settings = make_settings(db_path=str(tmp_path / "test.db"))
+    llm = StubLLM(entry=BUY, exit_=HOLD_EXIT)
+    answer = llm.complete_json
+
+    def press_stop(**kwargs):
+        running = db.query("select id from cycles where status = 'running'")
+        stop_signal.request(settings.db_path, running[0]["id"])
+        return answer(**kwargs)
+
+    llm.complete_json = press_stop
+
+    report = make_cycle(
+        db, settings, llm, StubMarketData({s: rising() for s in WATCHLIST})
+    ).run()
+
+    assert report.stopped is True
+    assert report.status == "halted"
+    # "PARADA" and not "KILL SWITCH": the summary is read on screen and those are
+    # opposite readings of the same short cycle.
+    assert "PARADA: Parada solicitada desde la interfaz." in report.summary()
+    # Only the first of the two candidates was asked about: the checkpoint before
+    # the second call honoured the request.
+    assert llm.calls == ["entry"]
+
+    row = db.query("select status, finished_at, error from cycles")[0]
+    assert row["status"] == "halted"
+    assert row["finished_at"] is not None
+    assert "Parada solicitada" in row["error"]
+
+    # What it had already done stands, and that is deliberate: the position is
+    # open, with its stop, and undoing it would be trading on nobody's decision.
+    assert report.orders_submitted == 1
+    assert len(db.get_open_positions(_portfolio(db))) == 1
+
+    # And the request is gone, so the scheduler's next cycle is not stopped too.
+    assert stop_signal.pending(settings.db_path) is None
+
+
+def test_a_request_left_over_from_an_earlier_cycle_does_not_stop_this_one(db, tmp_path):
+    """A Parar that arrives a second after the cycle ends leaves the file behind.
+    Honouring it later would look like the scheduler skipping a session."""
+    settings = make_settings(db_path=str(tmp_path / "test.db"))
+    stop_signal.request(settings.db_path, "ciclo-de-ayer")
+
+    report = make_cycle(
+        db, make_settings(db_path=settings.db_path),
+        StubLLM(entry=BUY, exit_=HOLD_EXIT),
+        StubMarketData({s: rising() for s in WATCHLIST}),
+    ).run()
+
+    assert report.stopped is False
+    assert report.status == "completed"
+    # Cleared on registering: at that instant no pending request can be for this
+    # cycle, so leaving it would only wait to stop the wrong one.
+    assert stop_signal.pending(settings.db_path) is None

@@ -124,6 +124,7 @@ export interface CycleControl {
   enabled: boolean;
   running: boolean;
   external?: boolean;
+  stop_requested?: boolean;
   profile?: string | null;
   dry_run?: boolean;
   stage: string;

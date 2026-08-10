@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { money, percent, signClass, signedMoney } from "@/lib/format";
+import { money, percent, sentence, signClass, signedMoney } from "@/lib/format";
 
 /**
  * The signs, which had a bug on screen and therefore have tests now.
@@ -102,5 +102,18 @@ describe("signClass", () => {
   it("tells no data from zero", () => {
     expect(signClass(null)).toBe("text-text-muted");
     expect(signClass(undefined)).toBe("text-text-muted");
+  });
+});
+
+describe("sentence", () => {
+  it("capitalises the first letter and leaves the rest of the words alone", () => {
+    // The stage travels lowercase because the server composes it after a label
+    // ("Ciclo en marcha — En marcha, lanzado por el planificador"). CSS
+    // `capitalize` would give "En Marcha, Lanzado Por El Planificador", which is
+    // not Spanish, so it is done here.
+    expect(sentence("en marcha, lanzado por el planificador")).toBe(
+      "En marcha, lanzado por el planificador",
+    );
+    expect(sentence("")).toBe("");
   });
 });

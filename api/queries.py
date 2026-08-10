@@ -254,14 +254,20 @@ def derived_limits(settings: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def cycle_running_elsewhere(db: Database) -> bool:
-    """Whether a cycle is running that this process did not launch.
+def running_cycle(db: Database) -> dict[str, Any] | None:
+    """The cycle in 'running', with the experiment it belongs to.
 
     The API's `CycleRunner` only knows about the subprocess it spawned itself, so
     a cycle fired by the scheduler —another container— was invisible to it. This
-    is the second source, and it lives here rather than in a route because **two
-    routes need it**: `/run` to refuse a second cycle over the same book, and
-    `/control/status` and the stream to stop claiming that nothing is running.
+    is the second source, and it lives here rather than in a route because
+    **three** routes need it: `/run` to refuse a second cycle over the same book,
+    `/control/status` and the stream to stop claiming that nothing is running, and
+    `/stop` to know **which** cycle to ask to stop (F4.21).
+
+    It returns the row and not a bool because those three want different halves of
+    it: the id is what a stop request names (`src/stop_signal.py`), and the profile
+    and the start time are what the panel had no way to show for a cycle it did not
+    launch — it said "en marcha" without saying which experiment nor since when.
 
     A failure to read is **not** treated as "one is running": the start has its own
     check inside the cycle (`find_running_cycle`) and that is the one that really
@@ -269,11 +275,22 @@ def cycle_running_elsewhere(db: Database) -> bool:
     legitimate launch.
     """
     try:
-        return bool(
-            db.query("select count(1) as n from cycles where status = 'running'")[0]["n"]
+        rows = db.query(
+            "select c.id, c.started_at, p.name as profile "
+            "from cycles c "
+            "left join portfolios f on f.id = c.portfolio_id "
+            "left join profiles p on p.id = f.profile_id "
+            "where c.status = 'running' "
+            "order by c.started_at desc limit 1"
         )
     except DatabaseError:
-        return False
+        return None
+    return rows[0] if rows else None
+
+
+def cycle_running_elsewhere(db: Database) -> bool:
+    """Whether there is a cycle in the table, for whoever only needs the yes/no."""
+    return running_cycle(db) is not None
 
 
 # ----------------------------------------------------------------------

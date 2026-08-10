@@ -177,6 +177,24 @@ export function duration(seconds: number | null | undefined): string {
 }
 
 /**
+ * Capitalises the first letter, leaving the rest alone.
+ *
+ * It exists for the texts the server writes in the middle of a sentence and the
+ * screen shows at the start of one: the cycle's stage is `en marcha, lanzado por
+ * el planificador` because `api/runner.py` composes it after a label, and the
+ * panel puts it after a dash where it reads as its own sentence.
+ *
+ * Not `capitalize` in CSS, which would also uppercase the initial of every other
+ * word: `En Marcha, Lanzado Por El Planificador` is not Spanish.
+ *
+ * @param text - Text to capitalise. Empty is returned unchanged.
+ * @return The text with its first letter in upper case.
+ */
+export function sentence(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
  * The colour class of a signed figure.
  *
  * Uses `delta-good`/`delta-bad` and not `positive`/`negative`, which is the

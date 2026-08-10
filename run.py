@@ -41,7 +41,7 @@ import os
 import sys
 from dataclasses import replace
 
-from src import fees
+from src import cycle_log, fees
 from src.config import ConfigError, DashboardSettings, Infra, Settings
 from src.cycle import TradingCycle
 from src.llm import LLMClient, LLMError
@@ -49,6 +49,13 @@ from src.llm import LLMClient, LLMError
 #: `POST /api/profiles` applies the same rule. Here it is only used for the
 #: --help text.
 from src.profile_settings import MAX_LIVE_SYMBOLS as MAX_LIVE_SYMBOLS
+
+
+#: Commands whose output is mirrored into the shared log file, for the Ciclos
+#: screen to show live (see `src/cycle_log.py`). They are the two that operate on
+#: the book: the rest either read or configure, and nobody watches them from the
+#: interface.
+MIRRORED_COMMANDS = {"cycle", "close-experiment"}
 
 
 def setup_logging(level: str) -> None:
@@ -844,8 +851,23 @@ def main(argv: list[str] | None = None) -> int:
             return 130
 
     infra = Infra.load(env_file=args.env_file)
-    setup_logging(infra.log_level)
 
+    # The mirror wraps `setup_logging` and not just the command, and that order is
+    # the whole trick: `basicConfig` keeps the stream it is handed, so installing
+    # the mirror afterwards would leave every log line out of the file and only
+    # the `print`s in it.
+    if args.command in MIRRORED_COMMANDS:
+        with cycle_log.capture(infra.db_path):
+            setup_logging(infra.log_level)
+            return _dispatch(args, infra)
+
+    setup_logging(infra.log_level)
+    return _dispatch(args, infra)
+
+
+def _dispatch(args, infra: Infra) -> int:
+    """Runs the command. Split out of `main` so the mirror can wrap the whole of
+    it —logging included— without indenting the dispatch inside a `with`."""
     try:
         if args.command == "profiles":
             return command_profiles(infra)

@@ -251,6 +251,16 @@ falla con «not authorized» al compilar la sentencia. Escribibles solo `profile
 ejecuta SQL libre. Por eso lanzar un ciclo es un subproceso ([api/runner.py](api/runner.py)) y
 no una llamada en proceso.
 
+**Los dos ficheros del volumen compartido.** El ciclo y la API no comparten
+proceso —ni contenedor, si lo lanzó el planificador—, así que lo que tienen que
+decirse va en dos ficheros junto a la base, y no por la red ni por la base:
+[src/cycle_log.py](src/cycle_log.py) (`cycle.log`, lo escribe `run.py` y lo lee la
+API para el log en vivo de la pantalla de Ciclos) y
+[src/stop_signal.py](src/stop_signal.py) (`stop.request`, lo escribe la API con el
+id del ciclo a parar y lo mira el ciclo en cada punto de control). Ninguno es
+histórico, así que la garantía de arriba sigue entera: la API pide, el ciclo
+decide y registra.
+
 `GET /api/stream` (SSE) **por dentro sondea**: el ingestor está en otro proceso y no hay bus
 de eventos. Lo que gana es mover el sondeo del navegador al servidor. Las conexiones caducan a
 los 15 minutos a propósito — `EventSource` reconecta solo y así se relee la lista de símbolos.

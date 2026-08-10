@@ -72,7 +72,9 @@ def create_app(config: ApiConfig | None = None) -> FastAPI:
     app.state.config = settings
     # None when the controls are switched off. The control endpoints look at
     # this: with no runner there is no way to fire anything.
-    app.state.runner = CycleRunner() if settings.controls else None
+    app.state.runner = (
+        CycleRunner(db_path=settings.db_path) if settings.controls else None
+    )
 
     app.include_router(profiles.router)
     app.include_router(trading.router)

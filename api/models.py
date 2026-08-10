@@ -693,6 +693,11 @@ class CycleControl(BaseModel):
     #: stop it?", and the answer to the second is no. Folding them together would
     #: leave the Parar button enabled over a process this API cannot signal.
     external: bool = False
+    #: A stop has been asked for and the cycle has not reached its next checkpoint
+    #: yet (F4.21). It is on the wire because the request leaves no line in the log:
+    #: without it the panel looked identical after pressing Parar, and a button
+    #: that seems to have done nothing gets pressed again.
+    stop_requested: bool = False
     profile: str | None = None
     dry_run: bool = False
     stage: str

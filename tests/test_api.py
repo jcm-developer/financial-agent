@@ -795,14 +795,23 @@ class StubRunner:
 
     def __init__(self) -> None:
         self.started: list[tuple[str | None, bool]] = []
+        self.stopped: list[str | None] = []
         self._running = False
+        self._stop_requested = False
 
     def start(self, *, profile=None, dry_run=False):
         self.started.append((profile, dry_run))
         self._running = True
         return True, "Ciclo lanzado."
 
-    def stop(self):
+    def stop(self, cycle_id=None):
+        # The real one takes the id of the registered cycle and writes the request
+        # to the shared file (F4.21); here it is only recorded, so a test can check
+        # that the route reads it from the table and not from the runner.
+        self.stopped.append(cycle_id)
+        if cycle_id:
+            self._stop_requested = True
+            return True, "Parada pedida."
         if not self._running:
             return False, "No hay ningun ciclo en marcha."
         self._running = False
@@ -813,7 +822,7 @@ class StubRunner:
             "enabled": True, "running": self._running, "profile": None,
             "dry_run": False, "started_at": None, "finished_at": None,
             "returncode": None, "lines": [], "stage": "inactivo",
-            "elapsed_seconds": None,
+            "elapsed_seconds": None, "stop_requested": self._stop_requested,
         }
 
     def lines_since(self, index):
@@ -852,6 +861,50 @@ def test_a_cycle_is_not_launched_if_one_is_already_running(client, db_path, prof
 def test_stopping_with_no_cycle_running(client):
     client.app_ref.state.runner = StubRunner()
     assert client.post("/api/cycles/stop").status_code == 409
+
+
+def test_stopping_asks_the_registered_cycle_and_not_this_process(client, db_path, profile):
+    """F4.21: the id comes from the table, which is the only thing both containers
+    share.
+
+    That is what makes one code path serve both cases. Before, Parar was a
+    `terminate()` over this process's subprocess, so a cycle from the scheduler's
+    container had no button at all and the screen sent you to restart the
+    container — which stops the container, not the cycle, and leaves the row in
+    'running' until it ages out.
+    """
+    runner = StubRunner()
+    client.app_ref.state.runner = runner
+    seeded = seed_history(db_path, profile["id"])
+    with Database(path=db_path) as db:
+        db.execute(
+            "update cycles set status = 'running' where id = ?", (seeded["cycle_id"],)
+        )
+
+    respuesta = client.post("/api/cycles/stop")
+
+    assert respuesta.status_code == 200
+    assert runner.stopped == [seeded["cycle_id"]]
+    # And it is said on screen while the cycle has not reached its checkpoint: the
+    # request leaves no line in the log, so without this the panel would look
+    # untouched and the button would get pressed again.
+    assert client.get("/api/cycles/control/status").json()["stop_requested"] is True
+
+
+def test_the_status_says_which_experiment_the_scheduler_is_running(client, db_path, profile):
+    """The half F4.19 left out: it said "en marcha" without saying which
+    experiment nor since when, because the runner does not know and nobody asked
+    the row that does."""
+    seeded = seed_history(db_path, profile["id"])
+    with Database(path=db_path) as db:
+        db.execute(
+            "update cycles set status = 'running' where id = ?", (seeded["cycle_id"],)
+        )
+
+    state = client.get("/api/cycles/control/status").json()
+
+    assert state["profile"] == "europa-01"
+    assert state["elapsed_seconds"] is not None
 
 
 def test_with_the_controls_off_there_is_no_way_to_fire_anything(db_path):

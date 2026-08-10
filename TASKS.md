@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto)
+Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo)
 
 ---
 
@@ -1249,6 +1249,94 @@ diez sesiones en silencio.
       receta habría arreglado lo que pasa por la receta y dejado el resto igual. El
       `cursor: not-allowed` de lo deshabilitado va justo detrás, porque un control apagado no debe
       invitar al clic.
+
+- [x] **F4.21** **Parar el ciclo del planificador, que no se podía parar** (2026-08-10).
+      Reportado desde la pantalla, y es la mitad que F4.19 dejó abierta: allí se arregló el
+      rótulo —el panel decía «Sin ciclo en marcha» con uno en marcha— y se decidió **dejar
+      `Parar` apagado a propósito**, porque la API no puede mandar señales a un proceso de otro
+      contenedor y un botón que siempre falla es peor que no tener botón (F3.8). El `title`
+      remitía a `docker compose restart scheduler`, que **para el contenedor, no el ciclo**, y
+      deja la fila en `running` hasta que caduca a los 90 minutos de `STALE_CYCLE_MINUTES`.
+
+      **La decisión: la parada se pide, no se manda.** La petición viaja como **un fichero con
+      el id del ciclo junto a la base** ([src/stop_signal.py](src/stop_signal.py)), en el volumen
+      que comparten los cuatro servicios, y el ciclo lo mira **antes de cada llamada al modelo**,
+      que es donde se le van los veinte minutos. Así el mismo camino sirve para el ciclo que lanza
+      la interfaz y para el del planificador, y el ciclo se cierra **en orden**: guarda su
+      `equity_snapshot` y termina su fila con el motivo.
+
+      **Cooperativo también para el ciclo propio, y no solo para el remoto.** El `terminate()`
+      que había cortaba el proceso donde estuviera —posiblemente entre mandar una orden y
+      registrarla— y dejaba la fila en `running`. Dos mecanismos para el mismo botón habrían sido
+      dos comportamientos que explicar en pantalla. Queda un solo caso con señal: cuando **todavía
+      no hay ciclo registrado** (el proceso está bajando datos y no ha escrito nada), porque
+      entonces no hay id al que dirigir la petición y no hay histórico a medio escribir.
+
+      **El id, y no un `flag`.** Una petición que llega un segundo tarde deja el fichero puesto;
+      con un flag, el ciclo **siguiente** —el del planificador, horas después— se pararía solo y
+      se leería como una sesión saltada. Con el id, un fichero rezagado es inofensivo, y el ciclo
+      borra el que encuentre al registrarse, porque en ese instante ninguna petición puede ser
+      para él.
+
+      - ⚠️ **`status` nuevo descartado: se registra como `halted`.** `cycles.status` tiene un
+        CHECK de cuatro valores y SQLite no puede alterar una restricción, así que `'stopped'`
+        obligaba a reconstruir la tabla de la que cuelgan seis con `on delete cascade` —y sobre
+        una base ya creada el CHECK viejo rechazaría el valor **justo el día en que alguien pulsa
+        el botón**. Es la misma llamada que ya documentan `_grade_analyst` e `ingest_runs.kind`.
+        Lo que separa los dos `halted` es `error`: el del kill switch lo deja vacío y registra un
+        `risk_event`; este escribe «Parada solicitada desde la interfaz.». Y en memoria
+        `CycleReport.stopped` existe para que el resumen no imprima «KILL SWITCH» sobre una parada
+        que pidió una persona: son lecturas opuestas del mismo ciclo corto.
+      - **Consecuencias que hay que asumir, y están dichas en pantalla:** no es instantáneo
+        —cae en el punto de control siguiente, que con una llamada al modelo en vuelo puede tardar
+        lo que tarde—, **lo ya ejecutado sigue ejecutado** (deshacerlo sería operar por decisión
+        de nadie) y el ciclo queda en el histórico como **parcial**, no como sesión tranquila.
+      - El panel gana `stop_requested`, porque la petición **no deja línea en el log** y sin eso
+        pulsar `Parar` no cambiaba nada visible durante hasta un minuto — y un botón que parece no
+        haber hecho nada se vuelve a pulsar. Va también por el SSE, para las pestañas que no lo
+        pulsaron.
+      - De paso, el estado del ciclo externo trae **de qué experimento es y desde cuándo**:
+        `queries.running_cycle` ya leía esa fila para saber que había una, y el panel decía «en
+        marcha» sin decir de quién. `with_external` sube a [api/runner.py](api/runner.py) porque
+        ahora la comparten `/control/status`, el SSE y los tests.
+
+- [x] **F4.22** **El log en vivo estaba en blanco justo para los ciclos que nadie mira desde una
+      terminal** (2026-08-10). Reportado junto a F4.21. `api/runner.py` leía la tubería de **su**
+      subproceso, así que el ciclo del planificador —otro contenedor, otra tubería— no tenía log
+      que enseñar, y era el caso normal: los ciclos de verdad los lanza el planificador.
+
+      **El log va a un fichero junto a la base** ([src/cycle_log.py](src/cycle_log.py)), en el
+      volumen compartido, y la API lee **la cola** de ese fichero en lugar de una tubería. Un solo
+      mecanismo para los dos casos, no dos fuentes que empalmar: con la tubería para lo propio y
+      el fichero para lo ajeno, el cursor de líneas del SSE cambiaría de origen a mitad de ciclo.
+
+      - **Lo escribe `run.py`, no `cycle.py`.** Son las líneas que el ciclo ya imprime para la
+        consola; un canal estructurado aparte obligaría a `cycle.py` a saber que existe una
+        interfaz, que es lo mismo que evita que la etapa se deduzca del texto. `cycle_log.capture`
+        se entra **antes de `setup_logging`**, y ese orden es todo el truco: `basicConfig` se queda
+        con el `stream` que le dan, así que instalar el espejo después dejaría fuera del fichero
+        todas las líneas de log y solo metería los `print`.
+      - **El espejo no roba la consola.** `docker compose logs -f scheduler` sigue enseñando el
+        ciclo, que era la única forma de seguirlo antes de que hubiera pantalla, y un fallo al
+        escribir el fichero se traga a propósito: el fichero es la copia para la interfaz, el
+        ciclo es la operación.
+      - **Descartada la base de datos** como canal: una fila por línea es una escritura por línea
+        compitiendo con el ingestor por el cerrojo, más una tabla que podar. El log de un ciclo
+        vale lo que dura el ciclo, y un fichero que se vacía en cada arranque lo dice solo.
+      - Se arregló al paso un empalme que ya estaba mal: al vaciarse el log, un cliente con el
+        cursor por delante recibía `from` mayor que sus líneas y se quedaba con las primeras del
+        ciclo anterior. Ahora una cola más corta que el cursor manda **el estado entero**, sin
+        `from`, para que el cliente reemplace en vez de empalmar.
+
+- [x] **F4.23** **«Ciclo en marcha (del planificador) — en marcha, lanzado por el planificador»**
+      (2026-08-10). El paréntesis y la etapa decían lo mismo dos veces en la misma línea, porque
+      F4.19 metió quién lo lanzó en los dos sitios.
+
+      El rótulo dice **si hay un ciclo** y la etapa dice **qué está haciendo**; quién lo lanzó es
+      de la segunda. Queda «Ciclo en marcha — En marcha, lanzado por el planificador». La etapa la
+      compone el servidor en minúscula porque va detrás de una etiqueta, así que la pantalla la
+      capitaliza con `sentence()` ([app/src/lib/format.ts](app/src/lib/format.ts)) y no con
+      `capitalize` de CSS, que daría «En Marcha, Lanzado Por El Planificador» — eso no es español.
 
 ### F5 — Pantalla de perfiles / experimentos
 
