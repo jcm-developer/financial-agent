@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables)
+Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; apuntadas F4.18 (quitar el `VIVO` de Posiciones), F9.10 (el tamaño lo decide el tope y no la conviccion, medido) y F9.11 (auditar la comision en todo el circuito, no solo en la entrada))
 
 ---
 
@@ -1182,6 +1182,23 @@ diez sesiones en silencio.
 
       **673 tests en verde (+3), typecheck limpio, 73 tests del frontend (+2), tipos
       regenerados.**
+- [ ] **F4.18** **Quitar la etiqueta `VIVO` de la columna Último** en
+      [app/src/pages/Positions.tsx](app/src/pages/Positions.tsx). Pedido el 2026-08-10: con el
+      ingestor sano es el caso normal en todas las filas, así que es una columna de ruido verde
+      repetida que no informa de nada.
+
+      ⚠️ **Quitar el componente entero no es lo pedido, y conviene no hacerlo de más.**
+      [PriceSource](app/src/components/PriceSource.tsx) tiene **tres** estados y solo uno sobra:
+      `VIVO` es el caso normal, pero `CICLO` avisa de que esa fila se valora con el precio que
+      vio el analista en su último ciclo —que puede ser de anteayer— y `SIN PRECIO` de que la
+      posición se valora a su precio de entrada, o sea que su P&L es cero por falta de dato y no
+      porque no se haya movido. Esos dos hay que conservarlos: son justo los casos en que la
+      cifra de al lado no significa lo que parece.
+
+      Propuesta: que `PriceSource` no pinte nada cuando la fuente es `live` y siga pintando en
+      los otros dos. Con eso la etiqueta pasa de decorar a avisar, que es lo que hace útil una
+      etiqueta. Afecta también a Resumen, que usa el mismo componente, y eso es deseado —se
+      compartió en su día precisamente para que las dos pantallas no divergieran.
 
 ### F5 — Pantalla de perfiles / experimentos
 
@@ -2498,10 +2515,17 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
          a ser lo que su comentario decía que era, un suelo de cordura. Cambiarlo ahora sería
          apretar dos veces la misma tuerca.
       4. **El prompt del analista no las menciona.** El modelo propone stop y objetivo sin
-         saber que operar cuesta dinero, así que un objetivo a +0,3 % le parece razonable.
-         **Es lo único que queda de F9.9**, y no se ha hecho con lo demás porque no es del mismo
-         tipo: los tres de arriba son reglas deterministas y este es un dato nuevo en el prompt.
-         Ojo con la regla de honestidad de F9.7 antes de tocarlo.
+         saber que operar cuesta dinero. **Es lo único que queda de F9.9**, y no se hizo con lo
+         demás porque no es del mismo tipo: los tres de arriba son reglas deterministas y este
+         es un dato nuevo en el prompt. Ojo con la regla de honestidad de F9.7 antes de tocarlo.
+
+         **Y hay medición, del 2026-08-10.** Los tres veredictos aprobados llevan
+         `target_source: 'llm'` y `stop_source: 'llm_wider'`: **los objetivos y los stops los
+         propone el modelo, no se derivan**. Y los propone estrechos y casi simétricos —CABK.MC
+         a 12,90 con stop 12,60 y objetivo 13,20, ±2,3 %— lo que da R/R de 1,07, 1,29 y 1,38 en
+         bruto. Sobre 2.038 € de posición, los 8,22 € de ida y vuelta son el **17 % de la
+         ganancia que ese objetivo persigue**. No es que el modelo se equivoque: es que está
+         optimizando un ratio del que le falta un término.
 
       ⚠️ **Esto cambia lo que el experimento mide, y se hizo sabiéndolo** (decidido el
       2026-08-10, a petición). Los cinco perfiles llevan días corriendo con las reglas viejas,
@@ -2515,6 +2539,58 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       método por lo mismo que tiene los demás: el Risk Manager dimensiona con él y no puede
       saber con qué bróker habla. **El valor por defecto es la tarifa estándar y no cero**,
       porque cero sería la única mentira silenciosa que este módulo no se puede permitir.
+- [ ] **F9.10** ⚠️ **El tamaño de la posición no lo decide ni la convicción ni el riesgo por
+      operación: lo decide siempre el tope.** Planteado el 2026-08-10 —«el agente cada vez que
+      puede compra el máximo permitido por posición»— y **confirmado en los tres veredictos**:
+
+      | Símbolo | Regla que ató | % del capital | Riesgo asumido | Presupuesto de riesgo |
+      |---|---|---|---|---|
+      | ALV.DE | `max_position_pct` | 39,49 % | 43,20 € | 300,00 € |
+      | ACX.MC | `max_position_pct` | 39,97 % | 93,66 € | 299,90 € |
+      | CABK.MC | `max_total_exposure_pct` | 20,39 % | 45,82 € | 299,72 € |
+
+      **El deslizador de riesgo por operación está inerte en este perfil**, y es lo que la tabla
+      enseña de golpe: el presupuesto son 300 € y el riesgo realmente asumido va de 43 a 94 €,
+      porque el tope de posición ata mucho antes. Con 3 % de riesgo y stops a 1,2× ATR, el
+      tamaño por riesgo sale de 1.000 a 1.400 acciones y el 40 % lo recorta siempre a 9 o 223.
+      Mover el deslizador de riesgo de 10 a 7 no cambiaría **ni una acción**: seguiría atando el
+      mismo tope. Eso no es un fallo de código —cada regla hace lo suyo— pero sí una
+      configuración donde dos de los tres controles no controlan nada.
+
+      **Y la convicción no interviene en el tamaño, hoy por diseño.** `risk.py` solo la usa como
+      puerta (`min_conviction`): pasa o no pasa. Las tres compras tenían convicción 70 y las tres
+      recibieron el máximo que cabía. Lo pedido es que module el tamaño.
+
+      Dos formas de arreglarlo, y no son la misma discusión:
+      - **La barata:** bajar `max_position_pct` en el perfil hasta que el presupuesto de riesgo
+        vuelva a ser el que ata. No toca código y devuelve el sentido a los deslizadores.
+      - **La pedida:** que la convicción escale el tamaño, por ejemplo interpolando entre
+        `min_conviction` y 100 sobre el presupuesto de riesgo. **No rompe la premisa del
+        proyecto** —el modelo seguiría sin ejecutar, y la convicción entraría en una fórmula
+        determinista de `risk.py`, igual que ya entra en la puerta— pero sí le da al modelo una
+        palanca sobre el dinero que hoy no tiene, y eso hay que decidirlo a propósito. ⚠️ Ojo
+        además con la calibración de F5.7: si el tamaño depende de la convicción, la convicción
+        deja de ser una variable observada y pasa a ser parte del sistema.
+
+      ⚠️ Cualquiera de las dos vuelve a partir el histórico, como F9.9.
+- [ ] **F9.11** **Auditar que las comisiones entran en *todas* las decisiones, no solo en la
+      entrada.** Pedido el 2026-08-10. F9.9 cubrió el dimensionado y el R/R de una compra; lo
+      que no se ha revisado es el resto del circuito, y son sitios distintos con respuestas
+      distintas:
+      - **Las salidas obligatorias** (`mandatory_exits`): comparan el precio con el stop y con
+        el objetivo. Probablemente **debe quedarse como está** —un stop es un stop, y meterle la
+        comisión sería moverlo— pero hay que escribirlo, no suponerlo.
+      - **La salida discrecional**, cuando el analista ve la tesis deteriorada: cerrar cuesta
+        3,00 € o 4,11 € y nadie los pesa. Salir de una posición plana es perder la comisión.
+      - **La subida de stop** (`_maybe_raise_stop`): un stop elevado hasta un punto donde lo que
+        se realiza no cubre la ida y vuelta es un stop que garantiza una pérdida.
+      - **El cierre del experimento** (F5.8), que liquida el libro entero: son N comisiones de
+        golpe y el informe final no las separa.
+      - **El screener y `min_order_notional`**, ya revisados de refilón en F9.9.3.
+
+      La forma de cerrarla no es tocar los cinco: es **decidir y dejar escrito** en cuáles entra
+      la comisión y en cuáles no, con el motivo. Hoy la respuesta a «¿lo tiene en cuenta?» es
+      «en la entrada sí, en lo demás no lo sé», y eso es lo que hay que quitar.
 
 ---
 
