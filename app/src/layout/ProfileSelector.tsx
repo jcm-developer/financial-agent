@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from "react-router";
 
-import { Select } from "@/components/pieces";
+import { Select } from "@/components/Select";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 
 /**
@@ -46,7 +46,7 @@ export function ProfileSelector() {
       label="Experimento"
       options={options}
       value={ref ?? ""}
-      onChange={(event) => navigate(`/p/${encodeURIComponent(event.target.value)}/${section}`)}
+      onChange={(name) => navigate(`/p/${encodeURIComponent(name)}/${section}`)}
     />
   );
 }

@@ -1,9 +1,10 @@
 import { createElement, type ComponentProps, type ComponentType, type ReactNode } from "react";
 
+import { Tooltip } from "@/components/Tooltip";
 import { cn } from "@/lib/utils";
 
 /**
- * The shared interface pieces.
+ * The shared interface pieces, built to the Verdana Health design system.
  *
  * It exists because the alternative —copying the class string into every
  * screen— had already begun to diverge, and in a way you cannot see by looking
@@ -17,7 +18,7 @@ import { cn } from "@/lib/utils";
  * hand again. If something needs a variant, it is added here.
  *
  * **It carries no colours of its own**: everything comes from the tokens in
- * `index.css`, which is what lets the theme switch touch no component at all.
+ * `index.css`, so the palette is defined in exactly one place.
  */
 
 /* -------------------------------------------------------------------------- */
@@ -25,19 +26,47 @@ import { cn } from "@/lib/utils";
 /* -------------------------------------------------------------------------- */
 
 /**
- * The three buttons that exist. There is deliberately no fourth solid brand
- * button: on a data screen colour fill is reserved for the figures, and a blue
- * button would compete with the chart series for the same attention.
+ * The four Verdana button variants.
+ *
+ * `primary` is the navy fill and is the page's one committing action; `secondary`
+ * is the bordered navy outline and is what most actions are; `ghost` is the slate
+ * text with no border, for what accompanies something else; `destructive` is the
+ * red fill, for what cannot be undone.
  */
-type ButtonVariant = "neutral" | "subtle" | "danger";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "destructive";
+
+/** sm 32 px · md 42 px · lg 48 px, with the padding and type size each carries. */
+export type ButtonSize = "sm" | "md" | "lg";
 
 const BUTTON_BASE =
-  "inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 py-1 text-[13px] transition-colors hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-card";
+  "inline-flex select-none items-center justify-center gap-2 rounded-md font-medium " +
+  "transition-colors duration-150 ease-calm " +
+  // Verdana's disabled state: 0.4 opacity, the disabled cursor, and every hover
+  // and focus state suppressed — which is what the `disabled:hover:` resets do.
+  "disabled:cursor-not-allowed disabled:opacity-40";
 
-const BUTTON_TONE: Record<ButtonVariant, string> = {
-  neutral: "",
-  subtle: "text-text-secondary",
-  danger: "text-delta-bad",
+const BUTTON_VARIANT: Record<ButtonVariant, string> = {
+  primary:
+    "bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover disabled:hover:bg-primary",
+  secondary:
+    "border border-primary bg-transparent text-primary hover:bg-primary/4 disabled:hover:bg-transparent",
+  ghost:
+    "bg-transparent text-text-secondary hover:bg-surface-sunken disabled:hover:bg-transparent",
+  destructive:
+    "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive-hover disabled:hover:bg-destructive",
+};
+
+const BUTTON_SIZE: Record<ButtonSize, string> = {
+  sm: "h-8 px-3.5 text-body-sm",
+  md: "h-[2.625rem] px-5.5 text-body-sm",
+  lg: "h-12 px-7 text-body",
+};
+
+/** The icon size that pairs with each button size. */
+const BUTTON_ICON: Record<ButtonSize, string> = {
+  sm: "size-4",
+  md: "size-4",
+  lg: "size-5",
 };
 
 /**
@@ -47,51 +76,61 @@ const BUTTON_TONE: Record<ButtonVariant, string> = {
  * address, see it in the status bar— so in those places the appearance is
  * shared and the element is not.
  *
- * @param variant - Which of the three button tones to use.
+ * @param variant - Which of the four button variants to use.
  * @param className - Extra classes, merged so they win over the recipe.
+ * @param size - Which of the three heights to use.
  * @return The class string a `<Link>` needs to look like a button.
  */
-export function buttonClasses(variant: ButtonVariant = "neutral", className?: string) {
-  return cn(BUTTON_BASE, BUTTON_TONE[variant], className);
+export function buttonClasses(
+  variant: ButtonVariant = "secondary",
+  className?: string,
+  size: ButtonSize = "md",
+) {
+  return cn(BUTTON_BASE, BUTTON_VARIANT[variant], BUTTON_SIZE[size], className);
 }
 
 /**
  * The application's button.
  *
  * @param props - Button props, on top of everything a `<button>` accepts.
- * @param props.variant - Which of the three button tones to use.
- * @param props.icon - Decorative icon rendered before the label.
+ * @param props.variant - Which of the four button variants to use.
+ * @param props.size - Which of the three heights to use.
+ * @param props.icon - Decorative icon rendered before the label. Verdana asks
+ *     for iconography alongside text labels, never instead of them.
  * @return The rendered button.
  */
 export function Button({
-  variant = "neutral",
+  variant = "secondary",
+  size = "md",
   icon: Icon,
   className,
   children,
   ...rest
 }: ComponentProps<"button"> & {
   variant?: ButtonVariant;
+  size?: ButtonSize;
   /** Icon to the left of the text. Always decorative: the button's text is what it says. */
   icon?: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 }) {
   return (
-    <button type="button" className={buttonClasses(variant, className)} {...rest}>
-      {Icon && <Icon className="size-3.5 shrink-0" aria-hidden />}
+    <button type="button" className={buttonClasses(variant, className, size)} {...rest}>
+      {Icon && <Icon className={cn(BUTTON_ICON[size], "shrink-0")} aria-hidden />}
       {children}
     </button>
   );
 }
 
 /**
- * The faint underline links carry inside tables and text.
+ * Links, in the sage that Verdana reserves for interactive elements.
  *
- * `decoration-border` at rest and `decoration-current` on hover: the underline
- * is always there —removing it would leave the link distinguishable by colour
- * alone, which is exactly what F4.9 forbids— but it does not compete with the
- * figure next to it until you point at it.
+ * The underline is **always** there: sage against navy body text is a hue
+ * difference, and a hue difference is exactly what colour blindness takes away.
+ * It is faint at rest so it does not compete with the figure beside it, and
+ * becomes solid on hover.
  */
 export const LINK_CLASSES =
-  "underline decoration-border transition-colors hover:decoration-current";
+  "text-accent underline decoration-accent/30 underline-offset-2 transition-colors " +
+  "duration-150 hover:text-accent-hover hover:decoration-current";
 
 /**
  * A `<button>` that reads as a link.
@@ -102,22 +141,23 @@ export const LINK_CLASSES =
  * to announce it as what it does.
  *
  * @param props - Button props, on top of everything a `<button>` accepts.
- * @param props.variant - Whether the text inherits the colour or is muted.
+ * @param props.variant - Whether the text is the sage of a link or muted slate.
  * @return The rendered button.
  */
 export function LinkButton({
-  variant = "subtle",
+  variant = "accent",
   className,
   children,
   ...rest
-}: ComponentProps<"button"> & { variant?: "neutral" | "subtle" }) {
+}: ComponentProps<"button"> & { variant?: "accent" | "subtle" }) {
   return (
     <button
       type="button"
       className={cn(
-        LINK_CLASSES,
-        "text-[13px]",
-        variant === "subtle" && "text-text-secondary",
+        "text-body-sm underline underline-offset-2 transition-colors duration-150",
+        variant === "accent"
+          ? "text-accent decoration-accent/30 hover:text-accent-hover hover:decoration-current"
+          : "text-text-secondary decoration-border hover:text-foreground hover:decoration-current",
         className,
       )}
       {...rest}
@@ -132,40 +172,43 @@ export function LinkButton({
 /* -------------------------------------------------------------------------- */
 
 /**
- * The card: thin border, surface background and a shadow that is `none` in dark.
- *
- * The shadow lives here and not in each place because two of the seven cards
- * used to carry it, and in the light theme that made some float and others not
- * with no criterion at all.
+ * Verdana gives the card two forms and they are alternatives, not a scale:
+ * **default** is bordered and flat, **elevated** drops the border and takes the
+ * md shadow instead. A card with both would read as two levels at once.
  */
-const CARD_BASE = "rounded-lg border border-border bg-card shadow-[var(--shadow-card)]";
+const CARD_DEFAULT = "rounded-md border border-border bg-card";
+const CARD_ELEVATED = "rounded-md bg-card shadow-lg";
 
 /**
  * The card recipe as a class string, for when the card is a `<Link>`: the
  * experiment list is made of cards that navigate.
  *
- * @param padding - Padding utility. `p-0` for a card that wraps a table.
+ * @param padding - Padding utility. Verdana's card padding is 24 px (`p-6`).
+ *     `p-0` for a card that wraps a table.
  * @param className - Extra classes, merged so they win over the recipe.
+ * @param elevated - Shadow instead of border.
  * @return The class string.
  */
-export function cardClasses(padding = "p-4", className?: string) {
-  return cn(CARD_BASE, padding, className);
+export function cardClasses(padding = "p-6", className?: string, elevated = false) {
+  return cn(elevated ? CARD_ELEVATED : CARD_DEFAULT, padding, className);
 }
 
 /**
- * The card: thin border, surface background, and a shadow that is `none` in dark.
+ * The card: white surface, hairline slate border, 8 px radius, 24 px of padding.
  *
  * @param props - Card props, on top of everything a `<div>` accepts.
  * @param props.as - Element to render, so a card can carry the right semantics
  *     without changing how it looks.
  * @param props.padding - Padding utility.
+ * @param props.elevated - Drops the border and takes the md shadow instead.
  * @param props.dashed - Dashed border, for the gap left by something that does
  *     not exist yet.
  * @return The rendered card.
  */
 export function Card({
   as = "div",
-  padding = "p-4",
+  padding = "p-6",
+  elevated = false,
   dashed = false,
   className,
   children,
@@ -175,12 +218,14 @@ export function Card({
   /**
    * The padding, as a prop and not as something overridden from `className`.
    *
-   * `p-4` and `px-4 py-6` are not the same utility group, so which one wins is
+   * `p-6` and `px-6 py-8` are not the same utility group, so which one wins is
    * decided by the order of the stylesheet and not the order of the classes:
    * passing it here is what makes a card with no padding (`p-0`, the one that
    * wraps a table) predictable.
    */
   padding?: string;
+  /** Verdana's elevated card: no border, md shadow. */
+  elevated?: boolean;
   /** Dashed border: the gap left by something that is not there yet (empties, pending screens). */
   dashed?: boolean;
 }) {
@@ -189,11 +234,33 @@ export function Card({
     {
       className: cardClasses(
         padding,
-        cn(dashed && "border-dashed shadow-none", className),
+        cn(dashed && "border-dashed bg-transparent shadow-none", className),
+        elevated && !dashed,
       ),
       ...rest,
     },
     children,
+  );
+}
+
+/**
+ * Verdana's tinted header strip: navy ground, white text, sitting flush inside
+ * the top of a card. It is the category label of the block underneath.
+ *
+ * @param props - Everything a `<div>` accepts.
+ * @return The rendered strip, already squaring its bottom corners.
+ */
+export function CardHeaderStrip({ className, children, ...rest }: ComponentProps<"div">) {
+  return (
+    <div
+      className={cn(
+        "rounded-t-md bg-primary px-6 py-3 text-caption tracking-[0.5px] text-primary-foreground uppercase",
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -206,7 +273,10 @@ export function Card({
 export function Block({ className, children, ...rest }: ComponentProps<"pre">) {
   return (
     <pre
-      className={cn("overflow-auto rounded-md bg-surface-sunken p-3 text-xs", className)}
+      className={cn(
+        "overflow-auto rounded-md bg-surface-sunken p-4 text-code text-text-secondary",
+        className,
+      )}
       {...rest}
     >
       {children}
@@ -222,8 +292,7 @@ export function Block({ className, children, ...rest }: ComponentProps<"pre">) {
  * A screen's `<h1>`, with its bottom gap included.
  *
  * `aside` is for whatever accompanies the title on the same line —the profile's
- * risk summary, say— and is placed to the right with the baselines aligned,
- * which is what stops 13 px text next to 17 px text from looking dropped.
+ * risk summary, say— and is placed to the right with the baselines aligned.
  *
  * @param props - Title props.
  * @param props.children - The title itself.
@@ -237,14 +306,14 @@ export function PageTitle({
   children: ReactNode;
   aside?: ReactNode;
 }) {
-  const title = <h1 className="text-[17px] font-semibold tracking-tight">{children}</h1>;
+  const title = <h1 className="text-h1">{children}</h1>;
 
-  if (!aside) return <div className="mb-5">{title}</div>;
+  if (!aside) return <div className="mb-8">{title}</div>;
 
   return (
-    <div className="mb-5 flex flex-wrap items-baseline justify-between gap-3">
+    <div className="mb-8 flex flex-wrap items-baseline justify-between gap-4">
       {title}
-      <p className="text-[13px] text-text-secondary">{aside}</p>
+      <p className="text-body-sm text-text-secondary">{aside}</p>
     </div>
   );
 }
@@ -264,16 +333,7 @@ export function SectionTitle({
   children: ReactNode;
   className?: string;
 }) {
-  return (
-    <h2
-      className={cn(
-        "text-[13px] font-semibold tracking-wide text-text-secondary uppercase",
-        className,
-      )}
-    >
-      {children}
-    </h2>
-  );
+  return <h2 className={cn("text-h3", className)}>{children}</h2>;
 }
 
 /**
@@ -298,11 +358,7 @@ export function BlockTitle({
   as?: "h1" | "h2" | "h3";
   className?: string;
 }) {
-  return createElement(
-    as,
-    { className: cn("text-[13px] font-semibold", className) },
-    children,
-  );
+  return createElement(as, { className: cn("text-h4", className) }, children);
 }
 
 /**
@@ -314,9 +370,8 @@ export function BlockTitle({
  * without the pairing a screen reader just reads eight labels and then eight
  * numbers.
  *
- * It lives here because it already existed twice, written by hand, and a third
- * copy is exactly the drift this module was created to stop. It has to sit
- * inside a `<dl>`.
+ * The figure goes in Fira Code through `.tabular`, which is Verdana's rule for
+ * results. It has to sit inside a `<dl>`.
  *
  * @param props - Stat props.
  * @param props.label - The label, in the interface language.
@@ -342,11 +397,13 @@ export function Stat({
 }) {
   return (
     <div>
-      <dt className="text-text-muted">{label}</dt>
-      <dd className={cn("tabular", valueClass)} title={title}>
+      <dt className="text-caption text-text-secondary">{label}</dt>
+      <dd className={cn("tabular mt-1 text-body font-medium", valueClass)} title={title}>
         {value}
       </dd>
-      {children && <dd className="text-xs leading-snug text-text-muted">{children}</dd>}
+      {children && (
+        <dd className="mt-1 text-caption font-normal text-text-secondary">{children}</dd>
+      )}
     </div>
   );
 }
@@ -356,7 +413,7 @@ export function Stat({
 /* -------------------------------------------------------------------------- */
 
 /**
- * An inline error.
+ * An inline notice, in the four state tones.
  *
  * It carries `role="alert"` because it almost always appears after an action
  * —launching a cycle, stopping it, a query that fails on refresh— and without it
@@ -364,20 +421,27 @@ export function Stat({
  * pressed and the new text is elsewhere in the document.
  *
  * @param props - Everything a `<div>` accepts.
+ * @param props.tone - Which state hue tints it. Errors by default, which is what
+ *     the overwhelming majority of these are.
  * @return The rendered alert, already carrying `role="alert"`.
  */
 export function Alert({
+  tone = "error",
   className,
   children,
   ...rest
-}: ComponentProps<"div">) {
+}: ComponentProps<"div"> & { tone?: "error" | "warning" | "success" | "info" }) {
+  const TONE = {
+    error: "bg-error/8 text-error-ink",
+    warning: "bg-warning-mark/8 text-warning",
+    success: "bg-success/8 text-success-ink",
+    info: "bg-info/8 text-info-ink",
+  } as const;
+
   return (
     <div
       role="alert"
-      className={cn(
-        "rounded-md border border-negative/40 bg-card p-3 text-[13px] text-negative-ink",
-        className,
-      )}
+      className={cn("rounded-md p-4 text-body-sm", TONE[tone], className)}
       {...rest}
     >
       {children}
@@ -407,34 +471,59 @@ export function Loading({
   className?: string;
 }) {
   return (
-    <p role="status" className={cn("text-[13px] text-text-muted", className)}>
+    <p role="status" className={cn("text-body-sm text-text-secondary", className)}>
       {text}
     </p>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/* Badges                                                                     */
+/* Chips                                                                      */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Bordered pill: counts, header states.
- *
- * @param props - Badge props, on top of everything a `<span>` accepts.
- * @param props.compact - Tighter variant, for when the pill sits inside a row.
- * @return The rendered badge.
+ * Verdana's chip: 12 px, medium, uppercase, half a pixel of tracking, 4 px
+ * radius. Its variants are two different jobs and mixing them is the easy
+ * mistake — `filter`/`filterActive` are a **control** you can press, and the
+ * three status tones are a **read-only state**.
  */
-export function Badge({
-  compact = false,
+export type ChipVariant =
+  | "filter"
+  | "filterActive"
+  | "success"
+  | "warning"
+  | "error"
+  | "info"
+  | "neutral";
+
+const CHIP_VARIANT: Record<ChipVariant, string> = {
+  filter: "border border-border bg-background text-foreground",
+  filterActive: "bg-primary text-primary-foreground",
+  success: "bg-success/8 text-success-ink",
+  warning: "bg-warning-mark/8 text-warning",
+  error: "bg-error/8 text-error-ink",
+  info: "bg-info/8 text-info-ink",
+  neutral: "bg-surface-sunken text-text-secondary",
+};
+
+/**
+ * The chip.
+ *
+ * @param props - Chip props, on top of everything a `<span>` accepts.
+ * @param props.variant - Which of the seven tones to use.
+ * @return The rendered chip.
+ */
+export function Chip({
+  variant = "neutral",
   className,
   children,
   ...rest
-}: ComponentProps<"span"> & { compact?: boolean }) {
+}: ComponentProps<"span"> & { variant?: ChipVariant }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-[13px]",
-        compact && "px-[9px] py-0.5 text-xs font-semibold",
+        "inline-flex items-center gap-1.5 rounded-sm px-3 py-1 text-caption tracking-[0.5px] whitespace-nowrap uppercase",
+        CHIP_VARIANT[variant],
         className,
       )}
       {...rest}
@@ -445,49 +534,81 @@ export function Badge({
 }
 
 /**
- * The tiny uppercase tag stuck to a figure: `VIVO`, `CICLO`, `SIN PRECIO`,
- * `SIN MODELO`.
+ * The state tones a `<Tag>` can take, kept as the domain's own vocabulary.
  *
- * **It is never the only carrier of meaning** (F4.9): it always comes with a
- * `title` holding the whole sentence, because four uppercase letters explain
- * nothing on their own and the colour explains even less.
+ * `<Tag>` and `<Badge>` are what the screens already call these, and they are
+ * **thin aliases over `<Chip>`** rather than components of their own: renaming
+ * thirty call sites would have been a change to the screens, and the point of
+ * this file is that the recipe lives in one place regardless of what the caller
+ * asks for it by.
  */
-type TagTone = "inherit" | "neutral" | "good" | "warning" | "bad";
+type TagTone = "inherit" | "neutral" | "good" | "warning" | "bad" | "info";
 
-const TAG_TONE: Record<TagTone, string> = {
-  inherit: "",
-  neutral: "text-text-muted",
-  good: "text-delta-good",
-  warning: "text-warning",
-  bad: "text-delta-bad",
+const TAG_TONE: Record<TagTone, ChipVariant> = {
+  inherit: "neutral",
+  neutral: "neutral",
+  good: "success",
+  warning: "warning",
+  bad: "error",
+  info: "info",
 };
 
 /**
- * The tiny uppercase tag stuck to a figure.
+ * Bordered chip for counts and header states.
+ *
+ * @param props - Badge props, on top of everything a `<span>` accepts.
+ * @param props.compact - Kept for the call sites that pass it. Verdana's chip is
+ *     one size, so it no longer changes anything and is accepted and ignored.
+ * @return The rendered chip.
+ */
+export function Badge({
+  compact: _compact = false,
+  className,
+  children,
+  ...rest
+}: ComponentProps<"span"> & { compact?: boolean }) {
+  return (
+    <Chip variant="filter" className={className} {...rest}>
+      {children}
+    </Chip>
+  );
+}
+
+/**
+ * The status chip stuck to a figure: `VIVO`, `CICLO`, `SIN PRECIO`, `SIN MODELO`.
+ *
+ * **It is never the only carrier of meaning**: it always comes with a `title`
+ * holding the whole sentence, because four uppercase letters explain nothing on
+ * their own and the colour explains even less.
  *
  * @param props - Tag props, on top of everything a `<span>` accepts. Callers
- *     must pass `title` with the full sentence: the colour and four uppercase
- *     letters never carry the meaning on their own (F4.9).
- * @param props.tone - Which token colours the tag, or `inherit` to inherit.
- * @return The rendered tag.
+ *     must pass `title` with the full sentence.
+ * @param props.tone - Which state tone colours it.
+ * @return The rendered chip.
  */
 export function Tag({
-  tone = "inherit",
+  tone = "neutral",
+  title,
   className,
   children,
   ...rest
 }: ComponentProps<"span"> & { tone?: TagTone }) {
-  return (
-    <span
-      className={cn(
-        "ml-1.5 align-middle text-[10px] font-semibold uppercase",
-        TAG_TONE[tone],
-        className,
-      )}
-      {...rest}
-    >
+  const chip = (
+    <Chip variant={TAG_TONE[tone]} className={cn("align-middle", className)} {...rest}>
       {children}
-    </span>
+    </Chip>
+  );
+
+  // The whole sentence goes in a Verdana tooltip rather than the browser's
+  // `title`, which the design system cannot style. Every call site already
+  // passes it, so upgrading them all is this one branch — and the ones that do
+  // not pass it degrade to a bare chip instead of breaking.
+  if (!title) return <span className="ml-2 inline-flex align-middle">{chip}</span>;
+
+  return (
+    <Tooltip content={title} className="ml-2 align-middle">
+      {chip}
+    </Tooltip>
   );
 }
 
@@ -495,8 +616,29 @@ export function Tag({
 /* Form controls                                                              */
 /* -------------------------------------------------------------------------- */
 
-const CONTROL_CLASSES =
-  "min-h-8 rounded-md border border-border bg-card px-2 py-1 text-[13px] transition-colors hover:bg-surface-sunken";
+/**
+ * The Verdana field recipe: 42 px tall, 10×14 of padding, 8 px radius, hairline
+ * border that goes navy on hover, and on focus a navy edge with its 3 px halo.
+ *
+ * The halo is a `ring` and the second pixel of the border is an inset shadow,
+ * both of which paint outside the box model: spec-ing focus as a 2 px border
+ * literally would move every character in the field by one pixel on focus.
+ *
+ * Exported because the custom `<Select>` trigger has to be the same object as an
+ * `<Input>` — it is a field, and a field that is a button still has to look like
+ * the field next to it.
+ */
+export const CONTROL_CLASSES =
+  "h-[2.625rem] w-full rounded-md border border-border bg-card px-3.5 py-2.5 text-body-sm " +
+  "text-foreground transition-[color,box-shadow,border-color] duration-150 " +
+  "placeholder:text-text-muted hover:border-primary " +
+  "focus:border-primary focus:ring-[3px] focus:ring-primary/10 focus:outline-none " +
+  "focus-visible:outline-none " +
+  "disabled:cursor-not-allowed disabled:border-border disabled:bg-surface-sunken disabled:opacity-100";
+
+/** The error state of the same recipe: red edge and a red halo. */
+export const CONTROL_INVALID =
+  "border-error ring-[3px] ring-error/10 hover:border-error focus:border-error focus:ring-error/10";
 
 /**
  * A control's label, wrapping it.
@@ -527,57 +669,42 @@ export function Field({
   return (
     <label
       className={cn(
-        "text-[13px]",
-        row ? "flex items-center gap-2" : "flex flex-col gap-1",
+        row ? "flex items-center gap-3" : "flex flex-col gap-1.5",
         className,
       )}
     >
-      <span className="text-text-muted">{label}</span>
+      <span className="text-body-sm font-medium whitespace-nowrap text-foreground">
+        {label}
+      </span>
       {children}
     </label>
   );
 }
 
 /**
- * Native dropdown.
+ * The line under a field that says what it decides.
  *
- * It is still the browser's `<select>` on purpose: this application's lists have
- * three or four entries and the native one is already keyboard-accessible
- * without pulling in a popover. It will change when something has to be shown
- * inside each option.
- *
- * @param props - Select props, on top of everything a `<select>` accepts.
- * @param props.label - Label text, in the interface language.
- * @param props.row - Label to the left instead of above.
- * @param props.fieldClass - Extra classes for the wrapping `<label>`.
- * @param props.options - Options as `[value, text]` pairs, text already in the
- *     interface language.
- * @return The rendered select inside its label.
+ * @param props - Hint props.
+ * @param props.error - Colours it red and makes it the error text instead.
+ * @param props.children - The wording.
+ * @return The rendered helper line.
  */
-export function Select({
-  label,
-  row,
-  fieldClass,
-  className,
-  options,
-  ...rest
-}: Omit<ComponentProps<"select">, "children"> & {
-  label: string;
-  row?: boolean;
-  /** Classes for the wrapping `<label>`, not for the dropdown. */
-  fieldClass?: string;
-  options: readonly (readonly [value: string, text: string])[];
+export function FieldHint({
+  error = false,
+  children,
+}: {
+  error?: boolean;
+  children: ReactNode;
 }) {
   return (
-    <Field label={label} row={row} className={fieldClass}>
-      <select className={cn(CONTROL_CLASSES, className)} {...rest}>
-        {options.map(([value, text]) => (
-          <option key={value} value={value}>
-            {text}
-          </option>
-        ))}
-      </select>
-    </Field>
+    <span
+      className={cn(
+        "text-caption font-normal",
+        error ? "text-error-ink" : "text-text-secondary",
+      )}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -587,12 +714,14 @@ export function Select({
  * @param props - Input props, on top of everything an `<input>` accepts.
  * @param props.label - Label text, in the interface language.
  * @param props.hint - The line under the field explaining what it decides.
+ * @param props.error - What is wrong with what was typed, shown instead of the hint.
  * @param props.fieldClass - Extra classes for the wrapping `<label>`.
  * @return The rendered input inside its label.
  */
 export function Input({
   label,
   hint,
+  error,
   fieldClass,
   className,
   ...rest
@@ -600,13 +729,23 @@ export function Input({
   label: string;
   /** What the field decides, when the label alone does not say it. */
   hint?: ReactNode;
+  /** What is wrong with the value. Replaces the hint and turns the field red. */
+  error?: ReactNode;
   /** Classes for the wrapping `<label>`, not for the box. */
   fieldClass?: string;
 }) {
   return (
     <Field label={label} className={fieldClass}>
-      <input className={cn(CONTROL_CLASSES, className)} {...rest} />
-      {hint && <span className="text-xs leading-snug text-text-muted">{hint}</span>}
+      <input
+        aria-invalid={error ? true : undefined}
+        className={cn(CONTROL_CLASSES, error && CONTROL_INVALID, className)}
+        {...rest}
+      />
+      {error ? (
+        <FieldHint error>{error}</FieldHint>
+      ) : (
+        hint && <FieldHint>{hint}</FieldHint>
+      )}
     </Field>
   );
 }
@@ -617,8 +756,12 @@ export function Input({
  * **The value is always in sight, and that is not decoration**: a slider whose
  * number you cannot read is a control you cannot set on purpose, and these two
  * —risk profile and diversification— are the ones the whole experiment is
- * described by (F6.5). The ends are named as well, because "1" and "10" do not
- * say which way is more risk.
+ * described by. The ends are named as well, because "1" and "10" do not say
+ * which way is more risk.
+ *
+ * The filled half of the track is a gradient stop driven by the `--fill` custom
+ * property set here: CSS cannot read an input's value, so without this the track
+ * is a uniform bar and the control stops showing where in the range it sits.
  *
  * @param props - Slider props, on top of everything an `<input type="range">` accepts.
  * @param props.label - Label text, in the interface language.
@@ -644,10 +787,10 @@ export function Slider({
   hint?: ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1 text-[13px]">
+    <label className="flex flex-col gap-1.5">
       <span className="flex items-baseline justify-between gap-2">
-        <span className="text-text-muted">{label}</span>
-        <span className="tabular font-semibold">{value}/10</span>
+        <span className="text-body-sm font-medium text-foreground">{label}</span>
+        <span className="tabular text-body-sm font-medium">{value}/10</span>
       </span>
       <input
         type="range"
@@ -655,16 +798,15 @@ export function Slider({
         max={10}
         step={1}
         value={value}
-        // `accent-primary` and not an arbitrary value: the token utility is what
-        // DESIGN.md asks for, and it repaints itself with the theme switch.
-        className={cn("h-8 w-full accent-primary", className)}
+        style={{ "--fill": `${((value - 1) / 9) * 100}%` } as React.CSSProperties}
+        className={cn("slider", className)}
         {...rest}
       />
-      <span className="flex justify-between text-xs text-text-muted">
+      <span className="flex justify-between text-caption font-normal text-text-secondary">
         <span>{low}</span>
         <span>{high}</span>
       </span>
-      {hint && <span className="text-xs leading-snug text-text-muted">{hint}</span>}
+      {hint && <FieldHint>{hint}</FieldHint>}
     </label>
   );
 }

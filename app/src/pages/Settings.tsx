@@ -7,17 +7,17 @@ import {
 } from "@/api/hooks";
 import type { AgentSettings, SettingsUpdate } from "@/api/types";
 import { DerivedLimitsPanel } from "@/components/DerivedLimitsPanel";
+import { Checkbox } from "@/components/Checkbox";
 import {
   Alert,
   Button,
   Card,
-  Field,
   Input,
   PageTitle,
   SectionTitle,
-  Select,
   Slider,
 } from "@/components/pieces";
+import { Select } from "@/components/Select";
 import { Section } from "@/components/Section";
 import { useTitle } from "@/layout/useTitle";
 import { useActiveProfile } from "@/profile/useActiveProfile";
@@ -188,7 +188,7 @@ function SettingsForm({
   return (
     <form className="flex flex-col gap-8" onSubmit={submit}>
       <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr] lg:items-start">
-        <Card padding="p-4" className="flex flex-col gap-6">
+        <Card padding="p-6" className="flex flex-col gap-6">
           <SectionTitle>Los dos deslizadores</SectionTitle>
           <Slider
             label="Perfil de riesgo"
@@ -210,28 +210,20 @@ function SettingsForm({
               setDiversification(Number(e.target.value));
             }}
           />
-          <label className="flex items-start gap-2 border-t border-border pt-4 text-[13px]">
-            <input
-              type="checkbox"
-              checked={advanced}
-              onChange={(e) => {
-                setSaved(null);
-                setAdvanced(e.target.checked);
-              }}
-              className="mt-0.5 size-4 accent-primary"
-            />
-            <span>
-              Modo avanzado: fijar los nueve límites a mano
-              <span className="mt-1 block text-xs text-text-muted">
-                {/* This is the master switch of F6.5, and its wording matters:
-                    with it off the sliders win *even if the columns still hold
-                    numbers from a previous session*. Without saying so, turning
-                    it off looks like it did nothing. */}
-                Con esto apagado mandan los deslizadores, aunque las columnas conserven
-                números de antes. Encendido, mandan los números de abajo.
-              </span>
-            </span>
-          </label>
+          <Checkbox
+            className="border-t border-border pt-6"
+            checked={advanced}
+            onChange={(e) => {
+              setSaved(null);
+              setAdvanced(e.target.checked);
+            }}
+            label="Modo avanzado: fijar los nueve límites a mano"
+            /* This is the master switch of F6.5, and its wording matters: with
+               it off the sliders win *even if the columns still hold numbers
+               from a previous session*. Without saying so, turning it off looks
+               like it did nothing. */
+            hint="Con esto apagado mandan los deslizadores, aunque las columnas conserven números de antes. Encendido, mandan los números de abajo."
+          />
         </Card>
 
         {preview.data && (
@@ -247,7 +239,7 @@ function SettingsForm({
         <Select
           label="Proveedor"
           value={value("llm_provider")}
-          onChange={(e) => set("llm_provider", e.target.value)}
+          onChange={(next) => set("llm_provider", next)}
           options={[
             ["nvidia", "NVIDIA NIM (capa gratuita)"],
             ["openai", "OpenAI"],
@@ -290,7 +282,7 @@ function SettingsForm({
         <Select
           label="Modo del screener"
           value={value("screener_mode")}
-          onChange={(e) => set("screener_mode", e.target.value)}
+          onChange={(next) => set("screener_mode", next)}
           options={[
             ["score", "score — puntuación por tendencia y volumen"],
             ["random", "random — grupo de control"],
@@ -340,7 +332,7 @@ function SettingsForm({
         <Select
           label="Intervalo de barras"
           value={value("bar_interval")}
-          onChange={(e) => set("bar_interval", e.target.value)}
+          onChange={(next) => set("bar_interval", next)}
           options={[
             ["1d", "1d — un ciclo tras el cierre"],
             ["1h", "1h — varios ciclos por sesión"],
@@ -395,7 +387,7 @@ function SettingsForm({
           <NumberField label="Múltiplo de ATR del stop" field="stop_atr_multiple" value={value} set={set} />
           <NumberField label="Reward/risk mínimo" field="min_reward_risk" value={value} set={set} />
           <NumberField label="Notional mínimo" field="min_order_notional" value={value} set={set} />
-          <p className="text-xs leading-relaxed text-text-muted sm:col-span-2 lg:col-span-3">
+          <p className="text-caption leading-relaxed text-text-muted sm:col-span-2 lg:col-span-3">
             Un campo vacío vuelve a NULL, que significa «derívalo de los deslizadores». No es
             lo mismo que un cero: el cero es un límite que se ha elegido.
           </p>
@@ -405,7 +397,7 @@ function SettingsForm({
       {save.error && <Alert>{save.error.message}</Alert>}
 
       {saved !== null && !save.error && (
-        <p role="status" className="text-[13px] text-text-secondary">
+        <p role="status" className="text-body-sm text-text-secondary">
           {saved.length === 0
             ? "No había nada que cambiar."
             : `Guardado: ${saved.join(", ")}.`}
@@ -413,10 +405,10 @@ function SettingsForm({
       )}
 
       <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-        <Button type="submit" disabled={save.isPending}>
+        <Button type="submit" variant="primary" disabled={save.isPending}>
           {save.isPending ? "Guardando…" : "Guardar cambios"}
         </Button>
-        <span className="self-center text-xs text-text-muted">
+        <span className="self-center text-caption text-text-muted">
           Los cambios se aplican al siguiente ciclo: el que esté corriendo leyó sus
           parámetros al arrancar y no los recarga (R6).
         </span>
@@ -438,7 +430,7 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
     <fieldset>
       <legend className="sr-only">{title}</legend>
       <SectionTitle className="mb-3">{title}</SectionTitle>
-      <Card padding="p-4">
+      <Card padding="p-6">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
       </Card>
     </fieldset>
@@ -512,17 +504,12 @@ function Check({
 }) {
   const checked = Boolean(draft[field as string] ?? settings[field]);
   return (
-    <Field label="" className="justify-end">
-      <span className="flex items-center gap-2 text-[13px]">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => set(field as string, e.target.checked)}
-          className="size-4 accent-primary"
-        />
-        {label}
-      </span>
-    </Field>
+    <Checkbox
+      className="self-end pb-2.5"
+      checked={checked}
+      onChange={(e) => set(field as string, e.target.checked)}
+      label={label}
+    />
   );
 }
 

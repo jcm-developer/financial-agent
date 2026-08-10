@@ -4,19 +4,16 @@ import { Button, Card } from "@/components/pieces";
 import { cn } from "@/lib/utils";
 
 /**
- * Data table, written by hand instead of pulled from shadcn/ui.
+ * Data table, written to Verdana's list spec: 48 px rows, 8×16 of cell padding,
+ * a #F1F5F9 divider between rows, and #F8FAFC on hover.
  *
- * shadcn's table is a set of wrappers over `<table>` with no Radix underneath,
- * so copying it would add one more file and no capability; and these already
- * have to carry the inherited palette and `tabular-nums` on the figure columns.
- *
- * F4.7 expected shadcn to arrive with F5.4's confirmation dialog. It did not:
- * what Radix supplies there —focus trap, Esc, the page made inert— is what the
- * browser's own `<dialog>` already does (see `ConfirmDialog.tsx`). The rule
- * stands as written; nothing has needed Radix yet.
+ * It is written by hand instead of pulled from shadcn/ui because shadcn's table
+ * is a set of wrappers over `<table>` with no Radix underneath, so copying it
+ * would add one more file and no capability; and these already have to carry the
+ * palette and put the figure columns in Fira Code.
  *
  * `overflow-x-auto` on the container and not on the page: a wide table has to
- * scroll inside its own slot, without dragging the rest of the screen (F4.9).
+ * scroll inside its own slot, without dragging the rest of the screen.
  *
  * @param props - Table props.
  * @param props.title - Screen-reader description, rendered as a `<caption>`.
@@ -36,7 +33,7 @@ export function Table({
 }) {
   return (
     <Card padding="p-0" className="overflow-x-auto">
-      <table className={cn("w-full text-[13px]", className)}>
+      <table className={cn("w-full text-body-sm", className)}>
         <caption className="sr-only">{title}</caption>
         {children}
       </table>
@@ -46,6 +43,10 @@ export function Table({
 
 /**
  * Column header cell.
+ *
+ * The header row is the one place uppercase and tracking are used outside a
+ * chip: it is what separates the labels from the figures underneath without
+ * spending a rule or a fill on it.
  *
  * @param props - Header props.
  * @param props.children - The header text.
@@ -66,7 +67,7 @@ export function Th({
     <th
       scope="col"
       className={cn(
-        "px-3 py-2 font-medium whitespace-nowrap text-text-muted",
+        "h-12 px-4 py-2 text-caption tracking-[0.5px] whitespace-nowrap text-text-secondary uppercase",
         numeric ? "text-right" : "text-left",
         className,
       )}
@@ -81,7 +82,7 @@ export function Th({
  *
  * @param props - Cell props.
  * @param props.children - The cell content.
- * @param props.numeric - Right-aligns and applies tabular figures.
+ * @param props.numeric - Right-aligns and puts the figure in Fira Code.
  * @param props.header - Renders the cell as the row's header instead.
  * @param props.className - Extra classes.
  * @param props.title - Tooltip, used to carry what the colour alone would not say.
@@ -108,7 +109,7 @@ export function Td({
   title?: string;
 }) {
   const classes = cn(
-    "px-3 py-1.5 align-top",
+    "px-4 py-2 align-top",
     numeric && "tabular text-right whitespace-nowrap",
     header && "text-left font-normal",
     className,
@@ -145,14 +146,19 @@ export function TableHead({ children }: { children: ReactNode }) {
 }
 
 /**
- * A body row, separated from the next by a rule.
+ * A body row: 48 px tall, divided from the next by the light slate rule, and
+ * tinted on hover so the eye can track across a wide table without losing it.
  *
  * @param props - Row props.
  * @param props.children - The `Td` cells.
  * @return The rendered `<tr>`.
  */
 export function Row({ children }: { children: ReactNode }) {
-  return <tr className="border-b border-border last:border-0">{children}</tr>;
+  return (
+    <tr className="h-12 border-b border-surface-sunken transition-colors duration-150 last:border-0 hover:bg-background">
+      {children}
+    </tr>
+  );
 }
 
 /**
@@ -168,7 +174,7 @@ export function Row({ children }: { children: ReactNode }) {
  */
 export function Empty({ children }: { children: ReactNode }) {
   return (
-    <Card dashed padding="px-4 py-6" className="text-[13px] text-text-muted">
+    <Card dashed padding="px-6 py-10" className="text-body-sm text-text-secondary">
       {children}
     </Card>
   );
@@ -205,18 +211,19 @@ export function Pagination({
   const to = Math.min(offset + limit, total);
 
   return (
-    <div className="mt-3 flex items-center justify-between gap-3 text-[13px]">
-      <span className="tabular text-text-muted">
+    <div className="mt-4 flex items-center justify-between gap-4">
+      <span className="tabular text-body-sm text-text-secondary">
         {from}–{to} de {total}
       </span>
       <div className="flex gap-2">
         <Button
+          size="sm"
           disabled={offset === 0}
           onClick={() => onChange(Math.max(0, offset - limit))}
         >
           Anteriores
         </Button>
-        <Button disabled={to >= total} onClick={() => onChange(offset + limit)}>
+        <Button size="sm" disabled={to >= total} onClick={() => onChange(offset + limit)}>
           Siguientes
         </Button>
       </div>

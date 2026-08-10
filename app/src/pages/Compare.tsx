@@ -6,6 +6,7 @@ import { useProfiles } from "@/api/hooks";
 import { keys } from "@/api/keys";
 import type { Analytics, ProfileSummary } from "@/api/types";
 import { Alert, Card, Loading, PageTitle, SectionTitle } from "@/components/pieces";
+import { Checkbox } from "@/components/Checkbox";
 import { ProfileStatus } from "@/components/ProfileStatus";
 import { Section } from "@/components/Section";
 import { TableHead, Row, Table, Td, Th } from "@/components/Table";
@@ -55,7 +56,7 @@ export function Compare() {
         {(all: ProfileSummary[]) =>
           all.length < 2 ? (
             <Card padding="p-6" dashed>
-              <p className="text-[13px] text-text-secondary">
+              <p className="text-body-sm text-text-secondary">
                 Hace falta más de un experimento para comparar. El gesto normal es duplicar
                 uno y cambiarle un solo parámetro: así las dos curvas se diferencian en eso y
                 no en cinco cosas a la vez.
@@ -119,30 +120,31 @@ function Picked({
         <SectionTitle className="mb-3">Qué comparar</SectionTitle>
         <div className="flex flex-wrap gap-x-6 gap-y-2">
           {all.map((profile) => (
-            <label key={profile.id} className="flex items-center gap-2 text-[13px]">
-              <input
-                type="checkbox"
-                className="size-4 accent-primary"
-                checked={chosen.includes(profile.name)}
-                onChange={(e) =>
-                  onChange(
-                    e.target.checked
-                      ? [...chosen, profile.name]
-                      : chosen.filter((n) => n !== profile.name),
-                  )
-                }
-              />
-              {profile.name}
-              <span className="text-text-muted">{profile.currency}</span>
-              <ProfileStatus status={profile.status} />
-            </label>
+            <Checkbox
+              key={profile.id}
+              checked={chosen.includes(profile.name)}
+              onChange={(e) =>
+                onChange(
+                  e.target.checked
+                    ? [...chosen, profile.name]
+                    : chosen.filter((n) => n !== profile.name),
+                )
+              }
+              label={
+                <>
+                  {profile.name}{" "}
+                  <span className="text-text-muted">{profile.currency}</span>{" "}
+                  <ProfileStatus status={profile.status} />
+                </>
+              }
+            />
           ))}
         </div>
       </fieldset>
 
       {chosen.length === 0 ? (
         <Card padding="p-6" dashed>
-          <p className="text-[13px] text-text-secondary">
+          <p className="text-body-sm text-text-secondary">
             Elige dos experimentos para ver sus curvas una encima de otra. Con más de dos se
             dibuja uno por gráfica, compartiendo escala.
           </p>

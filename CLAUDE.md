@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |---|---|---|
 | [TASKS.md](TASKS.md) | El plan de trabajo. Cada tarea tiene un id (`F4.9`) que se cita en los commits | **Antes de empezar cualquier cosa**, para saber si lo pedido ya tiene id y contexto |
 | [EXPERIMENT.md](EXPERIMENT.md) | La lógica real de un experimento: los dos relojes, la anatomía de un ciclo, los tres precios, qué ve el modelo y qué no | **Obligatorio antes de tocar `src/cycle.py`, el screener, el risk manager o el planificador** |
-| [DESIGN.md](DESIGN.md) | El sistema de diseño: paleta, escala, componentes, accesibilidad | **Obligatorio antes de tocar `app/`** |
+| [DESIGN.md](DESIGN.md) | **Verdana Health**: paleta, escala, componentes, accesibilidad y lo que se perdió al adoptarlo | **Obligatorio antes de tocar `app/`** |
 | [README.md](README.md) | Qué es el proyecto y qué esperar de él | Para entender el porqué del experimento |
 
 `TASKS.md` no es una lista de deseos: lleva las **decisiones de arquitectura** (D1–D8), los
@@ -47,7 +47,7 @@ Mira `git log` antes de escribir. La convención es propia y conviene respetarla
 - **En español, sin acentos en vocales pero conservando la ñ** (`graficas`, `tenia`, `añaden`).
 - **Cuerpo largo y explicativo**, en prosa: qué se decidió, qué se descartó, qué medición
   lo respalda, qué consecuencia hay que asumir. Los apartes van con ` -- `.
-- **Penúltima línea:** la verificación (`607 tests en verde, typecheck limpio`).
+- **Penúltima línea:** la verificación (`665 tests en verde, typecheck limpio`).
 - **Última línea:** `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`
 
 ---
@@ -123,7 +123,7 @@ se parecen.
 ### Backend (Python 3.12)
 
 ```bash
-python -m pytest tests -q                            # los 607 tests
+python -m pytest tests -q                            # los 665 tests
 python -m pytest tests/test_risk.py -q                # un módulo
 python -m pytest tests/test_risk.py::test_nombre -q   # un solo test
 python -m pytest tests -q -k "calendario"             # por nombre
@@ -261,6 +261,14 @@ React 19 + Vite 8 + TypeScript 7 + Tailwind v4, todo en inglés (`pages/`, `Tabl
 `Button`), con el texto de pantalla en español. Recharts solo en Analítica, cargada con `lazy()` porque pesa casi tanto como el
 resto junto.
 
+El sistema visual es **Verdana Health** desde el 2026-08-10 (ver [DESIGN.md](DESIGN.md)).
+Plus Jakarta Sans, DM Sans y Fira Code van **autoalojadas y empaquetadas** —101 KB de woff2,
+solo el subconjunto latino—, no por CDN: la API se sirve desde un contenedor en `127.0.0.1`
+sin salida a internet garantizada. Los controles de formulario son propios
+(`Select`, `Checkbox`, `RadioGroup`, `Tooltip`): el `<select>` nativo dibuja su lista con el
+widget del sistema operativo, que es la única superficie a la que el sistema de diseño no
+llega.
+
 - **TanStack Query es la única caché.** El SSE escribe en ella con `setQueryData`, nunca en un
   estado paralelo de React: con dos fuentes para el mismo precio la pantalla enseña dos
   números distintos y no hay un sitio donde arreglarlo. Las claves viven solo en
@@ -278,11 +286,20 @@ resto junto.
 
 ## Invariantes que no se rompen
 
-- **La paleta no se toca.** El par positivo/negativo es **azul/rojo y no verde/rojo** para que
-  se lea sin distinguir el verde del rojo (ΔE 21,6 en protanopía). Los contrastes se midieron
-  en F4.9. Cambiarla desharía las dos cosas sin que nada avise. Ver DESIGN.md.
+- **La paleta es la de Verdana Health y no se mezcla con otra.** Navy `#0F172A` como ritmo
+  primario, salvia `#059669` reservada a lo interactivo y a lo positivo, y los cuatro colores
+  de estado **con sus dos niveles**: el saturado es la *marca* (relleno de gráfica, fondo de
+  chip al 8 %) y el profundo es la *tinta* (texto). Confundirlos es el error fácil. Ver
+  DESIGN.md.
+- **Tema único, solo claro.** No hay `.dark`, ni variante `dark:`, ni interruptor. Añadir un
+  `dark:` es reabrir un sistema que se cerró a propósito.
 - **Ningún hexadecimal en `className`.** Se usa la utilidad del token; en SVG,
   `var(--color-…)`.
+- **La escala tipográfica son los diez pasos de Verdana** (`text-h1`, `text-body-sm`,
+  `text-caption`…), cada uno con su peso y su interlineado dentro del token. No se usan
+  `text-sm`, `text-base` ni `text-lg`: serían una segunda escala. ⚠️ **Todo tamaño nuevo hay
+  que declararlo además en `cn()`** ([app/src/lib/utils.ts](app/src/lib/utils.ts)) o
+  `tailwind-merge` lo tomará por un color y borrará el color de al lado, en silencio.
 - **Ninguna receta de clases se escribe a mano.** Botón, tarjeta, aviso, insignia, control,
   título y bloque salen de [app/src/components/pieces.tsx](app/src/components/pieces.tsx).
 - **El símbolo de divisa se pasa siempre, nunca se asume** (FE.8): un presupuesto europeo

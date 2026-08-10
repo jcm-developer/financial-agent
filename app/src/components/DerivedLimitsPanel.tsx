@@ -37,10 +37,10 @@ interface Props {
  */
 export function DerivedLimitsPanel({ limits, symbol, stale = false }: Props) {
   return (
-    <Card padding="p-4" className={stale ? "opacity-60 transition-opacity" : undefined}>
+    <Card padding="p-6" className={stale ? "opacity-60 transition-opacity" : undefined}>
       <SectionTitle className="mb-3">Con estos ajustes</SectionTitle>
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px] sm:grid-cols-3">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-body-sm sm:grid-cols-3">
         <Stat
           label="Riesgo por operación"
           value={percent(limits.risk_per_trade_pct)}
@@ -63,7 +63,7 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false }: Props) {
         />
       </dl>
 
-      <p className="mt-4 border-t border-border pt-3 text-xs leading-relaxed text-text-muted">
+      <p className="mt-4 border-t border-border pt-3 text-caption leading-relaxed text-text-muted">
         <span className="font-semibold">
           Tope por sector: máx. {limits.sector_cap} posiciones — calculado pero no aplicado.
         </span>{" "}

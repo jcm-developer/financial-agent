@@ -1,4 +1,5 @@
-import { Badge } from "@/components/pieces";
+import { Chip, type ChipVariant } from "@/components/pieces";
+import { Tooltip } from "@/components/Tooltip";
 import { cn } from "@/lib/utils";
 import type { StreamState } from "@/api/stream";
 
@@ -13,10 +14,10 @@ import type { StreamState } from "@/api/stream";
  * it, and then they do not believe the real red either.
  */
 
-const APPEARANCE: Record<StreamState, { text: string; className: string }> = {
-  live: { text: "datos en vivo", className: "text-delta-good border-current" },
-  connecting: { text: "reconectando…", className: "text-warning border-current" },
-  disconnected: { text: "desconectado", className: "text-delta-bad border-current" },
+const APPEARANCE: Record<StreamState, { text: string; variant: ChipVariant }> = {
+  live: { text: "datos en vivo", variant: "success" },
+  connecting: { text: "reconectando…", variant: "warning" },
+  disconnected: { text: "desconectado", variant: "error" },
 };
 
 interface Props {
@@ -36,30 +37,30 @@ interface Props {
  * @return The rendered badge.
  */
 export function LiveIndicator({ state, reconnections = 0, notice }: Props) {
-  const { text, className } = APPEARANCE[state];
+  const { text, variant } = APPEARANCE[state];
 
   return (
-    <Badge
-      compact
-      className={cn("gap-2", className)}
-      // Colour cannot be the only carrier of meaning (F4.9): the text already
-      // says it, and the title adds the detail for whoever needs it.
-      title={
+    // Colour cannot be the only carrier of meaning: the chip already says the
+    // state in words, and the tooltip adds the detail for whoever needs it.
+    <Tooltip
+      content={
         notice
-          ? `${text} — ultimo aviso del servidor: ${notice}`
+          ? `${text} — último aviso del servidor: ${notice}`
           : reconnections
             ? `${text} — ${reconnections} reconexiones`
             : text
       }
     >
-      <span
-        aria-hidden
-        className={cn(
-          "size-1.5 rounded-full bg-current",
-          state === "live" && "animate-pulse",
-        )}
-      />
-      {text}
-    </Badge>
+      <Chip variant={variant}>
+        <span
+          aria-hidden
+          className={cn(
+            "size-1.5 rounded-full bg-current",
+            state === "live" && "animate-pulse",
+          )}
+        />
+        {text}
+      </Chip>
+    </Tooltip>
   );
 }

@@ -137,7 +137,7 @@ function OrderTableRow({ row, symbol }: { row: OrderRow; symbol: string }) {
       <Td>
         <span className={cn("font-medium", statusClass(row.status))}>{row.status}</span>
         {row.error && (
-          <p className="mt-0.5 max-w-sm text-xs leading-snug text-text-secondary">
+          <p className="mt-0.5 max-w-sm text-caption leading-snug text-text-secondary">
             {row.error}
           </p>
         )}

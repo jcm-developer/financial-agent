@@ -143,7 +143,7 @@ function Control({
 
   if (!state.enabled) {
     return (
-      <Card className="mb-6 text-[13px] text-text-secondary">
+      <Card className="mb-6 text-body-sm text-text-secondary">
         Los controles de ciclo están apagados en el servidor
         (<code>API_CONTROLS=false</code>). Los ciclos los lanza el planificador.
       </Card>
@@ -154,7 +154,7 @@ function Control({
     <Card className="mb-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-[13px]">
+          <p className="text-body-sm">
             <span className={state.running ? "font-semibold text-warning" : "text-text-secondary"}>
               {state.running ? "Ciclo en marcha" : "Sin ciclo en marcha"}
             </span>
@@ -165,7 +165,7 @@ function Control({
               : ""}
           </p>
           {state.profile && (
-            <p className="mt-0.5 text-xs text-text-muted">
+            <p className="mt-0.5 text-caption text-text-muted">
               perfil {state.profile}
               {state.dry_run ? " · en seco" : ""}
               {state.returncode !== null && state.returncode !== undefined
@@ -177,6 +177,7 @@ function Control({
 
         <div className="flex flex-wrap gap-2">
           <Button
+            variant="primary"
             disabled={state.running || run.isPending || !profile}
             onClick={() => run.mutate({})}
           >
@@ -185,14 +186,14 @@ function Control({
           {/* Dry run: it analyses and decides but does not execute. It is how to
               see what the model would do without moving the experiment's book. */}
           <Button
-            variant="subtle"
+            variant="ghost"
             disabled={state.running || run.isPending || !profile}
             onClick={() => run.mutate({ dry_run: true })}
           >
             Lanzar en seco
           </Button>
           <Button
-            variant="danger"
+            variant="destructive"
             disabled={!state.running || stop.isPending}
             onClick={() => stop.mutate()}
           >
@@ -203,7 +204,7 @@ function Control({
               shares the log and the lock with the cycle: only one thing at a
               time may touch a book. */}
           <Button
-            variant="danger"
+            variant="destructive"
             disabled={state.running || close.isPending || !profile}
             onClick={() => setClosing(true)}
           >
@@ -323,7 +324,7 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }) {
       <Section query={query}>
         {(cycle) => (
           <>
-            <dl className="grid gap-x-6 gap-y-1 text-[13px] sm:grid-cols-3">
+            <dl className="grid gap-x-6 gap-y-1 text-body-sm sm:grid-cols-3">
               <Stat label="Inicio" value={dateTime(cycle.started_at)} />
               <Stat label="Fin" value={dateTime(cycle.finished_at)} />
               <Stat label="Modelo" value={cycle.llm_model ?? "—"} />
@@ -349,12 +350,12 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }) {
                 tell "it ran with these settings" from "we do not know which
                 settings it ran with". */}
             {cycle.settings === null || cycle.settings === undefined ? (
-              <p className="mt-3 text-[13px] text-text-muted">
+              <p className="mt-3 text-body-sm text-text-muted">
                 Sin copia de los parámetros: es un ciclo anterior a que se guardaran (F6.3).
               </p>
             ) : (
               <details className="mt-3">
-                <summary className="cursor-pointer text-[13px] text-text-secondary">
+                <summary className="cursor-pointer text-body-sm text-text-secondary">
                   Parámetros con los que corrió
                 </summary>
                 <Block className="mt-2 max-h-64">
@@ -394,7 +395,7 @@ function CycleTableRow({
     <Row>
       <Td>
         <LinkButton
-          variant="neutral"
+          variant="subtle"
           onClick={onSelect}
           aria-current={selected ? "true" : undefined}
           className={selected ? "font-semibold decoration-current" : undefined}

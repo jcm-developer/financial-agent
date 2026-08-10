@@ -9,6 +9,7 @@ import {
 } from "@/api/hooks";
 import type { ProfileSummary } from "@/api/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Checkbox } from "@/components/Checkbox";
 import { Button, Input } from "@/components/pieces";
 import { statusMeaning } from "@/components/ProfileStatus";
 
@@ -108,7 +109,7 @@ export function ProfileActions({ profile }: Props) {
         Duplicar
       </Button>
 
-      <Button variant="danger" onClick={() => setPending("delete")}>
+      <Button variant="destructive" onClick={() => setPending("delete")}>
         Borrar
       </Button>
 
@@ -214,29 +215,22 @@ export function ProfileActions({ profile }: Props) {
         {/* F5.7. It goes here and not in a button of its own because a control
             profile IS a duplicate with one parameter changed — the same gesture,
             with the parameter already decided. */}
-        <label className="flex items-start gap-2">
-          <input
-            type="checkbox"
-            checked={asControl}
-            onChange={(e) => {
-              setAsControl(e.target.checked);
-              if (e.target.checked && copyName === `${profile.name}-copia`) {
-                setCopyName(`${profile.name}-control`);
-              }
-            }}
-            className="mt-0.5 size-4 accent-primary"
-          />
-          <span>
-            Hacerlo <strong className="font-semibold">grupo de control</strong>: el screener
-            elige al azar en vez de puntuar.
-            <span className="mt-1 block text-xs text-text-muted">
-              Es contra lo que se mide si el criterio del modelo aporta algo (R7). Mismo
-              universo, mismo riesgo, mismos descartes duros: lo único que cambia es que los
-              candidatos no están elegidos. Si el agente rinde igual, el filtro no estaba
-              aportando nada.
-            </span>
-          </span>
-        </label>
+        <Checkbox
+          checked={asControl}
+          onChange={(e) => {
+            setAsControl(e.target.checked);
+            if (e.target.checked && copyName === `${profile.name}-copia`) {
+              setCopyName(`${profile.name}-control`);
+            }
+          }}
+          label={
+            <>
+              Hacerlo <strong className="font-semibold">grupo de control</strong>: el
+              screener elige al azar en vez de puntuar.
+            </>
+          }
+          hint="Es contra lo que se mide si el criterio del modelo aporta algo (R7). Mismo universo, mismo riesgo, mismos descartes duros: lo único que cambia es que los candidatos no están elegidos. Si el agente rinde igual, el filtro no estaba aportando nada."
+        />
       </ConfirmDialog>
 
       <ConfirmDialog

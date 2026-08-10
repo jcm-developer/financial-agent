@@ -46,7 +46,7 @@ export function ProfileCard({ profile, actions }: Props) {
   return (
     <Card as="article" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 className="text-[15px] font-semibold">
+        <h3 className="text-h4 font-semibold">
           <Link
             to={`/p/${encodeURIComponent(profile.name)}/summary`}
             className={LINK_CLASSES}
@@ -70,10 +70,10 @@ export function ProfileCard({ profile, actions }: Props) {
       </div>
 
       {profile.description && (
-        <p className="text-[13px] text-text-secondary">{profile.description}</p>
+        <p className="text-body-sm text-text-secondary">{profile.description}</p>
       )}
 
-      <p className="text-[13px] text-text-muted">
+      <p className="text-body-sm text-text-muted">
         {/* The market comes first because it decides the currency, and the
             currency is what stops two budgets being compared as if they were the
             same unit (FE.8). */}
@@ -83,7 +83,7 @@ export function ProfileCard({ profile, actions }: Props) {
           ` · ${profile.watched_symbols} símbolos en vivo`}
       </p>
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px] sm:grid-cols-3 lg:grid-cols-6">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-body-sm sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Capital" value={money(m.equity, symbol)}>
           de {money(m.initial_budget, symbol)}
         </Stat>

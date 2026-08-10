@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`)
+Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`)
 
 ---
 
@@ -1954,6 +1954,96 @@ lección de F6.9); encaja, además, porque no se pudo aprobar nada para ese sím
 **La posición no se cierra automáticamente**, y es deliberado: vender al precio que justamente
 no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 tests en verde**
 (4 nuevos).
+
+### F10 — Rediseño: Verdana Health ✅ (2026-08-10)
+
+- [x] **F10.1** **Adopción completa de Verdana Health**, el sistema de diseño que se aportó
+      como documento. Sustituye al anterior de punta a punta y `DESIGN.md` pasa a ser ese
+      documento, ampliado con cómo está implementado aquí. El viejo se borró: describía una
+      paleta, una densidad y un tema que ya no existen, y un documento de diseño que miente
+      es peor que no tenerlo.
+
+      **La adopción se decidió completa y no adaptada, y eso hay que dejarlo escrito porque
+      tiene un coste medido.** Verdana chocaba con cuatro decisiones del proyecto y ganan las
+      cuatro:
+
+      | Verdana pide | El proyecto tenía | Qué se perdió |
+      |---|---|---|
+      | Success verde / Error rojo | Par **azul/rojo** para P&L | La separación de ΔE 21,6 en protanopía que midió F4.9 |
+      | Cuerpo 16 px, filas de 48 | 13 px y ~30 px | En una tabla caben ~9 filas donde cabían 15 |
+      | Tres familias de Google | `system-ui`, cero fuentes importadas | 101 KB de woff2 en el bundle |
+      | Solo tema claro | El oscuro era el de partida (F4.2) | El interruptor y la clase `.dark` |
+
+      **Lo que sostiene la lectura del P&L ahora que el par es verde/rojo** es lo que no es
+      color, y estaba ya puesto: el signo escrito en cada cifra (`signedMoney`, `percent` con
+      `sign`), la línea del cero en las gráficas y la vista de tabla que toda gráfica lleva
+      debajo. No es equivalente a la separación que había, y por eso está apuntado en
+      DESIGN.md § «Lo que se perdió al adoptarlo» en vez de en un comentario.
+
+- [x] **F10.2** **Los controles de formulario pasan a ser propios**: `<Select>` con panel
+      desplegable, `<Checkbox>`, `<RadioGroup>` y `<Tooltip>`, más `<Chip>` unificando lo que
+      antes eran `<Badge>` y `<Tag>`.
+
+      **Por qué el `<select>` nativo tenía que caer, después de dos tareas defendiéndolo:**
+      dibuja su lista con el widget del sistema operativo, que es **la única superficie de la
+      aplicación a la que un sistema de diseño no llega**. Mientras la regla fue «no lo
+      cambies hasta que haga falta enseñar algo dentro de cada opción», el nativo ganaba.
+      Adoptar Verdana entero cambia la pregunta: ya no es qué se enseña dentro de la opción,
+      es que el panel es un popup blanco de esquinas rectas en Windows bajo un sistema que no
+      tiene ninguna.
+
+      Lo que se conserva del nativo, que era lo que lo hacía defendible: el contrato de
+      teclado entero —flechas, `Inicio`/`Fin`, `Enter`, `Esc`, `Tab` y **la búsqueda por
+      letra tecleada, con su ciclado por letra repetida**— y el anuncio correcto
+      (`combobox`/`listbox`/`option` cosidos con `aria-activedescendant`, sin trampa de
+      foco). El panel va en un **portal** porque varias de estas viven dentro de tarjetas con
+      `overflow-x-auto` y quedarían recortadas.
+
+      ⚠️ **Queda una limitación conocida:** el panel se apila con `z-index`, así que quedaría
+      por debajo de un `<dialog>` abierto con `showModal()`, que vive en la capa superior. Hoy
+      ningún diálogo lleva un `<Select>`; el día que lleve uno, hay que meter el panel dentro
+      del diálogo.
+
+      `<Badge>` y `<Tag>` **se conservan como alias finos sobre `<Chip>`** en vez de
+      renombrarse: eran treinta sitios de llamada en las pantallas, y el sentido de
+      `pieces.tsx` es que la receta viva en un solo sitio independientemente de cómo la pidan.
+
+- [x] **F10.3** ⚠️ **`tailwind-merge` borraba colores en silencio, y costó una captura de
+      pantalla encontrarlo.** Es el hallazgo de la tarea y el que más fácil habría sido
+      publicar sin ver.
+
+      `tailwind-merge` clasifica una clase `text-*` que no conoce **adivinando**, y para
+      `text-body-sm` adivina *color*. Mezclar `text-primary-foreground` con `text-body-sm`
+      parecía entonces dos colores compitiendo: ganaba el último y el primero desaparecía. El
+      síntoma era **el botón «Lanzar ciclo» sin etiqueta encima** —texto navy sobre relleno
+      navy— y afectaba además a las cabeceras de tabla, que perdían su tamaño de 12 px.
+
+      **Nada de lo automático lo detecta**: el typecheck pasaba, los 45 tests del frontend
+      pasaban y `npm run build` pasaba. Salió al abrir la pantalla de Ciclos en el navegador.
+
+      La escala se declara ahora en `cn()` ([app/src/lib/utils.ts](app/src/lib/utils.ts)) y
+      está clavada con cinco tests en `utils.test.ts`, incluido uno que recorre **los diez
+      pasos** y no solo los que se usan hoy. La regla que queda: *todo tamaño nuevo en el
+      bloque `@theme` de `index.css` hay que añadirlo también a esa lista*.
+
+- [x] **F10.4** **Fuentes autoalojadas y recortadas al subconjunto latino.** Las tres familias
+      entran por `@fontsource-variable` y se empaquetan en `app/dist` dentro de la imagen.
+
+      **Nada de CDN, y no es purismo:** la API se sirve desde un contenedor publicado en
+      `127.0.0.1` sin salida a internet garantizada, así que un enlace a Google Fonts dejaría
+      la interfaz entera en la familia de respaldo justo al desplegarla.
+
+      Las declaraciones `@font-face` están **escritas a mano** en vez de importar el
+      `index.css` de cada paquete, porque ese arrastra cirílico, griego y vietnamita: **262 KB
+      de woff2 contra 101**. Medido en el build, no estimado. Todo lo que necesita el español
+      —ñ, vocales acentuadas, ¿ y ¡— está en `latin`.
+
+- [x] **F10.5** Verificado **corriendo**, no solo compilando: seis pantallas capturadas con
+      Playwright contra la API real, más el panel del desplegable abierto y un tooltip
+      encendido. Es lo que sacó F10.3 a la luz.
+
+      **665 tests de Python en verde, 50 del frontend (20 nuevos), typecheck limpio, build en
+      101 KB de fuentes + 33 KB de CSS.**
 
 ### F9 — Futuro (no bloquea)
 

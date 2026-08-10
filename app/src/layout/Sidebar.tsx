@@ -16,13 +16,18 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * Sidebar (F4.3).
+ * Sidebar navigation.
  *
  * Two groups, and the separation matters: above, what depends on the experiment
  * being looked at; below, what does not. Without that rule, "Perfiles" and
  * "Posiciones" look like the same kind of thing and they are not — one holds for
  * every experiment and the other changes completely depending on which is
  * selected.
+ *
+ * The groups now carry **written headings** rather than a bare rule between
+ * them. The distinction was documented here and invisible on screen, which made
+ * it a rule nobody could follow while reading the sidebar; a chip-styled caption
+ * costs one line each and says it out loud.
  */
 
 const PROFILE_LINKS = [
@@ -45,8 +50,11 @@ const GENERAL_LINKS = [
   { to: "/diagnostics", text: "Ingesta", Icon: Radio },
 ] as const;
 
+/** Verdana's list row, at the sidebar's scale: 40 px tall, 8×12, 8 px radius. */
 const LINK_CLASSES =
-  "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] transition-colors";
+  "flex h-10 items-center gap-3 rounded-md px-3 text-body-sm transition-colors duration-150";
+
+const GROUP_TITLE = "px-3 pb-2 text-caption tracking-[0.5px] text-text-muted uppercase";
 
 /**
  * @param props - What `NavLink` passes to its class callback.
@@ -57,8 +65,12 @@ function linkClasses({ isActive }: { isActive: boolean }) {
   return cn(
     LINK_CLASSES,
     isActive
-      ? "bg-surface-sunken font-medium text-foreground"
-      : "text-text-secondary hover:bg-surface-sunken hover:text-foreground",
+      ? // The active row is Verdana's #0F172A06 active background, with the navy
+        // restated on the label and the icon. `aria-current` carries it for a
+        // screen reader, so the tint is never the only thing saying which one
+        // it is.
+        "bg-primary/4 font-medium text-primary"
+      : "text-text-secondary hover:bg-background hover:text-foreground",
   );
 }
 
@@ -72,32 +84,36 @@ function linkClasses({ isActive }: { isActive: boolean }) {
  */
 export function Sidebar({ profile }: { profile: string | undefined }) {
   return (
-    <nav aria-label="Secciones" className="flex flex-col gap-1">
-      {profile ? (
-        PROFILE_LINKS.map(({ to, text, Icon }) => (
-          <NavLink
-            key={to}
-            to={`/p/${encodeURIComponent(profile)}/${to}`}
-            className={linkClasses}
-          >
-            <Icon className="size-3.5 shrink-0" aria-hidden />
+    <nav aria-label="Secciones" className="flex flex-col gap-6">
+      <div className="flex flex-col gap-0.5">
+        <p className={GROUP_TITLE}>Experimento</p>
+        {profile ? (
+          PROFILE_LINKS.map(({ to, text, Icon }) => (
+            <NavLink
+              key={to}
+              to={`/p/${encodeURIComponent(profile)}/${to}`}
+              className={linkClasses}
+            >
+              <Icon className="size-4 shrink-0" aria-hidden />
+              {text}
+            </NavLink>
+          ))
+        ) : (
+          <p className="px-3 py-2 text-body-sm text-text-muted">
+            Elige un experimento para ver sus datos.
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-0.5">
+        <p className={GROUP_TITLE}>General</p>
+        {GENERAL_LINKS.map(({ to, text, Icon }) => (
+          <NavLink key={to} to={to} className={linkClasses}>
+            <Icon className="size-4 shrink-0" aria-hidden />
             {text}
           </NavLink>
-        ))
-      ) : (
-        <p className="px-2.5 py-1.5 text-[13px] text-text-muted">
-          Elige un experimento para ver sus datos.
-        </p>
-      )}
-
-      <hr className="my-2 border-border" />
-
-      {GENERAL_LINKS.map(({ to, text, Icon }) => (
-        <NavLink key={to} to={to} className={linkClasses}>
-          <Icon className="size-3.5 shrink-0" aria-hidden />
-          {text}
-        </NavLink>
-      ))}
+        ))}
+      </div>
     </nav>
   );
 }

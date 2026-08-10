@@ -777,7 +777,7 @@ tools/
 universe/
   sp500.txt             503 símbolos, en notación de Yahoo
   eurostoxx50_ibex35.txt  89 símbolos de la zona euro, verificados
-tests/                  607 tests, sin red ni credenciales
+tests/                  665 tests, sin red ni credenciales
   helpers.py            Dobles del LLM y de los datos, compartidos
                         (incluye un ciclo completo de integración)
 ```

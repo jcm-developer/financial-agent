@@ -4,18 +4,22 @@ import { useStream } from "@/api/stream";
 import { LiveIndicator } from "@/components/LiveIndicator";
 import { buttonClasses, Card, BlockTitle } from "@/components/pieces";
 import { Sidebar } from "@/layout/Sidebar";
-import { ThemeButton } from "@/layout/ThemeButton";
 import { ProfileSelector } from "@/layout/ProfileSelector";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 
 /**
- * The application's frame (F4.3).
+ * The application's frame.
  *
  * **The stream is opened here, once.** If every screen called `useStream()`
  * there would be one SSE connection per mounted screen, and the server would run
  * the same SQLite poll as many times as there are open tabs —exactly what F3.5
  * set out to avoid by moving the polling from the browser to the server. The
  * screens read from the Query cache, which is where the stream writes.
+ *
+ * The header is **sticky and opaque**. Opaque and not translucent on purpose:
+ * Verdana's elevation is diffused shadow, never blur, and a frosted bar over a
+ * table of figures lowers the contrast of the text precisely where it is read
+ * most. What separates it from the page is the hairline and the sm shadow.
  *
  * @return The rendered frame, with the active screen in its outlet.
  */
@@ -28,28 +32,35 @@ export function Layout() {
       <a className="skip-link" href="#content">
         Saltar al contenido
       </a>
-      <header className="border-b border-border">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-3">
-          <Link to="/" className="text-[15px] font-semibold tracking-tight">
+
+      <header className="sticky top-0 z-30 border-b border-border bg-card shadow-sm">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-3">
+          <Link
+            to="/"
+            className="font-headline text-h4 font-bold tracking-tight text-foreground"
+          >
             financial-agent
           </Link>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-4">
             <ProfileSelector />
             <LiveIndicator
               state={stream.state}
               reconnections={stream.reconnections}
               notice={stream.lastNotice}
             />
-            <ThemeButton />
           </div>
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-5 py-6 md:flex-row">
-        <aside className="md:w-52 md:shrink-0">
-          <Sidebar profile={profile?.name ?? ref} />
+      <div className="mx-auto flex max-w-7xl flex-col gap-8 px-6 py-8 md:flex-row">
+        <aside className="md:w-56 md:shrink-0">
+          <div className="md:sticky md:top-24">
+            <Sidebar profile={profile?.name ?? ref} />
+          </div>
         </aside>
 
+        {/* `min-w-0` is not decoration: without it a wide table stretches the
+            flex container and breaks the table's own `overflow-x-auto`. */}
         <main id="content" tabIndex={-1} className="min-w-0 flex-1 pb-16">
           {notFound ? <ProfileNotFound name={ref!} /> : <Outlet />}
         </main>
@@ -72,15 +83,15 @@ export function Layout() {
  */
 function ProfileNotFound({ name }: { name: string }) {
   return (
-    <Card padding="p-6">
-      <BlockTitle as="h1" className="text-[15px]">
+    <Card padding="p-8">
+      <BlockTitle as="h1" className="text-h2">
         No hay ningún experimento llamado «{name}»
       </BlockTitle>
-      <p className="mt-2 text-[13px] text-text-secondary">
+      <p className="mt-3 text-body text-text-secondary">
         Puede que lo hayas renombrado o borrado. La URL lleva el nombre del perfil, así que
         un enlace guardado deja de valer cuando el nombre cambia.
       </p>
-      <Link to="/profiles" className={buttonClasses("neutral", "mt-4")}>
+      <Link to="/profiles" className={buttonClasses("primary", "mt-6")}>
         Ver los experimentos que hay
       </Link>
     </Card>

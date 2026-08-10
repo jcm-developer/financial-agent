@@ -2,7 +2,8 @@ import { useState } from "react";
 
 import { useDecisions } from "@/api/hooks";
 import type { DecisionRow } from "@/api/types";
-import { Input, Tag, Select, PageTitle } from "@/components/pieces";
+import { Input, Tag, PageTitle } from "@/components/pieces";
+import { Select } from "@/components/Select";
 import { Section } from "@/components/Section";
 import { TableHead, Row, Pagination, Table, Td, Th, Empty } from "@/components/Table";
 import { money, dateTime } from "@/lib/format";
@@ -71,7 +72,7 @@ export function Decisions() {
             ["sell", "Venta"],
             ["hold", "Mantener"],
           ]}
-          onChange={(event) => changeFilter(() => setAction(event.target.value))}
+          onChange={(next) => changeFilter(() => setAction(next))}
         />
         <Select
           label="Veredicto"
@@ -81,7 +82,7 @@ export function Decisions() {
             ["approved", "Aprobadas"],
             ["rejected", "Rechazadas"],
           ]}
-          onChange={(event) => changeFilter(() => setVerdict(event.target.value))}
+          onChange={(next) => changeFilter(() => setVerdict(next))}
         />
       </div>
 
@@ -168,16 +169,16 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
       <Td numeric>{row.conviction}</Td>
       <Td className="max-w-lg">
         {row.thesis ? (
-          <p className="text-xs leading-snug">{row.thesis}</p>
+          <p className="text-caption leading-snug">{row.thesis}</p>
         ) : (
-          <p className="text-xs text-text-muted">Sin tesis.</p>
+          <p className="text-caption text-text-muted">Sin tesis.</p>
         )}
         {row.risks && (
-          <p className="mt-1 text-xs leading-snug text-text-muted">
+          <p className="mt-1 text-caption leading-snug text-text-muted">
             <span className="font-medium">Riesgos:</span> {row.risks}
           </p>
         )}
-        <p className="mt-1 text-[11px] text-text-muted">
+        <p className="mt-1 text-caption text-text-muted">
           {row.reference_price !== null && row.reference_price !== undefined && (
             <>ref. {money(row.reference_price, symbol)} · </>
           )}
@@ -198,15 +199,15 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
               {row.verdict === "approved" ? "aprobada" : "rechazada"}
             </span>
             {row.rule && (
-              <p className="mt-0.5 text-[11px] text-text-muted">{row.rule}</p>
+              <p className="mt-0.5 text-caption text-text-muted">{row.rule}</p>
             )}
             {row.risk_reason && (
-              <p className="mt-0.5 max-w-xs text-xs leading-snug text-text-secondary">
+              <p className="mt-0.5 max-w-xs text-caption leading-snug text-text-secondary">
                 {row.risk_reason}
               </p>
             )}
             {row.approved_notional !== null && row.approved_notional !== undefined && (
-              <p className="tabular mt-0.5 text-[11px] text-text-muted">
+              <p className="tabular mt-0.5 text-caption text-text-muted">
                 {money(row.approved_notional, symbol)}
               </p>
             )}
@@ -214,12 +215,12 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
         ) : (
           // A hold decision does not go through the Risk Manager: there is
           // nothing to size. Saying so stops it from looking like a gap.
-          <span className="text-xs text-text-muted">
+          <span className="text-caption text-text-muted">
             {row.action === "hold" ? "no aplica" : "sin veredicto"}
           </span>
         )}
         {row.order_status && (
-          <p className="mt-0.5 text-[11px] text-text-muted">
+          <p className="mt-0.5 text-caption text-text-muted">
             orden: {row.order_status}
             {row.filled_avg_price !== null && row.filled_avg_price !== undefined
               ? ` a ${money(row.filled_avg_price, symbol)}`

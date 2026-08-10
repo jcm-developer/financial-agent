@@ -141,9 +141,14 @@ export function duration(seconds: number | null | undefined): string {
 /**
  * The colour class of a signed figure.
  *
- * Uses `delta-good`/`delta-bad` and not `positive`/`negative`: they are
- * deliberately different pairs (see `index.css`). The text of a change may use
- * green because it competes with no chart series.
+ * Uses `delta-good`/`delta-bad` and not `positive`/`negative`, which is the
+ * ink/mark split of the design system: these two are the **text** tier
+ * (#16A34A / #DC2626), deep enough to be read as letters, while
+ * `positive`/`negative` are the saturated fills a chart paints with.
+ *
+ * **The null case is the one that matters.** "No hay dato" and "cero" get
+ * different colours, because a P&L of zero for want of a price is not a P&L of
+ * zero.
  *
  * @param value - Signed value the colour describes.
  * @return The Tailwind text-colour class for that sign.

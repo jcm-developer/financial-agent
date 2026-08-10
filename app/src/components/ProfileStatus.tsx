@@ -1,4 +1,5 @@
-import { Badge } from "@/components/pieces";
+import { Chip, type ChipVariant } from "@/components/pieces";
+import { Tooltip } from "@/components/Tooltip";
 import type { ProfileSummary } from "@/api/types";
 
 /**
@@ -27,28 +28,28 @@ const MEANING: Record<Status, string> = {
   archived: "Retirado del listado. Su histórico sigue entero y se puede volver a activar.",
 };
 
-const TONE: Record<Status, string> = {
-  // Only the running state is coloured. Painting the other three would turn the
-  // list into four colours competing, and the question the list answers is
-  // "which one is running", not "how does each one feel".
-  draft: "text-text-muted",
-  active: "text-delta-good",
-  paused: "text-warning",
-  archived: "text-text-muted",
+const TONE: Record<Status, ChipVariant> = {
+  // Only the two states that ask something of you take a hue. Tinting all four
+  // would turn the list into four colours competing, and the question the list
+  // answers is "which one is running", not "how does each one feel".
+  draft: "neutral",
+  active: "success",
+  paused: "warning",
+  archived: "neutral",
 };
 
 /**
- * The badge saying whether an experiment is running.
+ * The chip saying whether an experiment is running.
  *
- * @param props - Badge props.
+ * @param props - Chip props.
  * @param props.status - The profile's status.
- * @return The rendered badge, carrying the whole sentence in its `title`.
+ * @return The rendered chip, with the whole sentence in its tooltip.
  */
 export function ProfileStatus({ status }: { status: Status }) {
   return (
-    <Badge compact className={TONE[status]} title={MEANING[status]}>
-      {LABEL[status]}
-    </Badge>
+    <Tooltip content={MEANING[status]}>
+      <Chip variant={TONE[status]}>{LABEL[status]}</Chip>
+    </Tooltip>
   );
 }
 

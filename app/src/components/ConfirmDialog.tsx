@@ -99,12 +99,13 @@ export function ConfirmDialog({
       aria-label={title}
       // The card recipe comes from `cardClasses`, never written out here: that
       // is the rule pieces.tsx exists for. What is added is only what belongs to
-      // being a dialog — the width, the centring and the backdrop. The scrim is
-      // the same black in both themes on purpose: it darkens the page behind,
-      // and a scrim that changes with the theme stops doing that in one of them.
+      // being a dialog — the width, the centring, the 12 px radius Verdana gives
+      // modals and dropdown panels, its lg elevation, and the backdrop. The
+      // scrim is the same navy wash whatever is behind it: it darkens the page,
+      // and a scrim that follows the surface stops doing that.
       className={cardClasses(
-        "p-5",
-        "m-auto w-[min(32rem,calc(100vw-2rem))] text-foreground backdrop:bg-black/50",
+        "p-6",
+        "m-auto w-[min(32rem,calc(100vw-2rem))] rounded-lg text-foreground shadow-xl backdrop:bg-primary/40",
       )}
       onCancel={(event) => {
         // While the request is in flight Esc would leave the dialog closed and
@@ -117,22 +118,22 @@ export function ConfirmDialog({
         if (!busy && event.target === ref.current) onCancel();
       }}
     >
-      <BlockTitle as="h2" className="text-[15px]">
+      <BlockTitle as="h2" className="text-h4">
         {title}
       </BlockTitle>
 
-      <div className="mt-3 flex flex-col gap-3 text-[13px] text-text-secondary">
+      <div className="mt-4 flex flex-col gap-4 text-body-sm text-text-secondary">
         {children}
       </div>
 
-      {error && <Alert className="mt-3">{error}</Alert>}
+      {error && <Alert className="mt-4">{error}</Alert>}
 
-      <div className="mt-5 flex flex-wrap justify-end gap-2">
-        <Button variant="subtle" onClick={onCancel} disabled={busy}>
+      <div className="mt-6 flex flex-wrap justify-end gap-3">
+        <Button variant="ghost" onClick={onCancel} disabled={busy}>
           Cancelar
         </Button>
         <Button
-          variant={danger ? "danger" : "neutral"}
+          variant={danger ? "destructive" : "primary"}
           onClick={onConfirm}
           disabled={busy || confirmDisabled}
         >

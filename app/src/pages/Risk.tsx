@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 
 import { useRiskEvents } from "@/api/hooks";
 import type { RiskEventRow } from "@/api/types";
-import { Badge, Select, PageTitle, SectionTitle } from "@/components/pieces";
+import { Badge, PageTitle, SectionTitle } from "@/components/pieces";
+import { Select } from "@/components/Select";
 import { Section } from "@/components/Section";
 import { TableHead, Row, Pagination, Table, Td, Th, Empty } from "@/components/Table";
 import { quantity, money, dateTime } from "@/lib/format";
@@ -53,11 +54,11 @@ export function Risk() {
           ["approved", "Aprobados"],
           ["", "Todos"],
         ]}
-        onChange={(event) => {
-          setVerdict(event.target.value);
+        onChange={(next) => {
+          setVerdict(next);
           setOffset(0);
         }}
-        fieldClass="mb-5 w-fit"
+        fieldClass="mb-8 w-fit"
       />
 
       {byRule.length > 0 && (
@@ -72,7 +73,7 @@ export function Risk() {
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-xs text-text-muted">
+          <p className="mt-2 text-caption text-text-muted">
             Contado sobre las {query.data?.items.length ?? 0} filas de esta página, no
             sobre el histórico completo.
           </p>
@@ -168,13 +169,13 @@ function RiskEventTableRow({ row, symbol }: { row: RiskEventRow; symbol: string 
         </span>
       </Td>
       <Td>
-        <code className="text-xs">{row.rule ?? "—"}</code>
+        <code className="text-caption">{row.rule ?? "—"}</code>
       </Td>
-      <Td className="max-w-md text-xs leading-snug">{row.reason}</Td>
+      <Td className="max-w-md text-caption leading-snug">{row.reason}</Td>
       <Td numeric>
         {quantity(row.approved_qty)}
         {row.approved_notional !== null && row.approved_notional !== undefined && (
-          <p className="text-[11px] text-text-muted">
+          <p className="text-caption text-text-muted">
             {money(row.approved_notional, symbol)}
           </p>
         )}

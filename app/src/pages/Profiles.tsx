@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useProfiles } from "@/api/hooks";
 import type { ProfileSummary } from "@/api/types";
 import { NewProfileForm } from "@/components/NewProfileForm";
+import { Checkbox } from "@/components/Checkbox";
 import { Block, Button, Card, PageTitle } from "@/components/pieces";
 import { ProfileActions } from "@/components/ProfileActions";
 import { ProfileCard } from "@/components/ProfileCard";
@@ -48,15 +49,12 @@ export function Profiles() {
       {/* The toggle goes with the archive action, not after it: archiving takes
           an experiment out of this list, and without a way back the button would
           look like it deleted something. */}
-      <label className="mb-4 flex items-center gap-2 text-[13px] text-text-secondary">
-        <input
-          type="checkbox"
-          checked={showArchived}
-          onChange={(e) => setShowArchived(e.target.checked)}
-          className="size-4 accent-primary"
-        />
-        Ver también los archivados
-      </label>
+      <Checkbox
+        className="mb-6"
+        checked={showArchived}
+        onChange={(e) => setShowArchived(e.target.checked)}
+        label="Ver también los archivados"
+      />
 
       <Section query={profiles}>
         {(data: ProfileSummary[]) =>
@@ -119,14 +117,14 @@ function sorted(profiles: ProfileSummary[]): ProfileSummary[] {
 function NoProfiles({ onCreate }: { onCreate: () => void }) {
   return (
     <Card padding="p-6" dashed>
-      <p className="text-[13px] text-text-secondary">
+      <p className="text-body-sm text-text-secondary">
         No hay ningún experimento todavía. Un experimento es un mercado, un capital, un
         criterio de riesgo y un modelo; todo lo demás se mide contra eso.
       </p>
       <div className="mt-4">
         <Button onClick={onCreate}>Crear el primero</Button>
       </div>
-      <p className="mt-4 text-[13px] text-text-muted">O desde la consola:</p>
+      <p className="mt-4 text-body-sm text-text-muted">O desde la consola:</p>
       <Block className="mt-2">
         python run.py new-profile --name europa-01 --market eu --watch 89
       </Block>

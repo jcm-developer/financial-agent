@@ -11,9 +11,9 @@ import {
   Card,
   Input,
   Loading,
-  Select,
   Slider,
 } from "@/components/pieces";
+import { Select } from "@/components/Select";
 import { integer, money } from "@/lib/format";
 
 /**
@@ -152,8 +152,8 @@ export function NewProfileForm({ onCancel }: Props) {
   }
 
   return (
-    <Card as="section" padding="p-5">
-      <BlockTitle as="h2" className="text-[15px]">
+    <Card as="section" padding="p-6">
+      <BlockTitle as="h2" className="text-h4">
         Nuevo experimento
       </BlockTitle>
 
@@ -189,7 +189,7 @@ export function NewProfileForm({ onCancel }: Props) {
               <Select
                 label="Mercado"
                 value={market}
-                onChange={(e) => setMarket(e.target.value)}
+                onChange={(next) => setMarket(next)}
                 options={markets.data.map((m) => [m.code, m.label] as const)}
               />
               <Input
@@ -238,7 +238,7 @@ export function NewProfileForm({ onCancel }: Props) {
               hint="Decide cuántas posiciones abiertas caben a la vez, de 3 a 25."
             />
           </div>
-          <p className="text-xs text-text-muted">
+          <p className="text-caption text-text-muted">
             Los nueve límites duros se derivan de estos dos deslizadores. Se pueden fijar a
             mano después, en Ajustes, activando el modo avanzado.
           </p>
@@ -250,9 +250,9 @@ export function NewProfileForm({ onCancel }: Props) {
             <Select
               label="Proveedor"
               value={provider}
-              onChange={(e) => {
-                setProvider(e.target.value);
-                setModel(DEFAULT_MODEL[e.target.value] ?? "");
+              onChange={(next) => {
+                setProvider(next);
+                setModel(DEFAULT_MODEL[next] ?? "");
               }}
               options={PROVIDERS}
             />
@@ -293,10 +293,10 @@ export function NewProfileForm({ onCancel }: Props) {
         )}
 
         <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-          <Button type="submit" disabled={busy}>
+          <Button type="submit" variant="primary" disabled={busy}>
             {busy ? "Creando…" : "Crear y activar"}
           </Button>
-          <Button variant="subtle" onClick={onCancel} disabled={busy}>
+          <Button variant="ghost" onClick={onCancel} disabled={busy}>
             Cancelar
           </Button>
         </div>
@@ -320,7 +320,7 @@ export function NewProfileForm({ onCancel }: Props) {
  */
 function MarketNote({ market }: { market: MarketInfo }) {
   return (
-    <p className="text-xs leading-relaxed text-text-muted">
+    <p className="text-caption leading-relaxed text-text-muted">
       Sesión {market.session_open}–{market.session_close} ({market.timezone}), ventana
       operativa {market.operating_open}–{market.operating_close}. Divisa {market.currency}.
       Benchmark {market.benchmark}. Universo {market.universe_file} con{" "}

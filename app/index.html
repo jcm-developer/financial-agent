@@ -1,31 +1,17 @@
 <!doctype html>
-<html lang="es" class="dark">
+<html lang="es">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#f8fafc" />
     <title>financial-agent · operativa</title>
-    <script>
-      // Se aplica antes de pintar para que no haya un fogonazo del tema
-      // equivocado. La clase ya viene puesta en <html> porque el tema por
-      // defecto es oscuro (F4.2); esto solo la quita si hay preferencia
-      // guardada de lo contrario.
-      //
-      // El interruptor manual gana a la preferencia del sistema en los dos
-      // sentidos, igual que hacia el dashboard viejo.
-      try {
-        // `tema` es la clave de antes de F8.8 y se lee como respaldo: cambiarla
-        // sin mas le habria puesto el tema oscuro a quien tenia guardado el
-        // claro, sin que nada lo explicara. Se puede quitar cuando ya no queden
-        // navegadores con la clave vieja.
-        const saved =
-          localStorage.getItem("theme") ?? localStorage.getItem("tema");
-        const dark = saved ? saved === "dark" : true;
-        document.documentElement.classList.toggle("dark", dark);
-        document.documentElement.style.colorScheme = dark ? "dark" : "light";
-      } catch {
-        /* localStorage bloqueado: se queda el tema por defecto. */
-      }
-    </script>
+    <!-- Verdana Health es un sistema de tema unico. Aqui habia un script en
+         linea que aplicaba el tema guardado antes de pintar para evitar el
+         fogonazo del tema equivocado; con un solo tema no hay nada que elegir
+         antes de pintar, asi que se fue con la clase `dark` y con el
+         interruptor. La clave `theme` de localStorage queda huerfana a
+         proposito: borrarla no aporta nada y el navegador la descarta solo. -->
   </head>
   <body>
     <div id="root"></div>

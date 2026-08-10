@@ -1,135 +1,241 @@
 @import "tailwindcss";
 
-/* shadcn/ui expects the `dark` variant as a CLASS and not as a media query: the
-   manual switch has to win over the system preference in both directions, which
-   is exactly what the old web/index.html already did with [data-theme]. */
-@custom-variant dark (&:is(.dark *));
+/* The three Verdana Health families, self-hosted as npm packages and bundled
+   into `app/dist`. Not a CDN on purpose: the application is served from a
+   container published on 127.0.0.1 and there is no guarantee of outbound
+   internet, so a Google Fonts link would leave the whole interface in the
+   fallback family exactly when it is deployed.
+
+   **The `@font-face` rules are written here rather than imported**, and the
+   reason is the subset. Each package's `index.css` declares every subset it
+   ships —cyrillic, greek, vietnamese— and Vite emits all of them: 262 KB of
+   woff2 against the 101 KB the latin files weigh on their own. The interface is
+   in Spanish and every character it needs (ñ, the accented vowels, ¿ and ¡) is
+   in `latin`, so the other subsets are bytes in the image that nothing will ever
+   render. The italic faces are left out for the same reason: the system has no
+   italic style.
+
+   These are variable fonts, so one file covers the whole weight range and there
+   is no second request for the semibold of a heading.
+
+   ⚠️ If a language outside the latin subset ever has to be shown, this is what
+   has to change; the symptom would be the fallback family appearing on those
+   glyphs alone, which is easy to miss. */
+@font-face {
+  font-family: "Plus Jakarta Sans Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url("@fontsource-variable/plus-jakarta-sans/files/plus-jakarta-sans-latin-wght-normal.woff2")
+    format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "DM Sans Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 1000;
+  src: url("@fontsource-variable/dm-sans/files/dm-sans-latin-wght-normal.woff2")
+    format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Fira Code Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 700;
+  src: url("@fontsource-variable/fira-code/files/fira-code-latin-wght-normal.woff2")
+    format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 /* ---------------------------------------------------------------------------
-   The palette inherited from the old dashboard, value by value. Not nostalgia:
+   VERDANA HEALTH DESIGN SYSTEM
+   ---------------------------------------------------------------------------
 
-   * The positive/negative pair is BLUE/RED and not green/red on purpose. It is
-     a diverging pair with a cold pole and a warm one, so it still reads without
-     telling green from red. Changing it here would have undone that decision
-     with nobody noticing until it was on screen.
-   * `delta-good`/`delta-bad` are SEPARATE from positive/negative: they are used
-     by the text of variations, where green is fine because it competes with no
-     chart series.
-   * The neutrals are warm (#f9f9f7, not #ffffff), which is what keeps it from
-     looking like a spreadsheet.
+   Deep navy and soft sage over a near-white ground: clinical precision tempered
+   by warmth. Everything below is the system as specified in DESIGN.md — there is
+   no second palette and no theme variant.
+
+   **Single theme, light only.** Verdana does not specify a dark counterpart, and
+   inventing one would have meant two visual systems arguing over a switch. The
+   `.dark` class, the `dark:` variant and the anti-flash script in `index.html`
+   were all removed with it.
+
+   The ramp below is the slate family the component specs already reference
+   (#E2E8F0 borders, #F1F5F9 dividers, #475569 helper text, #CBD5E1 control
+   borders, #020617 primary hover), written out once so nothing has to guess.
    --------------------------------------------------------------------------- */
 :root {
-  --page: #f9f9f7;
-  --surface: #fcfcfb;
-  --surface-sunken: #f2f2ef;
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  /* The inherited #898781 gave 3.50:1 over the card: below the 4.5 AA asks for
-     normal text, and this token is used precisely on 11-13 px labels. */
-  --text-muted: #76746f;
-  --grid: #e1e0d9;
-  --axis: #c3c2b7;
-  --border-subtle: rgba(11, 11, 11, 0.1);
-  --series-1: #2a78d6;
-  --series-2: #eb6834;
-  --positive: #2a78d6;
-  --negative: #e34948;
-  /* Ink: the same meanings when what carries them is TEXT and not a mark. A
-     chart fill passes at 3:1 and a label needs 4.5, so the blue and the red
-     above —which pass as marks, at 4.30 and 3.85— do not work as letters. It is
-     the same split delta-good/bad already made. */
-  --positive-ink: #2874d0;
-  --negative-ink: #c62726;
-  --delta-good: #006300;
-  --delta-bad: #d03b3b;
-  /* The mark amber is illegible as text on a light background (1.79:1). Here it
-     is only used as letters —notices, badges— so the light theme carries the
-     dark version; in dark, the original already gives 9.49:1. */
-  --warning: #9c6b03;
-  --shadow-card: 0 1px 2px rgba(11, 11, 11, 0.04);
-  --radius: 0.5rem;
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+  --slate-950: #020617;
+
+  /* The four state hues carry TWO tiers each, and confusing them is the easy
+     mistake. The saturated value is the MARK —a chart fill, a chip background at
+     8 % alpha, a dot— and the deeper one is the TEXT. Verdana itself makes the
+     split in its chip spec: #22C55E15 fill under #16A34A letters. A fill passes
+     at 3:1 and a label needs more, so the mark tier cannot be used as type. */
+  --success-mark: #22c55e;
+  --success-ink: #16a34a;
+  --warning-mark: #eab308;
+  --warning-ink: #ca8a04;
+  --error-mark: #ef4444;
+  --error-ink: #dc2626;
+  --info-mark: #0ea5e9;
+  --info-ink: #0284c7;
 }
 
-.dark {
-  --page: #0d0d0d;
-  --surface: #1a1a19;
-  --surface-sunken: #222221;
-  --text-primary: #ffffff;
-  --text-secondary: #c3c2b7;
-  --text-muted: #898781;
-  --grid: #2c2c2a;
-  --axis: #383835;
-  --border-subtle: rgba(255, 255, 255, 0.1);
-  --series-1: #3987e5;
-  --series-2: #d95926;
-  --positive: #3987e5;
-  --negative: #e66767;
-  --positive-ink: #3987e5;
-  --negative-ink: #e66767;
-  --delta-good: #0ca30c;
-  --delta-bad: #e66767;
-  --warning: #fab219;
-  --shadow-card: none;
-}
+@theme {
+  /* ---- Families ------------------------------------------------------- */
+  --font-sans: "DM Sans Variable", system-ui, sans-serif;
+  --font-headline: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --font-mono: "Fira Code Variable", ui-monospace, monospace;
 
-/* The names shadcn/ui expects on the left, the palette above on the right. That
-   way the components the CLI copies fit with no retouching, and at the same time
-   there are not two palettes competing. */
-@theme inline {
-  --color-background: var(--page);
-  --color-foreground: var(--text-primary);
+  /* ---- Type scale ------------------------------------------------------
+     Verbatim from DESIGN.md, weights and line heights included, so a heading is
+     `text-h2` and never a size plus a weight plus a leading assembled by hand.
+     Headline sizes carry the headline family; body sizes inherit DM Sans. */
+  --text-display: 2.5rem; /* 40px */
+  --text-display--line-height: 1.15;
+  --text-display--font-weight: 700;
 
-  --color-card: var(--surface);
-  --color-card-foreground: var(--text-primary);
-  --color-popover: var(--surface);
-  --color-popover-foreground: var(--text-primary);
+  --text-h1: 2rem; /* 32px */
+  --text-h1--line-height: 1.2;
+  --text-h1--font-weight: 700;
 
-  --color-primary: var(--series-1);
+  --text-h2: 1.5rem; /* 24px */
+  --text-h2--line-height: 1.25;
+  --text-h2--font-weight: 600;
+
+  --text-h3: 1.25rem; /* 20px */
+  --text-h3--line-height: 1.3;
+  --text-h3--font-weight: 600;
+
+  --text-h4: 1rem; /* 16px */
+  --text-h4--line-height: 1.35;
+  --text-h4--font-weight: 500;
+
+  --text-body-lg: 1.125rem; /* 18px */
+  --text-body-lg--line-height: 1.6;
+
+  --text-body: 1rem; /* 16px */
+  --text-body--line-height: 1.6;
+
+  --text-body-sm: 0.875rem; /* 14px */
+  --text-body-sm--line-height: 1.5;
+
+  --text-caption: 0.75rem; /* 12px */
+  --text-caption--line-height: 1.4;
+  --text-caption--font-weight: 500;
+
+  --text-code: 0.875rem; /* 14px */
+  --text-code--line-height: 1.6;
+
+  /* ---- Colours ---------------------------------------------------------
+     The shadcn/ui vocabulary on the left so the CLI's components still fit, the
+     Verdana palette on the right. */
+  --color-background: var(--slate-50);
+  --color-foreground: var(--slate-900);
+
+  --color-card: #ffffff;
+  --color-card-foreground: var(--slate-900);
+  --color-popover: #ffffff;
+  --color-popover-foreground: var(--slate-900);
+
+  /* Primary is the navy, not the sage: Verdana's primary rhythm is navy over
+     white, and the sage is reserved for links, CTAs and positive states. */
+  --color-primary: var(--slate-900);
+  --color-primary-hover: var(--slate-950);
   --color-primary-foreground: #ffffff;
-  --color-secondary: var(--surface-sunken);
-  --color-secondary-foreground: var(--text-primary);
+  --color-secondary: var(--slate-100);
+  --color-secondary-foreground: var(--slate-900);
 
-  --color-muted: var(--surface-sunken);
-  --color-muted-foreground: var(--text-muted);
-  --color-accent: var(--surface-sunken);
-  --color-accent-foreground: var(--text-primary);
+  --color-accent: #059669;
+  --color-accent-hover: #047857;
+  --color-accent-foreground: #ffffff;
 
-  --color-destructive: var(--negative);
+  --color-muted: var(--slate-100);
+  --color-muted-foreground: var(--slate-500);
+
+  --color-destructive: var(--error-mark);
+  --color-destructive-hover: var(--error-ink);
   --color-destructive-foreground: #ffffff;
 
-  --color-border: var(--border-subtle);
-  --color-input: var(--border-subtle);
-  --color-ring: var(--series-1);
+  --color-border: var(--slate-200);
+  --color-border-strong: var(--slate-300);
+  --color-input: var(--slate-200);
+  --color-ring: var(--slate-900);
 
-  /* The domain's vocabulary. It exists apart because a P&L cell is not
-     "destructive": it is negative, which does not mean the same thing and is not
-     coloured the same. */
-  --color-surface-sunken: var(--surface-sunken);
-  --color-text-secondary: var(--text-secondary);
-  --color-text-muted: var(--text-muted);
-  --color-positive: var(--positive);
-  --color-negative: var(--negative);
-  --color-positive-ink: var(--positive-ink);
-  --color-negative-ink: var(--negative-ink);
-  --color-delta-good: var(--delta-good);
-  --color-delta-bad: var(--delta-bad);
-  --color-warning: var(--warning);
-  --color-grid: var(--grid);
-  --color-axis: var(--axis);
+  /* ---- Domain vocabulary -----------------------------------------------
+     Apart from the shadcn names because a P&L cell is not "destructive": it is
+     negative, which does not mean the same thing. */
+  --color-surface-sunken: var(--slate-100);
+  --color-text-secondary: var(--slate-600);
+  --color-text-muted: var(--slate-500);
 
-  /* Series for Recharts (F4.6), in the order they have to be used. There are
-     two, and that is a limit and not an oversight: green is reserved for
-     `delta-good` and amber for `warning`, so a third hue would have to come out
-     of what is left, and what is left collides with the blue already in use
-     (purple gives dE 3.7-5.8 against --series-1 under deuteranopia, measured in
-     F5.6, against a target of 8). Beyond two series the answer is small
-     multiples, not a third colour. */
-  --color-series-1: var(--series-1);
-  --color-series-2: var(--series-2);
+  /* Marks: chart fills, areas, bars, dots. */
+  --color-positive: var(--success-mark);
+  --color-negative: var(--error-mark);
+  /* Ink: the same meanings when what carries them is text. */
+  --color-positive-ink: var(--success-ink);
+  --color-negative-ink: var(--error-ink);
+  --color-delta-good: var(--success-ink);
+  --color-delta-bad: var(--error-ink);
 
-  --radius-sm: calc(var(--radius) - 2px);
-  --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) + 2px);
+  --color-success: var(--success-mark);
+  --color-success-ink: var(--success-ink);
+  --color-warning: var(--warning-ink);
+  --color-warning-mark: var(--warning-mark);
+  --color-error: var(--error-mark);
+  --color-error-ink: var(--error-ink);
+  --color-info: var(--info-mark);
+  --color-info-ink: var(--info-ink);
+
+  --color-grid: var(--slate-100);
+  --color-axis: var(--slate-300);
+
+  /* Two chart series, in the order they must be used. Navy first because it is
+     the system's primary rhythm; sky second because the sage is spoken for.
+     Beyond two the answer is small multiples, never a third hue. */
+  --color-series-1: var(--slate-900);
+  --color-series-2: var(--info-mark);
+
+  /* ---- Radius ----------------------------------------------------------
+     4 badges · 8 buttons, cards, inputs · 12 modals and dropdown panels ·
+     16 large containers · full for avatars and status dots. */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* ---- Elevation -------------------------------------------------------
+     Gentle and diffused, all four cast from the navy. Never a hard drop
+     shadow: the diffusion is what keeps it clinical. */
+  --shadow-sm: 0 1px 3px 0 rgb(15 23 42 / 0.03);
+  --shadow-md: 0 2px 6px 0 rgb(15 23 42 / 0.05);
+  --shadow-lg: 0 4px 16px 0 rgb(15 23 42 / 0.07);
+  --shadow-xl: 0 8px 32px 0 rgb(15 23 42 / 0.1);
+
+  /* ---- Motion ----------------------------------------------------------
+     Calm: nothing overshoots and nothing bounces. */
+  --ease-calm: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 @layer base {
@@ -138,28 +244,141 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    font-size: 14px;
-    line-height: 1.5;
+    @apply bg-background text-foreground text-body antialiased;
+    font-family: var(--font-sans);
   }
 
-  /* Visible focus on anything that can receive it: it is half of F4.9 and costs
-     one rule to have from the start instead of auditing it at the end. */
-  :focus-visible {
-    @apply outline-2 outline-offset-1 outline-ring;
+  /* Headings are Plus Jakarta Sans wherever they appear, so a heading written
+     without the helper still comes out in the headline family. */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-headline);
   }
 
-  /* Figures in tables are compared vertically, so they need a fixed width per
-     digit. Without this the money columns wobble and the eye cannot run down
-     them in one go. */
+  code,
+  pre,
+  samp,
+  kbd {
+    font-family: var(--font-mono);
+  }
+
+  /* Verdana rule 10: results and figures go in Fira Code, whose tabular
+     numerals is what lets a money column be read down in one go. `.tabular` is
+     the switch, and `<Td numeric>` applies it so tables never have to remember. */
   .tabular {
+    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
   }
 
-  /* Whoever asks for reduced motion means it: the pulsing dot of the live-data
-     indicator is decorative —the text already says the state— and it makes some
-     people dizzy. */
+  /* Focus is the input spec generalised: the 2 px navy edge plus its 3 px halo,
+     on anything that can take focus and not just on the fields. */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  ::selection {
+    background: rgb(15 23 42 / 0.12);
+  }
+
+  /* Calm scrollbars: the track disappears and the thumb is a slate capsule. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--slate-300) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--slate-300);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--slate-400);
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  /* The 1–10 sliders. The filled portion is a gradient stop driven by `--fill`,
+     which `<Slider>` sets inline: without it the track is uniform and the
+     control stops showing where in the range it sits. */
+  .slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 2.5rem;
+    background: transparent;
+  }
+  .slider::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 9999px;
+    background: linear-gradient(
+      to right,
+      var(--slate-900) 0 var(--fill, 0%),
+      var(--slate-200) var(--fill, 0%) 100%
+    );
+  }
+  .slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    margin-top: -6px;
+    width: 18px;
+    height: 18px;
+    border-radius: 9999px;
+    background: #ffffff;
+    border: 1.5px solid var(--slate-900);
+    box-shadow: var(--shadow-md);
+    transition: transform 150ms var(--ease-calm);
+  }
+  .slider::-moz-range-track {
+    height: 6px;
+    border-radius: 9999px;
+    background: var(--slate-200);
+  }
+  .slider::-moz-range-progress {
+    height: 6px;
+    border-radius: 9999px;
+    background: var(--slate-900);
+  }
+  .slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 9999px;
+    background: #ffffff;
+    border: 1.5px solid var(--slate-900);
+    box-shadow: var(--shadow-md);
+  }
+  .slider:active::-webkit-slider-thumb {
+    transform: scale(1.1);
+  }
+  .slider:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* Skip link: first in the tab order, visible only when focused. Without it,
+     reaching the content with the keyboard means going through the header and
+     the nine sidebar entries on EVERY page. */
+  .skip-link {
+    @apply sr-only;
+  }
+  .skip-link:focus {
+    @apply not-sr-only fixed top-4 left-4 z-50 rounded-md border border-border bg-card px-4 py-2 text-body-sm shadow-lg;
+  }
+
+  /* Whoever asks for reduced motion means it. */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -169,14 +388,29 @@
       transition-duration: 0.01ms !important;
     }
   }
+}
 
-  /* Skip link: first in the tab order and visible only when focused.
-     Without it, reaching the content with the keyboard means going through the
-     header and the nine sidebar entries on EVERY page. */
-  .skip-link {
-    @apply sr-only;
+@layer utilities {
+  /* The entrance of a dropdown panel or a tooltip. 150 ms to show and nothing
+     on hide, which is the tooltip timing Verdana specifies, applied to both. */
+  @keyframes verdana-appear {
+    from {
+      opacity: 0;
+      transform: translateY(-2px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
-  .skip-link:focus {
-    @apply not-sr-only fixed top-2 left-2 z-50 rounded-md border border-border bg-card px-3 py-2 text-[13px];
+
+  .appear {
+    animation: verdana-appear 150ms var(--ease-calm);
+  }
+  .appear-up {
+    transform-origin: bottom center;
+  }
+  .appear-down {
+    transform-origin: top center;
   }
 }

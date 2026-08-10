@@ -183,7 +183,7 @@ function SmallMultiples({ series }: Props) {
       <div className="grid h-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {series.map((s) => (
           <div key={s.name} className="flex min-h-0 flex-col">
-            <p className="truncate text-xs font-medium" title={s.name}>
+            <p className="truncate text-caption font-medium" title={s.name}>
               {s.name}
             </p>
             <div className="min-h-0 flex-1">

@@ -6,16 +6,25 @@ import { cn } from "@/lib/utils";
 /**
  * What every chart shares.
  *
- * **Colours are passed as `var(--series-1)` and not as hexadecimal.** SVG
- * presentation attributes accept CSS variables, so the theme switch repaints the
- * charts on its own: without that, the colours would have to be read with
- * `getComputedStyle` and redrawn by hand on every change.
+ * **Colours are passed as `var(--color-…)` and never as hexadecimal.** SVG
+ * presentation attributes accept CSS variables, so a chart is repainted by
+ * editing `index.css` and nothing else: without that, the colours would have to
+ * be read with `getComputedStyle` and redrawn by hand.
  *
- * The palette is the one inherited from the old dashboard and **it is
- * validated**, not assumed: both series pass the six checks —lightness band,
- * chroma, separation under colour blindness, normal-vision floor and contrast—
- * in light and in dark. The blue/red pair separates with ΔE 21.6 under
- * protanopia, well above the minimum of 8.
+ * The palette is Verdana's. Two things follow from it that are worth knowing
+ * before adding a chart:
+ *
+ * - **Polarity is the success/error pair** (#22C55E / #EF4444) — the mark tier,
+ *   which is what a fill needs. ⚠️ It is a green/red pair, so under protanopia
+ *   and deuteranopia the two poles are close to each other: the zero line, the
+ *   sign already written into every figure and the table view underneath are
+ *   what carry the reading when the hue does not.
+ * - **Identity is series-1 then series-2** (navy, then the info sky), assigned
+ *   in that fixed order and never cycled. Sage is missing from that list on
+ *   purpose: Verdana reserves it for interactive elements and positive states,
+ *   so a chart series painted sage would read as a link.
+ *
+ * Colour codes polarity **or** identity in a given chart, never both.
  */
 
 export const COLORS = {
@@ -85,24 +94,24 @@ export function Chart({
 
   return (
     <Card as="section">
-      <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-3">
         <BlockTitle>{title}</BlockTitle>
         {!empty && (
           <LinkButton
             onClick={() => setShowTable((v) => !v)}
             aria-pressed={showTable}
-            className="text-xs"
+            className="text-caption"
           >
             {showTable ? "Ver gráfica" : "Ver tabla"}
           </LinkButton>
         )}
       </div>
       {explanation && (
-        <p className="mb-3 text-xs leading-snug text-text-muted">{explanation}</p>
+        <p className="mb-4 text-caption font-normal text-text-secondary">{explanation}</p>
       )}
 
       {empty ? (
-        <p className="py-6 text-[13px] text-text-muted">{empty}</p>
+        <p className="py-8 text-body-sm text-text-secondary">{empty}</p>
       ) : showTable ? (
         <div className="overflow-x-auto">{table}</div>
       ) : (
@@ -141,12 +150,12 @@ export function ChartTooltip({
   if (!active || !payload?.length) return null;
 
   return (
-    <Card padding="px-2.5 py-1.5" className="rounded-md text-xs">
+    <Card elevated padding="px-3 py-2" className="text-caption">
       {label !== undefined && (
-        <p className="mb-0.5 font-medium text-foreground">{label}</p>
+        <p className="mb-1 font-medium text-foreground">{label}</p>
       )}
       {payload.map((entry, index) => (
-        <p key={index} className="tabular flex items-center gap-1.5 text-text-secondary">
+        <p key={index} className="tabular flex items-center gap-2 text-text-secondary">
           <span
             aria-hidden
             className="inline-block size-2 rounded-full"
@@ -181,11 +190,11 @@ export function SimpleTable({
   rows: (string | number)[][];
 }) {
   return (
-    <table className="w-full text-xs">
+    <table className="w-full text-caption">
       <thead>
-        <tr className="border-b border-border text-left text-text-muted">
+        <tr className="border-b border-border text-left tracking-[0.5px] text-text-secondary uppercase">
           {columns.map((c, i) => (
-            <th key={c} scope="col" className={i === 0 ? "py-1 pr-3" : "py-1 pr-3 text-right"}>
+            <th key={c} scope="col" className={i === 0 ? "py-2 pr-4" : "py-2 pr-4 text-right"}>
               {c}
             </th>
           ))}
@@ -193,11 +202,13 @@ export function SimpleTable({
       </thead>
       <tbody>
         {rows.map((row, i) => (
-          <tr key={i} className="border-b border-border last:border-0">
+          <tr key={i} className="border-b border-surface-sunken last:border-0">
             {row.map((cell, j) => (
               <td
                 key={j}
-                className={j === 0 ? "py-1 pr-3" : "tabular py-1 pr-3 text-right"}
+                className={
+                  j === 0 ? "py-2 pr-4 font-normal" : "tabular py-2 pr-4 text-right font-normal"
+                }
               >
                 {cell}
               </td>

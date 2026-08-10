@@ -17,13 +17,13 @@ export function NotFound() {
 
   return (
     <Card padding="p-6">
-      <BlockTitle as="h1" className="text-[15px]">
+      <BlockTitle as="h1" className="text-h4">
         Esta página no existe
       </BlockTitle>
-      <p className="mt-2 text-[13px] text-text-secondary">
+      <p className="mt-2 text-body-sm text-text-secondary">
         No hay nada en <code className="text-foreground">{pathname}</code>.
       </p>
-      <Link to="/" className={buttonClasses("neutral", "mt-4")}>
+      <Link to="/" className={buttonClasses("primary", "mt-6")}>
         Volver al inicio
       </Link>
     </Card>

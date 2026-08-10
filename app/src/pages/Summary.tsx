@@ -217,10 +217,10 @@ function Figure({
   children?: React.ReactNode;
 }) {
   return (
-    <Card padding="p-3">
-      <p className="text-xs text-text-muted">{label}</p>
-      <p className={cn("tabular mt-0.5 text-[17px] font-semibold", className)}>{value}</p>
-      {children && <p className="mt-1 text-xs leading-snug">{children}</p>}
+    <Card padding="p-6">
+      <p className="text-caption text-text-muted">{label}</p>
+      <p className={cn("tabular mt-0.5 text-h3 font-semibold", className)}>{value}</p>
+      {children && <p className="mt-1 text-caption leading-snug">{children}</p>}
     </Card>
   );
 }
@@ -249,12 +249,12 @@ function OpenPositionTableRow({ row, symbol }: { row: PositionRow; symbol: strin
       <Td numeric>{money(row.market_value, symbol)}</Td>
       <Td numeric className={signClass(row.unrealized_pnl)}>
         {signedMoney(row.unrealized_pnl, symbol)}
-        <span className="ml-1 text-xs">{percent(row.unrealized_pnl_pct, { sign: true })}</span>
+        <span className="ml-1 text-caption">{percent(row.unrealized_pnl_pct, { sign: true })}</span>
       </Td>
       <Td numeric>
         {money(row.stop_price, symbol)}
         {row.stop_distance_pct !== null && row.stop_distance_pct !== undefined && (
-          <span className="ml-1 text-xs text-text-muted">
+          <span className="ml-1 text-caption text-text-muted">
             {percent(row.stop_distance_pct)}
           </span>
         )}

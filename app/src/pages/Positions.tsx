@@ -127,7 +127,7 @@ function OpenPositionTableRow({ row, symbol }: { row: PositionRow; symbol: strin
       <Td>
         <span className="font-medium">{row.symbol}</span>
         {row.thesis && (
-          <p className="mt-0.5 max-w-md text-xs leading-snug text-text-muted">
+          <p className="mt-0.5 max-w-md text-caption leading-snug text-text-muted">
             {row.thesis}
           </p>
         )}
@@ -143,14 +143,14 @@ function OpenPositionTableRow({ row, symbol }: { row: PositionRow; symbol: strin
       </Td>
       <Td numeric className={signClass(row.unrealized_pnl)}>
         {signedMoney(row.unrealized_pnl, symbol)}
-        <span className="ml-1 text-xs">
+        <span className="ml-1 text-caption">
           {percent(row.unrealized_pnl_pct, { sign: true })}
         </span>
       </Td>
       <Td numeric>
         {money(row.stop_price, symbol)}
         {row.stop_distance_pct !== null && row.stop_distance_pct !== undefined && (
-          <span className="ml-1 text-xs text-text-muted" title="Distancia al stop">
+          <span className="ml-1 text-caption text-text-muted" title="Distancia al stop">
             {percent(row.stop_distance_pct)}
           </span>
         )}
@@ -184,7 +184,7 @@ function ClosedPositionTableRow({ row, symbol }: { row: PositionRow; symbol: str
       <Td numeric className={signClass(row.realized_pnl)}>
         {signedMoney(row.realized_pnl, symbol)}
       </Td>
-      <Td className="max-w-sm text-xs text-text-secondary">{row.exit_reason ?? "—"}</Td>
+      <Td className="max-w-sm text-caption text-text-secondary">{row.exit_reason ?? "—"}</Td>
     </Row>
   );
 }

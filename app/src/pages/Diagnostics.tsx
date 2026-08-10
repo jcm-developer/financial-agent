@@ -36,7 +36,7 @@ export function Diagnostics() {
       <Section title="Salud del ingestor" query={ingest}>
         {(data) => (
           <Card>
-            <p className="text-[13px]">
+            <p className="text-body-sm">
               <span
                 className={cn(
                   "font-semibold",
@@ -48,7 +48,7 @@ export function Diagnostics() {
               {" — "}
               {data.message}
             </p>
-            <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-[13px] sm:grid-cols-4">
+            <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-body-sm sm:grid-cols-4">
               <Item label="Símbolos seguidos" value={data.symbols_tracked ?? 0} />
               <Item
                 label="Barras guardadas"
@@ -71,7 +71,7 @@ export function Diagnostics() {
       <Section title="Cotizaciones" query={quotes}>
         {(data: QuoteRow[]) =>
           data.length === 0 ? (
-            <p className="text-[13px] text-text-muted">
+            <p className="text-body-sm text-text-muted">
               Todavía no hay cotizaciones. El ingestor las escribe en horario de mercado, y
               solo de los símbolos de los perfiles activos.
             </p>
@@ -142,15 +142,15 @@ function MarketCard({ market }: { market: MarketInfo }) {
         <span
           className={
             market.is_operating
-              ? "text-xs font-semibold text-delta-good"
-              : "text-xs text-text-muted"
+              ? "text-caption font-semibold text-delta-good"
+              : "text-caption text-text-muted"
           }
         >
           {market.is_operating ? "en ventana" : "fuera de ventana"}
         </span>
       </div>
-      <p className="mt-1 text-[13px] text-text-secondary">{market.status_text}</p>
-      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[13px]">
+      <p className="mt-1 text-body-sm text-text-secondary">{market.status_text}</p>
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-body-sm">
         <dt className="text-text-muted">Sesión</dt>
         <dd className="tabular text-right">
           {market.session_open}–{market.session_close}
