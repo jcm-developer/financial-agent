@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera)
+Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9 abierta: el agente decide sin comisiones, y dos de las tres posiciones abiertas son perdedoras esperadas)
 
 ---
 
@@ -2440,6 +2440,45 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
 
       Las tres comparten causa y por eso van juntas: la interfaz enseña resultados de un
       sistema con **dos relojes** y los presenta como si tuviera uno.
+- [ ] **F9.9** ⚠️ **El agente no sabe que las comisiones existen: no entran en el R/R, ni en el
+      dimensionado, ni en el prompt.** Planteado el 2026-08-10 al leer las tarjetas de F4.17.
+      Las comisiones se cobran (F5.9) y ya se **enseñan** (F4.17), pero **nadie decide con
+      ellas**, y son cuatro huecos distintos con arreglos distintos.
+
+      1. **El R/R se calcula sin fricción, y eso invalida el filtro.** `risk.py` compara
+         `(objetivo − precio) / (precio − stop)` contra `min_reward_risk`, y ahí no hay
+         comisión. Medido sobre las tres posiciones abiertas del experimento, con la tarifa de
+         ida y vuelta:
+
+         | Símbolo | R/R en papel | Ida y vuelta | **R/R real** |
+         |---|---|---|---|
+         | ACX.MC | 1,33 | 8,22 € | **1,15** |
+         | ALV.DE | 1,24 | 6,00 € | **0,97** |
+         | CABK.MC | 1,02 | 8,22 € | **0,72** |
+
+         Con `min_reward_risk = 1`, **las tres pasaron el filtro y dos son perdedoras
+         esperadas**. No es un ajuste fino: es el filtro midiendo otra cosa que la que dice
+         medir.
+      2. **El dimensionado por caja no reserva la comisión, y eso puede tirar una orden ya
+         aprobada.** `risk.py` hace `floor(cash / price)` con el precio de la barra;
+         `sim_broker.buy_market` cobra `qty × precio_de_ejecución + comisión` —con 5 pb de
+         deslizamiento encima— y **lanza `BrokerError` si no llega**. La ventana es estrecha
+         pero existe, y hoy no ha saltado por suerte: el tope de exposición ató antes que la
+         caja en los dos rechazos registrados. Con 2,71 € de efectivo, el próximo caso en que
+         la caja sea la que ate es el que falla.
+      3. **El suelo de 100 € es el único guardarraíl y es débil.** `MIN_ORDER_NOTIONAL` existe
+         justo por esto —«por debajo, la comisión se come el resultado»— pero en una orden de
+         100 € en Madrid la ida y vuelta son **8,22 €, un 8,2 %**. Ya está escrito en
+         [src/fees.py](src/fees.py) como consecuencia asumida; lo que no está decidido es si
+         100 € sigue siendo el número correcto **ahora que la tarifa es real** y no cero.
+      4. **El prompt del analista no las menciona.** El modelo propone stop y objetivo sin
+         saber que operar cuesta dinero, así que un objetivo a +0,3 % le parece razonable.
+
+      ⚠️ **Tocar esto cambia lo que el experimento mide**, y por eso no se hace de corrido: los
+      cinco perfiles llevan días corriendo con estas reglas, y cambiar el dimensionado a mitad
+      parte el histórico en dos mitades no comparables. Lo barato y lo primero es **(2)**, que
+      es un fallo sin criterio detrás. **(1)** es la que cambia resultados. Y para **(4)**, ojo
+      con la regla de honestidad de F9.7: darle la tarifa al modelo es darle un dato nuevo.
 
 ---
 
