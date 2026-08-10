@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo)
+Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera)
 
 ---
 
@@ -993,6 +993,57 @@ diez sesiones en silencio.
 
       **607 tests en verde, typecheck limpio, 14 tests del frontend.** Tipos regenerados
       (`app/src/api/types.ts`, 38 → sin la entrada de `/api/dashboard`).
+- [x] **F4.14** **Las pantallas de datos se refrescan cada minuto solas** (2026-08-10). Pedido
+      después de cerrar F4, igual que FE.14: hacía falta usar la interfaz con el experimento
+      corriendo para ver el hueco.
+
+      **El diagnóstico, que no era el que parecía.** El SSE de F4.5 sí funciona y sí trae
+      precios cada dos segundos, pero **los escribe en `keys.quotes()`, y esa entrada la lee
+      una sola pantalla: Ingesta**. El precio de la cartera no sale de ahí: sale de
+      `/api/positions`, que es quien valora una posición abierta —lee `quotes_live`, cae a
+      `market_snapshots` si no hay, y de ahí calcula `last_price`, `market_value`,
+      `unrealized_pnl` y la distancia al stop (`api/queries.py`, `_value_position`)—. Con
+      `staleTime` de 30 s y ningún intervalo, esa consulta **no se repetía nunca**: el número
+      de la pantalla era el del momento de abrir la pestaña, y de ahí el F5 cada rato. Lo
+      mismo con las ocho cifras de Resumen, que vienen de `metrics` en `/api/profiles`.
+
+      **Un `refetchInterval` de 60 s, y el minuto es la cadencia del ingestor** (D4), no un
+      número redondo: `quotes_live` recibe una escritura por símbolo y minuto, así que sondear
+      cada 15 s serían cuatro peticiones para que nos devuelvan el mismo precio. Y con el
+      retraso de 15 minutos del feed europeo confirmado en F2.1c, un intervalo más corto no
+      compra un precio más fresco. `staleTime` baja a la mitad del intervalo por comentario, no
+      por valor: se queda en 30 s, que ya era eso.
+
+      Alcance: `useProfiles`, `useAnalytics` y las cinco tablas paginadas (`usePage`:
+      posiciones, decisiones, órdenes, eventos de riesgo, ciclos), más las consultas de
+      Comparar, que van por `useQueries` porque su número depende de cuántos experimentos
+      estén marcados y comparten `REFRESH_MS` para no poder desviarse.
+
+      **Cuatro cosas que se descartaron:**
+      - **El intervalo por defecto en `createQueryClient`.** Es el atajo evidente y toca tres
+        grupos donde hace daño: lo que ya alimenta el SSE (`quotes`, `ingest-status`,
+        `cycles/control`), donde un sondeo en paralelo pide dos veces lo mismo y deshace lo que
+        compró D6; los formularios de configuración, a los que les cambiaría el valor bajo los
+        dedos a mitad de edición; y `limits-preview`, cacheado por posición del slider, que
+        volvería a pedir cada pareja probada para siempre. La regla queda escrita en
+        `REFRESH_MS`: **una pantalla que lee histórico o valoraciones se refresca, un
+        formulario no.**
+      - **Valorar las posiciones en el navegador** con los precios que ya trae el SSE. Habría
+        dado precios cada dos segundos y es exactamente lo que prohíbe F6.8: una segunda
+        implementación de un cálculo que ya es del servidor, condenada a discrepar con él, con
+        la pantalla mostrando un P&L que la API nunca dijo.
+      - **Mandar las posiciones por el stream.** Es más trabajo en el sitio donde menos hace
+        falta —la base es local y la petición es de milisegundos— y no cubre las tablas
+        paginadas, que no pueden viajar por un evento sin llevarse los filtros y el `offset`
+        detrás.
+      - **Suspender el intervalo con el mercado cerrado.** Fuera de la ventana operativa
+        (FE.13) el minuto devuelve lo mismo, sí, pero condicionarlo ataría cada pantalla a la
+        consulta de `/api/markets` para ahorrar una petición contra un SQLite local. Lo que sí
+        se aprovecha es el defecto de TanStack: `refetchIntervalInBackground` sigue en false,
+        así que una pestaña en otra ventana deja de sondear y es el refetch al enfocar el que
+        la pone al día.
+
+      **670 tests en verde, typecheck limpio, 50 tests del frontend.**
 
 ### F5 — Pantalla de perfiles / experimentos
 

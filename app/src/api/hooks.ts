@@ -40,6 +40,31 @@ import type {
  * `models.py`, which is precisely what the generated types prevent.
  */
 
+/**
+ * How often a screen that shows data asks the server again.
+ *
+ * **One minute, because that is the ingestor's cadence and not because it is a
+ * round number** (D4): `quotes_live` gets one write per symbol per minute, so
+ * polling every fifteen seconds would spend four requests to be told the same
+ * price. And the feed itself is fifteen minutes behind in Europe (F2.1c), so a
+ * faster interval would not buy a fresher number, only more traffic.
+ *
+ * **It is opted into hook by hook and is not a default of the client**, which is
+ * the decision worth writing down. A `refetchInterval` in `createQueryClient`
+ * would also reach three groups of queries where it does damage: the ones the
+ * SSE already feeds (`quotes`, `ingest-status`, `cycles/control`), where a
+ * parallel poll asks for the same thing twice and breaks what D6 bought; the
+ * configuration forms, whose values would be replaced under the user's fingers
+ * mid-edit; and `limits-preview`, cached once per slider position, which would
+ * re-ask for every pair ever tried, forever. So the rule is: **a screen that
+ * reads history or valuations refreshes, a form does not.**
+ *
+ * `refetchIntervalInBackground` stays at its default of false on purpose: a tab
+ * left open in another window stops polling, and the refetch on focus is what
+ * brings it up to date when it comes back.
+ */
+export const REFRESH_MS = 60_000;
+
 /** A table's filters, exactly as they travel in the query string. */
 type Filters = Record<string, string | number | undefined>;
 
@@ -76,6 +101,11 @@ export function useProfiles(includeArchived = false) {
         includeArchived ? { include_archived: true } : undefined,
         signal,
       ),
+    // The list carries `metrics`, and `metrics` carries the equity: it is where
+    // the eight figures of Resumen and every card on Inicio come from. Without
+    // the interval the capital of an experiment under watch stays frozen at
+    // whatever it was when the tab was opened.
+    refetchInterval: REFRESH_MS,
   });
 }
 
@@ -153,6 +183,7 @@ export function useAnalytics(profile: string | undefined) {
     queryFn: ({ signal }) =>
       api.get<Analytics>("/api/analytics", { profile }, signal),
     enabled: Boolean(profile),
+    refetchInterval: REFRESH_MS,
   });
 }
 
@@ -166,6 +197,16 @@ export function useAnalytics(profile: string | undefined) {
  * That way going back from "rejected only" to "all" paints instantly from the
  * cache instead of waiting for another request, and two screens with different
  * filters do not overwrite each other.
+ *
+ * **These five tables are the reason `REFRESH_MS` exists.** The prices of the
+ * book do not travel over the stream: `/api/positions` is what values an open
+ * position —it reads `quotes_live`, falls back to the last `market_snapshots`,
+ * and from there computes `last_price`, `market_value`, `unrealized_pnl` and the
+ * distance to the stop— so the only way to see a price move is to ask the
+ * endpoint again. **Valuing them in the browser from the `quotes` cache was the
+ * alternative and it is rejected for the same reason as F6.8**: it would be a
+ * second implementation of a calculation the server already owns, condemned to
+ * disagree with it, and the screen would be showing a P&L the API never said.
  *
  * @template T - The generated `Page_*` wrapper the endpoint returns.
  * @param key - Base cache key, which the filters extend.
@@ -185,6 +226,7 @@ function usePage<T>(
     queryFn: ({ signal }) =>
       api.get<T>(path, { profile, ...filters }, signal),
     enabled: Boolean(profile),
+    refetchInterval: REFRESH_MS,
   });
 }
 

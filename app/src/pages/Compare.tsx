@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import { useProfiles } from "@/api/hooks";
+import { REFRESH_MS, useProfiles } from "@/api/hooks";
 import { keys } from "@/api/keys";
 import type { Analytics, ProfileSummary } from "@/api/types";
 import { Alert, Card, Loading, PageTitle, SectionTitle } from "@/components/pieces";
@@ -95,11 +95,17 @@ function Picked({
   // decision in F4's header: several typed endpoints beat one untyped bundle,
   // and here it also means picking a fourth experiment does not refetch the
   // three already on screen.
+  //
+  // `refetchInterval` is repeated here instead of reusing `useAnalytics`,
+  // because the number of queries depends on how many experiments are ticked and
+  // only `useQueries` takes a list. It shares `REFRESH_MS` so it cannot drift
+  // away from the cadence of every other screen.
   const analytics = useQueries({
     queries: selected.map((profile) => ({
       queryKey: keys.analytics(profile.name),
       queryFn: ({ signal }: { signal: AbortSignal }) =>
         api.get<Analytics>("/api/analytics", { profile: profile.name }, signal),
+      refetchInterval: REFRESH_MS,
     })),
   });
 
