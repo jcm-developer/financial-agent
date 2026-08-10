@@ -22,6 +22,7 @@ from helpers import (
     rising,
 )
 from src.config import RiskLimits
+from src.cycle import CycleReport
 from src.db import Database
 
 
@@ -29,6 +30,37 @@ from src.db import Database
 # ----------------------------------------------------------------------
 # Casos
 # ----------------------------------------------------------------------
+
+def test_the_summary_carries_the_profile_currency():
+    """The summary is shown verbatim on the Ciclos screen, so it is screen text
+    and the symbol travels with the figure (FE.8).
+
+    It used to write `$` as a literal, so a European experiment reported
+    "Equity: $10,000.00" — an amount you could compare with another book's as if
+    they were the same unit. The two markets are asserted together because what
+    broke was precisely assuming one of them.
+    """
+    numbers = dict(equity_start=10_000.0, equity_end=10_040.5)
+
+    assert "Equity: €10,000.00 -> €10,040.50" in CycleReport(
+        currency_symbol="€", **numbers
+    ).summary()
+    assert "Equity: $10,000.00 -> $10,040.50" in CycleReport(
+        currency_symbol="$", **numbers
+    ).summary()
+
+
+def test_a_run_fills_the_currency_from_the_profiles_market(db):
+    """The wiring, which is the half a direct test of `summary()` does not see:
+    it is `run()` that has to look the market up."""
+    report = make_cycle(
+        db, make_settings(), StubLLM(entry=BUY, exit_=HOLD_EXIT),
+        StubMarketData({s: rising() for s in WATCHLIST}),
+    ).run()
+
+    assert report.currency_symbol == "$"
+    assert "$" in report.summary()
+
 
 def test_a_full_cycle_opens_positions_and_records_everything(db):
     settings = make_settings()

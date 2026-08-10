@@ -19,6 +19,7 @@ from src.cycle import TradingCycle
 from src.db import Database
 from src.indicators import Bar
 from src.llm import LLMResponse
+from src.market_calendar import get_market
 from src.market_data import build_snapshot
 from src.risk import RiskManager
 from src.sim_broker import SimBroker
@@ -122,7 +123,13 @@ def make_cycle(
     return TradingCycle(
         settings=settings, broker=broker, market_data=market_data,
         database=db, analyst=Analyst(llm, interval=settings.bar_interval),
-        risk_manager=RiskManager(settings.risk), portfolio_id=portfolio_id,
+        # Wired like `TradingCycle.build`: the risk manager gets the profile's
+        # currency, because its verdict text is stored and shown as it is.
+        risk_manager=RiskManager(
+            settings.risk,
+            currency_symbol=get_market(settings.market).currency_symbol,
+        ),
+        portfolio_id=portfolio_id,
     )
 
 

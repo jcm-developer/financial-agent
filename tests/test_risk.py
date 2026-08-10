@@ -332,6 +332,48 @@ def test_stop_takes_precedence_over_target(manager):
     assert signals[0].rule == "stop_loss_hit"
 
 
+# -- Divisa en el texto del veredicto ----------------------------------------
+
+def test_approval_text_carries_the_profile_currency():
+    """`reason` is screen text, not a log line: it is stored in
+    `risk_events.reason` and the Riesgo screen prints it verbatim, so a European
+    profile that writes `$` invites comparing its figures with another book's as
+    if they were the same unit (FE.8)."""
+    verdict = RiskManager(LIMITS, currency_symbol="€").evaluate_entry(
+        proposal(), account(), atr=2.0
+    )
+
+    assert verdict.approved
+    assert "€20,000.00" in verdict.reason
+    assert "$" not in verdict.reason
+
+
+def test_rejection_text_carries_the_profile_currency():
+    """The rejections carry figures too, and they are the ones read most: the
+    Riesgo screen opens on all the verdicts."""
+    tight = RiskLimits(**{**LIMITS.__dict__, "min_order_notional": 100_000.0})
+
+    verdict = RiskManager(tight, currency_symbol="€").evaluate_entry(
+        proposal(), account(), atr=2.0
+    )
+
+    assert not verdict.approved
+    assert verdict.rule == "min_order_notional"
+    assert "€100,000.00" in verdict.reason
+    assert "$" not in verdict.reason
+
+
+def test_manager_without_a_currency_writes_a_bare_figure(manager):
+    """The default is the empty string and not `$`, which is what it used to be:
+    with no market to ask, a bare figure says nothing and `$` says something
+    false."""
+    verdict = manager.evaluate_entry(proposal(), account(), atr=2.0)
+
+    assert verdict.approved
+    assert "por 20,000.00" in verdict.reason
+    assert "$" not in verdict.reason
+
+
 # -- Configuracion -----------------------------------------------------------
 
 def test_risk_per_trade_above_max_position_is_rejected_at_construction():

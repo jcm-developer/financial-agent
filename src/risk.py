@@ -30,8 +30,21 @@ class KillSwitch:
 
 
 class RiskManager:
-    def __init__(self, limits: RiskLimits) -> None:
+    def __init__(self, limits: RiskLimits, currency_symbol: str = "") -> None:
         self.limits = limits
+        #: What the profile's market prices in, for the text of the verdict.
+        #:
+        #: The verdict's `reason` is not a log line: it is stored in
+        #: `risk_events.reason` and the Riesgo screen prints it verbatim, so it
+        #: is screen text and the currency has to travel with the figure (FE.8).
+        #: It used to write `$` as a literal, which meant a European experiment
+        #: read "Aprobadas 9 acciones de ALV.DE por $3,949.20" — an amount you
+        #: could compare with another book's as if they were the same unit.
+        #:
+        #: **The default is the empty string and not `$`**: a manager built
+        #: without one writes a bare figure, which says nothing, instead of
+        #: saying something false.
+        self.currency_symbol = currency_symbol
 
     # -- Nivel cartera -----------------------------------------------------
 
@@ -113,6 +126,7 @@ class RiskManager:
         limits = self.limits
         symbol = proposal.symbol
         price = proposal.reference_price
+        money = self.currency_symbol
 
         if proposal.action != "buy":
             return _reject("action_not_buy", f"La accion propuesta es {proposal.action!r}, no una compra.")
@@ -205,8 +219,8 @@ class RiskManager:
         if remaining_exposure <= 0:
             return _reject(
                 "max_total_exposure_pct",
-                f"Exposicion actual ${account.positions_value:,.2f} ya cubre el limite de "
-                f"${exposure_cap:,.2f}.",
+                f"Exposicion actual {money}{account.positions_value:,.2f} ya cubre el "
+                f"limite de {money}{exposure_cap:,.2f}.",
             )
         exposure_qty = math.floor(remaining_exposure / price)
         if exposure_qty < qty:
@@ -221,7 +235,7 @@ class RiskManager:
             return _reject(
                 binding_rule if binding_rule != "risk_per_trade" else "qty_below_one",
                 f"El tamano calculado es {qty} acciones (limitado por {binding_rule}); "
-                f"a ${price:,.2f} por accion no da para una unidad.",
+                f"a {money}{price:,.2f} por accion no da para una unidad.",
                 details={
                     "risk_budget": round(risk_budget, 2),
                     "risk_per_share": round(risk_per_share, 4),
@@ -233,15 +247,15 @@ class RiskManager:
         if notional < limits.min_order_notional:
             return _reject(
                 "min_order_notional",
-                f"Valor de la orden ${notional:,.2f} por debajo del minimo "
-                f"${limits.min_order_notional:,.2f}.",
+                f"Valor de la orden {money}{notional:,.2f} por debajo del minimo "
+                f"{money}{limits.min_order_notional:,.2f}.",
                 details={"qty": qty, "price": round(price, 4)},
             )
 
         return RiskVerdict(
             approved=True,
             reason=(
-                f"Aprobadas {qty} acciones de {symbol} por ${notional:,.2f} "
+                f"Aprobadas {qty} acciones de {symbol} por {money}{notional:,.2f} "
                 f"(limita: {binding_rule}). Stop {stop:.2f} ({stop_source}), "
                 f"objetivo {target:.2f} ({target_source}), R/R {reward_risk:.2f}."
             ),

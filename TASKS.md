@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»)
+Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo)
 
 ---
 
@@ -469,6 +469,40 @@ Ver D8. Cerrado salvo lo que depende de la sesión del lunes (F2.1c) y el tope p
       Lo consumen el ingestor (`is_operating` / `next_operating_open`), `should_run` para
       los intervalos intradía, `run.py check` y el spike de F2.1c. `should_run("1d")` no
       cambia: sigue siendo "¿hay sesión hoy?".
+- [x] **FE.14** **Los dos sitios que se le escaparon a FE.8**, encontrados mirando la
+      pantalla de Riesgo de un perfil europeo: «Aprobadas 9 acciones de ALV.DE por
+      **$3,949.20**».
+
+      FE.8 arregló `Settings.describe()` y los cuatro comandos de consola, que era donde se
+      había mirado. Faltaban los dos que escriben dinero **desde dentro del ciclo**:
+
+      - `RiskVerdict.reason` ([src/risk.py](src/risk.py)), seis `$` literales. No es una
+        línea de log: se guarda en `risk_events.reason` y la pantalla de Riesgo lo imprime
+        tal cual, así que es texto de pantalla.
+      - `CycleReport.summary()` ([src/cycle.py](src/cycle.py)), la línea `Equity:`, que se
+        ve en Ciclos.
+
+      Ambos reciben ahora el símbolo del mercado del perfil, como ya hacía el prompt del
+      analista dos líneas más arriba en `TradingCycle.build` — mismo error, arreglado
+      entonces solo para el modelo.
+
+      **El defecto es la cadena vacía y no `$`.** Un `RiskManager` construido sin mercado
+      escribe la cifra desnuda: no decir nada es correcto, y decir `$` era decir algo falso.
+      Es lo que convertía el fallo en invisible, porque el default coincidía con el mercado
+      en el que se desarrolló todo.
+
+      **El histórico no se reescribe.** Las filas de `risk_events` que ya tienen `$` se
+      quedan como están: la API no puede escribir en el histórico por diseño
+      ([api/guard.py](api/guard.py)), y cambiar un `reason` a posteriori sería inventar lo
+      que dijo el Risk Manager. Se arregla de aquí en adelante.
+
+      `tools/seed_demo.py` conserva su `$` **y es correcto**: siembra AAPL, MSFT y NVDA.
+
+      **5 tests nuevos, 670 en verde.** Ninguno de los 665 anteriores tocaba estas cadenas,
+      que es exactamente por qué el fallo llegó a la pantalla. `tests/helpers.py` monta ahora
+      el ciclo como lo monta `TradingCycle.build`, para que la suite no ejercite un cableado
+      distinto del de producción.
+
 - [ ] **FE.12** El tope por sector de F6.5 sigue sin aplicarse, y en Europa es **peor**:
       `sp500.txt` al menos traía el reparto sectorial en un comentario, y el fichero
       europeo no trae ninguno. Mismo bloqueo que F6.5 (no hay dato de sector por símbolo);

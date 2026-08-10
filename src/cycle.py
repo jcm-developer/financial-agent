@@ -48,6 +48,11 @@ class CycleReport:
     market_open: bool = False
     equity_start: float = 0.0
     equity_end: float = 0.0
+    #: What the profile's market prices in. The summary is shown verbatim on the
+    #: Ciclos screen, so it is screen text and the symbol travels with the figure
+    #: (FE.8). Empty by default rather than `$`: a report built without one says
+    #: nothing instead of saying something false.
+    currency_symbol: str = ""
     analyzed: int = 0
     proposals_buy: int = 0
     approved: int = 0
@@ -69,7 +74,8 @@ class CycleReport:
         lines = [
             f"Estado del ciclo: {self.status}",
             f"Mercado abierto: {'si' if self.market_open else 'no'}",
-            f"Equity: ${self.equity_start:,.2f} -> ${self.equity_end:,.2f}",
+            f"Equity: {self.currency_symbol}{self.equity_start:,.2f} -> "
+            f"{self.currency_symbol}{self.equity_end:,.2f}",
         ]
         if self.screened:
             lines.append(f"Cribado: {self.screened}")
@@ -161,15 +167,23 @@ class TradingCycle:
                 # modelo que SAN.MC cotiza en dolares.
                 currency=market_calendar.get_market(settings.market).currency,
             ),
-            risk_manager=RiskManager(settings.risk),
+            # Same reason as the analyst's currency right above: the verdict's
+            # text is stored and printed as it is, so an approval in a European
+            # profile was reading "por $3,949.20".
+            risk_manager=RiskManager(
+                settings.risk,
+                currency_symbol=market_calendar.get_market(settings.market).currency_symbol,
+            ),
             portfolio_id=portfolio_id,
         )
 
     # ------------------------------------------------------------------
 
     def run(self) -> CycleReport:
-        report = CycleReport()
         settings = self.settings
+        report = CycleReport(
+            currency_symbol=market_calendar.get_market(settings.market).currency_symbol,
+        )
 
         # The calendar is consulted before spending anything: with no new bars,
         # analysing would mean repeating the previous cycle's decisions while
@@ -319,8 +333,10 @@ class TradingCycle:
         snapshot, so the closure appears in the history as one more cycle —which
         is what it is— and can be told apart by its `experiment_closed` rule.
         """
-        report = CycleReport()
         settings = self.settings
+        report = CycleReport(
+            currency_symbol=market_calendar.get_market(settings.market).currency_symbol,
+        )
 
         portfolio_id = self.portfolio_id or self.db.ensure_portfolio(
             name=settings.portfolio_name,
