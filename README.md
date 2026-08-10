@@ -294,9 +294,12 @@ SCHEDULER_REFRESH_SECONDS=60   # cada cuánto relee el plan
 
 ### 2.6 Detalles que conviene saber
 
-**La base de datos vive en un volumen de Docker**, no en `./data`. Es
-deliberado: SQLite necesita bloqueo de fichero fiable y los *bind mounts* de
-Docker Desktop en Windows no lo garantizan. Para sacar una copia:
+**La base de datos vive en un volumen de Docker** llamado
+`financial-agent-trading-data`, no en `./data`. Es deliberado: SQLite necesita
+bloqueo de fichero fiable y los *bind mounts* de Docker Desktop en Windows no lo
+garantizan. El volumen está declarado `external`, así que `docker compose down -v`
+no se lo puede llevar por delante; en una máquina nueva, créalo antes del primer
+`up` con `docker volume create financial-agent-trading-data`. Para sacar una copia:
 
 ```powershell
 docker compose cp api:/app/data/trading.db ./data/trading.db

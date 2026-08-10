@@ -176,9 +176,19 @@ docker compose run --rm bot python -m pytest tests -q
 docker compose cp api:/app/data/trading.db ./data/trading.db   # sacar la base
 ```
 
-⚠️ **`docker compose down -v` destruye el volumen `trading-data`**, o sea el histórico del
-experimento. La base vive en un volumen con nombre y no en un bind mount porque el bloqueo de
-ficheros de SQLite no es fiable sobre bind mounts de Docker Desktop en Windows.
+La base vive en un volumen con nombre —**`financial-agent-trading-data`**, declarado
+`external` desde el 2026-08-10— y no en un bind mount, porque el bloqueo de ficheros de
+SQLite no es fiable sobre bind mounts de Docker Desktop en Windows. Al ser externo,
+**`docker compose down -v` ya no puede destruirlo**; a cambio, en una máquina nueva hay que
+crearlo antes del primer `up`:
+
+```bash
+docker volume create financial-agent-trading-data
+```
+
+Si no existe, `up` falla en el sitio en vez de arrancar un experimento con la base vacía.
+Para borrar el histórico de verdad hace falta pedirlo por su nombre:
+`docker volume rm financial-agent-trading-data`.
 
 El puerto se publica en `127.0.0.1:8000` a propósito: son datos de una cuenta de inversión y
 la API no tiene autenticación.

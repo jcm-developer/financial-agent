@@ -151,7 +151,25 @@ services:
 
 volumes:
   trading-data:
-    # Fijado al nombre que Compose derivaba de `name: financial-bot`. Sin esto el
-    # renombrado del proyecto apuntaria a un volumen nuevo y vacio, y el historico
-    # del experimento se quedaria en el viejo sin que nada avise.
-    name: financial-bot_trading-data
+    # Fijado a mano, y no derivado del `name:` del proyecto, porque el volumen es
+    # el historico del experimento y no puede depender de como se llamen la carpeta
+    # ni el proyecto: si cambian, Compose apuntaria a un volumen nuevo y vacio y el
+    # historico se quedaria en el viejo sin que nada avise.
+    #
+    # Guion y no subrayado a proposito: el subrayado era la marca de que el nombre
+    # lo derivaba Compose, y aqui ya no lo deriva.
+    #
+    # El 2026-08-10 se migro desde `financial-bot_trading-data` --el nombre que
+    # Compose derivo de un `name: financial-bot` anterior, y que hacia avisar a
+    # cada `compose run` porque el proyecto ya se llamaba financial-agent--
+    # copiando el volumen con los cuatro servicios parados. El viejo se conserva
+    # como respaldo del arranque del experimento.
+    name: financial-agent-trading-data
+    # `external` dice "este volumen no es mio, solo lo uso", y compra dos cosas:
+    # `compose down -v` ya no puede destruir el historico, y en una maquina donde
+    # el volumen no exista `compose up` falla en el sitio -- en vez de crear uno
+    # vacio y arrancar un experimento sin pasado que parece el de siempre. El
+    # precio es que la primera vez hay que crearlo a mano:
+    #
+    #   docker volume create financial-agent-trading-data
+    external: true

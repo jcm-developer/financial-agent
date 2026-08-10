@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos)
+Última actualización: 2026-08-10 (comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`)
 
 ---
 
@@ -121,6 +121,15 @@ no es "no te enteras": conviene mirarlo antes de subir el número de perfiles.
 no es fiable sobre bind mounts de Docker Desktop en Windows. Con un escritor por minuto eso
 importa más, no menos.
 
+**El volumen se llama `financial-agent-trading-data` y es `external` desde el 2026-08-10**,
+el día que arrancó el experimento. Antes se llamaba `financial-bot_trading-data`, un nombre
+que Compose había derivado de un `name:` anterior del proyecto y que hacía avisar a cada
+`compose run`. Se migró copiándolo con los cuatro servicios parados; el viejo se conserva
+como respaldo del arranque. Lo que compra el `external` es que **`compose down -v` ya no
+puede destruir el histórico** y que, en una máquina donde el volumen no exista, `up` falla
+en el sitio en vez de arrancar un experimento sin pasado que parece el de siempre. El precio
+es crearlo a mano la primera vez: `docker volume create financial-agent-trading-data`.
+
 ### D8 — El mercado es un parámetro del perfil ✅ (2026-08-08)
 
 **Motivo:** las sesiones europeas (09:00–17:30 CET) caen dentro del horario en que el
@@ -211,7 +220,8 @@ otra forma y pide su SDK, así que queda en F9.1.
 - [x] **F1.1** **Borrado total**: la base anterior (40 ciclos, 166 decisiones) se aparta en
       `backup/trading.db.pre-F1-20260808` en lugar de borrarse — recuperarla luego sería
       imposible. `backup/` estaba en `.gitignore` y **se borró en F8.9** (2026-08-09). Falta
-      tirar el volumen de Docker: `docker compose down -v`.
+      tirar el volumen de Docker, que ya no es `docker compose down -v` sino
+      `docker volume rm` por su nombre: desde el 2026-08-10 está declarado `external`.
 - [x] **F1.2** `profiles`, `agent_settings`, `agent_settings_history`, `profile_universe`.
       Los límites duros del risk manager nacen **NULL a propósito**: NULL significa "derívalo
       de los sliders". Si nacieran con números, mover el slider de riesgo no cambiaría nada.
@@ -2076,8 +2086,11 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
    sector por símbolo. La pantalla de Ajustes ya lo dice en voz alta.
 4. ~~**F8.5**~~ ✅ **Hecho el 2026-08-10**: el `.env` no está en el índice ni en ninguna
    revisión de la historia. Nada que rotar.
-5. **F1.1 (resto)** — tirar el volumen de Docker con `docker compose down -v`. ⚠️ **No antes
-   del experimento**: destruye `trading-data`.
+5. **F1.1 (resto)** — tirar los volúmenes viejos de Docker: el `financial-bot_trading-data`
+   que quedó como respaldo del arranque, y cualquier resto anterior a F8.1. Ya no se hace con
+   `docker compose down -v` —`financial-agent-trading-data` es `external` y ese comando no lo
+   toca— sino con `docker volume rm` por su nombre. ⚠️ **Nunca el del experimento en marcha**:
+   es el histórico entero.
 6. **F9** entera, que no bloquea nada — con **F9.7** recién añadida (spike de noticias y
    fundamentales, del que depende F9.4) y **F9.3** concretada (el precio de ejecución
    arrastra 20–40 minutos con barras horarias).
