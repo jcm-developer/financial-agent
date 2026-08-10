@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript)
+Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera)
 
 ---
 
@@ -1134,6 +1134,54 @@ diez sesiones en silencio.
       lo descubrió el primer test, que estaba mal escrito.
 
       **670 tests en verde, typecheck limpio, 71 tests del frontend (+13).**
+- [x] **F4.17** **Las tarjetas pasan a ser la cartera entera, y el P&L abierto empieza a
+      descontar la comisión** (2026-08-10). Pedido mirando F4.15 en pantalla: «en Invertido
+      debería salir el cash inicial, en Valor de mercado lo invertido más el cash, y en P&L
+      latente deberían restarse las comisiones».
+
+      **El fondo del asunto era un fallo, no una preferencia.** `realized_pnl` descuenta las dos
+      comisiones desde siempre ([src/sim_broker.py](src/sim_broker.py), `sell_market`), y
+      `unrealized_pnl` no descontaba ninguna: **la misma columna significaba neto en una fila
+      cerrada y bruto en una abierta**, en una tabla que se lee en vertical. Y como el efectivo
+      tiene la comisión descontada desde el instante de la ejecución, un libro a −1,07 € vivía
+      debajo de un capital a −4,07 € sin que nada en pantalla explicara los 3,00 € de
+      diferencia. Ahora `_value_position` la resta, y `unrealized_pnl_pct` va sobre el coste para
+      que el porcentaje lleve lo que lleva el importe. El movimiento puro de precio no se pierde:
+      es `Entrada` contra `Último`, que están en la misma fila.
+
+      **Backend, porque el dato no salía:** `entry_commission` vive en `sim_positions` —el libro
+      del bróker— y no en `positions`, que es el libro del experimento; se une por
+      `(account_id, symbol)` y se expone en `PositionRow`. Y `cash` se añade a `ProfileMetrics`
+      leyéndolo de `sim_accounts`, **no del último snapshot**: es la única cifra del conjunto que
+      no depende de un precio —solo se mueve en una ejecución, y una ejecución solo ocurre dentro
+      de un ciclo— así que leerla viva es exacta en vez de tener la edad del último ciclo.
+
+      **Un símbolo que el libro del bróker no conoce vuelve sin comisión, no con cero.** Cero
+      sería afirmar «esta operó gratis»; la verdad es «el libro no lo sabe», y entonces el P&L se
+      queda en bruto y `entry_commission` viaja en null para decirlo. La pantalla lo cuenta como
+      cuenta las posiciones sin precio y sin stop: es la misma regla de F4.15, un hueco se cuenta
+      y no se rellena con un cero.
+
+      **Las cuatro tarjetas ahora forman una identidad, y esa es la razón de cambiarlas:**
+      `capital inicial + P&L latente + P&L realizado = valor de la cartera`. Cada tarjeta es un
+      término, así que una cifra que parece rara **se puede rastrear** en vez de solo dudarse.
+      Comprobado contra el experimento en marcha: 10.000,00 − 3,12 = **9.996,88 €**, que es
+      exactamente `cash` (2,71) más las tres posiciones (9.994,17). La versión de F4.15 sumaba
+      solo la tabla y dejaba el efectivo fuera, y con el efectivo fuera los números no suman nada
+      reconocible.
+
+      Lo que **empeora a propósito** está apuntado en F9.8.2: «Valor de la cartera» es el capital
+      **de ahora** y el «Capital» de Resumen es esa misma suma a precio del último ciclo, así que
+      durante la sesión difieren en unos euros. La de Posiciones es la fresca; decirlo en Resumen
+      es la tarea que queda.
+
+      Lo que sigue faltando: **la comisión de salida**. Calcularla en el navegador desde el
+      sufijo del símbolo sería [src/fees.py](src/fees.py) reimplementado en TypeScript, que es lo
+      que F6.8 existe para impedir, así que la tarjeta del stop descuenta la de entrada y dice en
+      su pie que le falta la otra.
+
+      **673 tests en verde (+3), typecheck limpio, 73 tests del frontend (+2), tipos
+      regenerados.**
 
 ### F5 — Pantalla de perfiles / experimentos
 
@@ -2379,12 +2427,16 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
          Posiciones calculando las tarjetas de las filas; en Resumen sigue abierto, y la
          solución **no** es unificar el precio: es decirlo, probablemente en el pie de las
          cifras que vienen del ciclo, con la hora del último.
-      3. **Las comisiones no se ven en ninguna pantalla.** Se cobran (3,00 € por leg en Europa,
-         4,11 € en Madrid) y se notan —los 4,07 € del primer ciclo de `eu-05-muy-agresivo` son
-         3,00 € de comisión y 1,07 € de deslizamiento, o sea fricción entera— pero
-         `entry_commission` se queda en `sim_positions` y no llega a la API. Con `MIN_ORDER_
-         NOTIONAL` de 100 € eso es hasta un 8 % de fricción invisible. Requisito previo para lo
-         demás: **exponerla en `PositionRow` y en `OrderRow`**, que es backend y no maquillaje.
+
+         ⚠️ **F4.17 lo ha vuelto más visible, no menos**: la tarjeta «Valor de la cartera» de
+         Posiciones es `cash + valor a precio vivo`, o sea el capital **de ahora**, mientras que
+         el «Capital» de Resumen es esa misma suma marcada a la barra del último ciclo. Son dos
+         cifras del mismo concepto en dos pantallas, y la de Posiciones es la fresca.
+      3. ~~**Las comisiones no se ven en ninguna pantalla.**~~ **Medio hecho en F4.17**:
+         `entry_commission` sale ya en `PositionRow` y el P&L latente va neto, así que la
+         posición abierta y la cerrada por fin significan lo mismo. **Queda `OrderRow`**, que es
+         donde se leería lo que costó cada ejecución una a una, y exige unir `orders` con
+         `sim_fills` —dos libros distintos— porque `orders` tampoco tiene la columna.
 
       Las tres comparten causa y por eso van juntas: la interfaz enseña resultados de un
       sistema con **dos relojes** y los presenta como si tuviera uno.

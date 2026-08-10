@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 
 import { usePositions } from "@/api/hooks";
-import type { PositionRow } from "@/api/types";
+import type { PositionRow, ProfileMetrics } from "@/api/types";
 import { Figure, LinkButton, PageTitle } from "@/components/pieces";
 import { PriceSource } from "@/components/PriceSource";
 import { Section } from "@/components/Section";
@@ -68,7 +68,13 @@ export function Positions() {
             <Empty>Ninguna posición abierta ahora mismo.</Empty>
           ) : (
             <>
-              <Totals summary={summarizeOpen(page.items)} symbol={symbol} />
+              {profile && (
+                <Totals
+                  summary={summarizeOpen(page.items)}
+                  metrics={profile.metrics}
+                  symbol={symbol}
+                />
+              )}
               <Table title="Posiciones abiertas">
                 <TableHead>
                   <Th>Símbolo</Th>
@@ -132,44 +138,68 @@ export function Positions() {
 }
 
 /**
- * The four figures of the open book, over the table they add up.
+ * The four figures of the portfolio, over the table of what is open.
  *
- * **They are computed from the rows on screen and not read from `metrics`.** The
- * reasoning is in `summarizeOpen`, and it is worth repeating because it is the
- * trap this screen invites: `/api/profiles` also carries a portfolio value, but
- * marked at the price of the last cycle's bar, while every row underneath is
- * marked at the ingestor's minute price. A card showing 9989,63 € over a table
- * of positions adding up to 9985,13 € would read as a broken sum. Here the
- * cards and the column below them are, by construction, the same arithmetic.
+ * **The set reconciles, and that is what it is for** (F4.17): capital inicial +
+ * P&L latente + P&L realizado = valor de la cartera. Every card is one term of
+ * that identity, so a figure that looks wrong can be traced instead of merely
+ * doubted. The first version was three sums of the table below and it answered a
+ * narrower question —what the open book is worth— leaving the cash out, and with
+ * the cash out the numbers add up to nothing recognisable.
  *
- * **What is deliberately not here is a "cambio del día".** The reference this
- * was modelled on has one, and this project cannot honestly produce it: the row
+ * **Two clocks, and here they compose rather than clash.** `cash` comes from the
+ * broker's ledger and does not depend on any price —it only moves on a fill— so
+ * pairing it with the live market value gives the portfolio's value **at the live
+ * price**. That is a different number from `metrics.equity`, which is the same
+ * sum marked at the last cycle's bar, and it is the fresher of the two. The
+ * capital on Resumen will therefore differ by a few euros during a session; F9.8
+ * carries the job of saying so on that screen.
+ *
+ * **What is deliberately not here is a "cambio del día".** The reference this was
+ * modelled on has one, and this project cannot honestly produce it: the row
  * carries no previous close, so the only daily figure available is
- * `metrics.day_pnl_pct`, which is the other clock. Half a card on the live price
- * and half on the cycle price is the FE.8 mistake in a different unit.
+ * `metrics.day_pnl_pct`, which is marked at the cycle price. Half a card on one
+ * clock and half on the other is the FE.8 mistake in a different unit.
  *
  * @param props - Totals props.
- * @param props.summary - The totals, already computed by `summarizeOpen`.
+ * @param props.summary - The open book's totals, from `summarizeOpen`.
+ * @param props.metrics - The profile's figures, for the cash and the budget the
+ *     table cannot know about.
  * @param props.symbol - Currency symbol of the profile's market, never assumed.
  * @return The rendered row of cards.
  */
-function Totals({ summary, symbol }: { summary: OpenSummary; symbol: string }) {
-  const { withoutPrice, withoutStop } = summary;
+function Totals({
+  summary,
+  metrics,
+  symbol,
+}: {
+  summary: OpenSummary;
+  metrics: ProfileMetrics;
+  symbol: string;
+}) {
+  const { withoutPrice, withoutStop, withoutCommission } = summary;
+  const cash = metrics.cash;
+  // Null and not zero when either half is missing: a portfolio value with the
+  // cash silently left out is the same 9985 € against 9989 € confusion in a
+  // bigger unit.
+  const portfolioValue =
+    cash === null || cash === undefined || summary.marketValue === null
+      ? null
+      : Math.round((cash + summary.marketValue) * 100) / 100;
 
   return (
     <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <Figure label="Invertido" value={money(summary.invested, symbol)}>
+      <Figure label="Capital inicial" value={money(metrics.initial_budget, symbol)}>
         <span className="text-text-muted">
-          coste de entrada de {summary.count === 1 ? "1 posición" : `${summary.count} posiciones`},
-          sin comisiones
+          el presupuesto asignado al experimento
         </span>
       </Figure>
 
-      <Figure label="Valor de mercado" value={money(summary.marketValue, symbol)}>
+      <Figure label="Valor de la cartera" value={money(portfolioValue, symbol)}>
         <span className={withoutPrice ? "font-medium text-delta-bad" : "text-text-muted"}>
           {withoutPrice
             ? `${withoutPrice} sin precio, fuera del total`
-            : "al último precio del ingestor"}
+            : `${money(summary.marketValue, symbol)} en posiciones y ${money(cash, symbol)} en efectivo`}
         </span>
       </Figure>
 
@@ -178,8 +208,10 @@ function Totals({ summary, symbol }: { summary: OpenSummary; symbol: string }) {
         value={signedMoney(summary.unrealizedPnl, symbol)}
         className={signClass(summary.unrealizedPnl)}
       >
-        <span className="text-text-muted">
-          {percent(summary.unrealizedPnlPct, { sign: true })} sobre lo invertido
+        <span className={withoutCommission ? "font-medium text-warning" : "text-text-muted"}>
+          {withoutCommission
+            ? `${withoutCommission} sin comisión conocida: su parte va en bruto`
+            : `${percent(summary.unrealizedPnlPct, { sign: true })} sobre lo invertido, con ${money(summary.commissions, symbol)} de comisiones dentro`}
         </span>
       </Figure>
 
@@ -191,12 +223,12 @@ function Totals({ summary, symbol }: { summary: OpenSummary; symbol: string }) {
       <Figure
         label="Si saltan los stops"
         value={signedMoney(summary.stopOutcome, symbol)}
-        title="Lo que se realizaría si todas las posiciones salieran hoy por su stop, sin contar la comisión de salida"
+        title="Lo que se realizaría si todas las posiciones salieran hoy por su stop, con la comisión de entrada ya descontada y sin la de salida"
       >
         <span className={withoutStop ? "font-medium text-warning" : "text-text-muted"}>
           {withoutStop
             ? `${withoutStop} sin stop, fuera del total`
-            : "contra el precio de entrada"}
+            : "sin la comisión de salida, que aún no se conoce"}
         </span>
       </Figure>
     </div>

@@ -109,6 +109,39 @@ describe("summarizeOpen", () => {
     expect(summary.withoutStop).toBe(1);
   });
 
+  it("adds up the commissions and takes them off what the stops would give", () => {
+    // `unrealized_pnl` arrives net from the API; the stop figure is netted here,
+    // so the two cards mean the same thing and can be read one against the other.
+    const summary = summarizeOpen([
+      position({
+        id: "a",
+        qty: 10,
+        entry_price: 100,
+        stop_price: 95,
+        entry_commission: 3,
+        market_value: 1080,
+        unrealized_pnl: 77,
+      }),
+    ]);
+
+    expect(summary.commissions).toBe(3);
+    expect(summary.unrealizedPnl).toBe(77);
+    expect(summary.stopOutcome).toBe(-53);
+    expect(summary.withoutCommission).toBe(0);
+  });
+
+  it("counts a position whose commission the ledger does not know", () => {
+    // Its P&L came gross, so a total holding it is not comparable with one that
+    // does not. Netting it by zero would claim the trade was free.
+    const summary = summarizeOpen([
+      position({ id: "a", entry_commission: 3, stop_price: 95 }),
+      position({ id: "b", entry_commission: null, stop_price: 95 }),
+    ]);
+
+    expect(summary.commissions).toBe(3);
+    expect(summary.withoutCommission).toBe(1);
+  });
+
   it("gives an empty book zeros for the cost and nulls for the rest", () => {
     const summary = summarizeOpen([]);
 

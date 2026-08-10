@@ -16,13 +16,13 @@ import type { PositionRow } from "@/api/types";
  * So the rule for this screen is: everything here is the live price, the same
  * one every row shows. The cycle-priced figures live on Resumen.
  *
- * **Nothing here nets out commissions**, because the row does not carry them:
- * `entry_commission` stays in `sim_positions` and never reaches the API. The
- * invested figure is therefore the cost of the shares and not what left the
- * account, and the stop figure is what the exits would book before the exit leg
- * is charged. Both are noted on the cards themselves; guessing the tariff here
- * from the symbol's suffix would be `src/fees.py` reimplemented in TypeScript,
- * which is the mistake F6.8 exists to prevent.
+ * **Commissions are in, and they come from the server** (F4.17): `unrealized_pnl`
+ * arrives already net of `entry_commission`, and the commission itself travels
+ * on the row so a card can say how much of the result is friction. What is still
+ * missing is the **exit** leg, and it stays missing on purpose: working it out
+ * here from the symbol's suffix would be `src/fees.py` reimplemented in
+ * TypeScript, which is the mistake F6.8 exists to prevent. The one card affected
+ * says so in its footnote.
  */
 
 /** The open book's totals, with the holes in them counted rather than hidden. */
@@ -33,20 +33,32 @@ export interface OpenSummary {
   invested: number;
   /** Market value at the live price. Null when not one position has a price. */
   marketValue: number | null;
-  /** Unrealised P&L at the live price. Null when nothing could be valued. */
+  /**
+   * Unrealised P&L at the live price, **already net of the opening commission**:
+   * the API subtracts it row by row. Null when nothing could be valued.
+   */
   unrealizedPnl: number | null;
   /** That P&L over what the valued positions cost. Null on the same condition. */
   unrealizedPnlPct: number | null;
+  /** Commission paid to open the open book, which the P&L above has taken off. */
+  commissions: number;
   /**
    * What would be booked if every stop triggered right now: `(stop − entry) ×
-   * qty`, summed. Negative in the normal case and positive when a raised stop
-   * has locked a gain in. Null when no open position carries a stop.
+   * qty` less the commission already paid, summed. Negative in the normal case
+   * and positive when a raised stop has locked a gain in. It does **not** carry
+   * the exit leg's commission, which the frontend cannot price. Null when no
+   * open position carries a stop.
    */
   stopOutcome: number | null;
   /** Positions with no price, left out of the value and the P&L. */
   withoutPrice: number;
   /** Positions with no stop, left out of `stopOutcome`. */
   withoutStop: number;
+  /**
+   * Positions whose commission the broker's ledger does not know. Their P&L is
+   * gross, so a total containing one is not comparable with one that has none.
+   */
+  withoutCommission: number;
 }
 
 /**
@@ -74,21 +86,32 @@ export function summarizeOpen(rows: readonly PositionRow[]): OpenSummary {
   // understates it, and it is the kind of error nobody catches by eye.
   let investedValued = 0;
   let stopOutcome = 0;
+  let commissions = 0;
   let valued = 0;
   let stopped = 0;
+  let priced = 0;
 
   for (const row of open) {
     invested += row.entry_price * row.qty;
 
+    const commission = row.entry_commission ?? 0;
+    if (row.entry_commission !== null && row.entry_commission !== undefined) {
+      commissions += row.entry_commission;
+      priced += 1;
+    }
+
     if (row.market_value !== null && row.market_value !== undefined) {
       marketValue += row.market_value;
+      // Already net: `_value_position` takes the commission off before sending it.
       unrealizedPnl += row.unrealized_pnl ?? 0;
       investedValued += row.entry_price * row.qty;
       valued += 1;
     }
 
     if (row.stop_price !== null && row.stop_price !== undefined) {
-      stopOutcome += (row.stop_price - row.entry_price) * row.qty;
+      // Same shape as the P&L above, so the two cards are comparable: the price
+      // leg less what has already been paid to be in the position.
+      stopOutcome += (row.stop_price - row.entry_price) * row.qty - commission;
       stopped += 1;
     }
   }
@@ -100,9 +123,11 @@ export function summarizeOpen(rows: readonly PositionRow[]): OpenSummary {
     unrealizedPnl: valued ? round(unrealizedPnl) : null,
     unrealizedPnlPct:
       valued && investedValued ? round((unrealizedPnl / investedValued) * 100) : null,
+    commissions: round(commissions),
     stopOutcome: stopped ? round(stopOutcome) : null,
     withoutPrice: open.length - valued,
     withoutStop: open.length - stopped,
+    withoutCommission: open.length - priced,
   };
 }
 

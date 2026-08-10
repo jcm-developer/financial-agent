@@ -439,6 +439,86 @@ def test_positions_are_valued_with_the_live_quote(client, db_path, profile):
     assert row["stop_distance_pct"] == pytest.approx(20.0)
 
 
+def seed_broker_ledger(
+    db_path: str, portfolio_id: str, *, cash: float, commission: float
+) -> None:
+    """Writes the simulated broker's ledger, which `seed_history` does not touch.
+
+    They are two different books on purpose: `positions` records what the
+    experiment decided and `sim_positions` what the execution cost. The API needs
+    both to state a P&L that means the same thing on an open row as on a closed
+    one.
+    """
+    with Database(path=db_path) as db:
+        db.execute(
+            "insert into sim_accounts (id, cash, initial_cash, last_equity, "
+            "created_at, updated_at) values (?, ?, 10000, 10000, ?, ?)",
+            (portfolio_id, cash, "2026-08-08T09:00:00+00:00",
+             "2026-08-08T09:00:00+00:00"),
+        )
+        db.execute(
+            "insert into sim_positions (id, account_id, symbol, qty, "
+            "avg_entry_price, entry_commission, opened_at) "
+            "values ('s1', ?, 'SAN.MC', 100, 4.5, ?, '2026-08-08T10:00:02+00:00')",
+            (portfolio_id, commission),
+        )
+
+
+def test_the_open_pnl_is_net_of_the_commission_paid_to_open(client, db_path, profile):
+    """Otherwise "P&L" means net on a closed row and gross on an open one.
+
+    `realized_pnl` has always subtracted both legs (`sim_broker.sell_market`), so
+    leaving the open one gross made the same column mean two things in a table
+    that is read downwards. It also stopped the screen reconciling: cash has the
+    commission out of it from the moment of the fill, so a gross P&L cannot add
+    up to the capital shown above it.
+    """
+    seeded = seed_history(db_path, profile["id"])
+    seed_broker_ledger(db_path, seeded["portfolio_id"], cash=9_670.0, commission=4.11)
+
+    row = client.get(f"/api/positions?profile={profile['id']}").json()["items"][0]
+
+    assert row["entry_commission"] == pytest.approx(4.11)
+    # 100 × (4,80 − 4,50) = 30,00 de precio, menos los 4,11 de la comisión.
+    assert row["unrealized_pnl"] == pytest.approx(25.89)
+    # Sobre el coste, para que el porcentaje lleve la comisión que lleva el importe.
+    assert row["unrealized_pnl_pct"] == pytest.approx(5.75)
+    # The market value is the value of the shares and does not move: only the
+    # result of holding them does.
+    assert row["market_value"] == pytest.approx(480.0)
+
+
+def test_a_position_the_ledger_does_not_know_keeps_its_gross_pnl(
+    client, db_path, profile
+):
+    """Netting by zero would claim it traded free, which is a different statement.
+
+    `seed_history` writes no ledger, so this is that case: the P&L stays gross and
+    `entry_commission` comes back null to say why.
+    """
+    seed_history(db_path, profile["id"])
+    row = client.get(f"/api/positions?profile={profile['id']}").json()["items"][0]
+
+    assert row["entry_commission"] is None
+    assert row["unrealized_pnl"] == pytest.approx(30.0)
+
+
+def test_the_metrics_carry_the_cash_of_the_broker_ledger(client, db_path, profile):
+    """Cash is the only figure in `metrics` that does not depend on a price.
+
+    It comes from `sim_accounts` and not from the last snapshot for that reason:
+    it moves on a fill, and a fill only happens inside a cycle, so reading it
+    live is exact rather than as old as the last cycle.
+    """
+    seeded = seed_history(db_path, profile["id"])
+    seed_broker_ledger(db_path, seeded["portfolio_id"], cash=9_670.0, commission=4.11)
+
+    profiles = client.get("/api/profiles").json()
+    metrics = next(p for p in profiles if p["id"] == profile["id"])["metrics"]
+
+    assert metrics["cash"] == pytest.approx(9_670.0)
+
+
 def test_decisions_bring_the_risk_verdict(client, db_path, profile):
     seed_history(db_path, profile["id"])
     pagina = client.get(f"/api/decisions?profile={profile['id']}").json()

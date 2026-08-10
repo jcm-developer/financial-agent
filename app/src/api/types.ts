@@ -390,6 +390,7 @@ export interface PositionRow {
   unrealized_pnl?: number | null;
   unrealized_pnl_pct?: number | null;
   stop_distance_pct?: number | null;
+  entry_commission?: number | null;
 }
 
 export interface ProfileCreate {
@@ -435,6 +436,7 @@ export interface ProfileDuplicate {
  */
 export interface ProfileMetrics {
   equity?: number | null;
+  cash?: number | null;
   initial_budget?: number | null;
   total_return_pct?: number | null;
   day_pnl_pct?: number | null;

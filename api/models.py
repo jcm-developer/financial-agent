@@ -88,6 +88,11 @@ class ProfileMetrics(BaseModel):
     """The figures on the profile card (F5.2)."""
 
     equity: float | None = None
+    #: Uninvested cash, straight from the broker's ledger. It is the one figure
+    #: here that does not depend on a price —it only moves on a fill— so unlike
+    #: `equity` it is not as old as the last cycle. Paired with the market value
+    #: of the open positions it gives the portfolio's value at the live price.
+    cash: float | None = None
     initial_budget: float | None = None
     total_return_pct: float | None = None
     day_pnl_pct: float | None = None
@@ -428,9 +433,19 @@ class PositionRow(BaseModel):
     #: price's freshness is worse than not giving it.
     price_source: Literal["live", "cycle"] | None = None
     market_value: float | None = None
+    #: **Net of `entry_commission`**, so it means the same as `realized_pnl` does
+    #: on a closed row, which has always netted both legs. Null when there is no
+    #: price to value against.
     unrealized_pnl: float | None = None
+    #: That P&L over what the position cost, so the percentage carries the
+    #: commission the amount does. The bare price move is `entry_price` against
+    #: `last_price`.
     unrealized_pnl_pct: float | None = None
     stop_distance_pct: float | None = None
+    #: What was paid to open, from the broker's ledger. Null on a closed position
+    #: —`realized_pnl` already absorbed it— and null on an open one the ledger
+    #: does not know, which is the case where `unrealized_pnl` stays gross.
+    entry_commission: float | None = None
 
 
 class DecisionRow(BaseModel):

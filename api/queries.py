@@ -150,6 +150,7 @@ def profile_metrics(
 ) -> dict[str, Any]:
     empty = {
         "equity": None,
+        "cash": None,
         "initial_budget": float(settings["initial_budget"]),
         "total_return_pct": None,
         "day_pnl_pct": None,
@@ -184,8 +185,13 @@ def profile_metrics(
         "  (select started_at from cycles where portfolio_id = ? "
         "     order by started_at desc limit 1) as last_cycle_at, "
         "  (select status from cycles where portfolio_id = ? "
-        "     order by started_at desc limit 1) as last_cycle_status",
-        (portfolio_id,) * 10,
+        "     order by started_at desc limit 1) as last_cycle_status, "
+        # Straight from the broker's ledger and not from the last snapshot: cash
+        # is the one figure in this whole set that does **not** depend on a price,
+        # so it has no reason to be as old as the last cycle. It only moves on a
+        # fill, and a fill only happens inside a cycle.
+        "  (select cash from sim_accounts where id = ?) as cash",
+        (portfolio_id,) * 11,
     )[0]
 
     budget = float(settings["initial_budget"])
@@ -193,6 +199,7 @@ def profile_metrics(
     closed = int(row["closed_trades"] or 0)
     return {
         "equity": equity,
+        "cash": row["cash"],
         "initial_budget": budget,
         # Against the assigned budget, not against the first snapshot: it is the
         # question whoever compares two experiments asks.
@@ -289,6 +296,41 @@ def _price_index(db: Database, symbols: list[str]) -> dict[str, dict[str, Any]]:
     return index
 
 
+def _commission_index(
+    db: Database, portfolio_id: str, symbols: list[str]
+) -> dict[str, float]:
+    """Commission already paid to open each position, by symbol.
+
+    It has to be looked up in the **broker's ledger** because `positions` never
+    had the column: the experiment's table records what was decided, and the
+    commission is what the execution cost. `sim_positions` keeps it precisely
+    because the realized P&L cannot rebuild it afterwards (see `schema.sql`), and
+    it accumulates when a symbol is bought twice.
+
+    A symbol missing from the ledger comes back **absent, not zero**. Zero would
+    be a claim —"this one traded free"— and here the truth is "the ledger does not
+    know", which the caller reports as such instead of quietly serving a gross
+    P&L dressed as a net one.
+
+    @param db: Read-only connection.
+    @param portfolio_id: The portfolio, which is also the simulated account's id.
+    @param symbols: Symbols with an open position.
+    @return: Commission per symbol, only for the ones the ledger has.
+    """
+    if not symbols:
+        return {}
+
+    marks = ", ".join("?" for _ in symbols)
+    return {
+        row["symbol"]: float(row["entry_commission"])
+        for row in db.query(
+            f"select symbol, entry_commission from sim_positions "
+            f"where account_id = ? and symbol in ({marks})",
+            (portfolio_id, *symbols),
+        )
+    }
+
+
 # ----------------------------------------------------------------------
 # Listas paginadas
 # ----------------------------------------------------------------------
@@ -321,14 +363,37 @@ def positions(
         (*params, clamp_limit(limit), max(0, offset)),
     )
 
-    abiertas = [row["symbol"] for row in rows if row["status"] == "open"]
-    prices = _price_index(db, sorted(set(abiertas)))
+    abiertas = sorted({row["symbol"] for row in rows if row["status"] == "open"})
+    prices = _price_index(db, abiertas)
+    commissions = _commission_index(db, portfolio_id, abiertas)
     for row in rows:
-        _value_position(row, prices.get(row["symbol"]))
+        _value_position(row, prices.get(row["symbol"]), commissions.get(row["symbol"]))
     return rows, total
 
 
-def _value_position(row: dict[str, Any], price: dict[str, Any] | None) -> None:
+def _value_position(
+    row: dict[str, Any],
+    price: dict[str, Any] | None,
+    commission: float | None = None,
+) -> None:
+    """Values an open position at the last price, **net of what it cost to open**.
+
+    The commission is subtracted because otherwise the same column means two
+    different things depending on the row: `realized_pnl` on a closed position
+    already nets both legs (`sim_broker.sell_market`), so an open one showing the
+    gross figure made "P&L" mean net below and gross above, in a table read down
+    the column. It also made the screen fail to reconcile: with a 3,00 EUR
+    commission, a book down 1,07 EUR sat under a capital figure down 4,07 EUR, and
+    nothing on screen explained the difference. Cash has the commission taken out
+    of it from the moment of the fill, so netting it here is what makes
+    `equity = cash + posiciones` and the sum of the P&Ls tell the same story.
+
+    **A position whose commission is unknown keeps its gross P&L** and says so
+    through `entry_commission` being null, rather than being netted by zero. It
+    cannot happen through the normal route —the simulated broker writes both rows—
+    and if it ever does, a figure that is visibly missing its cost beats one that
+    silently claims to include it.
+    """
     row["last_price"] = None
     row["last_price_as_of"] = None
     row["price_source"] = None
@@ -336,6 +401,7 @@ def _value_position(row: dict[str, Any], price: dict[str, Any] | None) -> None:
     row["unrealized_pnl"] = None
     row["unrealized_pnl_pct"] = None
     row["stop_distance_pct"] = None
+    row["entry_commission"] = commission if row["status"] == "open" else None
 
     if row["status"] != "open" or price is None:
         return
@@ -348,9 +414,14 @@ def _value_position(row: dict[str, Any], price: dict[str, Any] | None) -> None:
     entry, qty = row["entry_price"], row["qty"]
     if not (last and entry):
         return
+    cost = entry * qty
+    pnl = (last - entry) * qty - (commission or 0.0)
     row["market_value"] = round(last * qty, 2)
-    row["unrealized_pnl"] = round((last - entry) * qty, 2)
-    row["unrealized_pnl_pct"] = round((last / entry - 1) * 100, 2)
+    row["unrealized_pnl"] = round(pnl, 2)
+    # Over the cost and not `last / entry - 1`, so the percentage carries the
+    # commission the amount beside it already carries. The bare price move is
+    # still on the row: it is `Entrada` next to `Último`.
+    row["unrealized_pnl_pct"] = round(pnl / cost * 100, 2)
     stop = row["stop_price"]
     # How much room the position has before touching the stop, in % of the current price.
     row["stop_distance_pct"] = round((last / stop - 1) * 100, 2) if stop else None
