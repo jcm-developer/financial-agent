@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`)
+Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»)
 
 ---
 
@@ -2044,6 +2044,52 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
 
       **665 tests de Python en verde, 50 del frontend (20 nuevos), typecheck limpio, build en
       101 KB de fuentes + 33 KB de CSS.**
+
+- [x] **F10.6** **La tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos».**
+      Dos arreglos de lectura que salieron de usar la aplicación ya rediseñada, no de
+      compilarla.
+
+      **La tesis era prosa dentro de la columna más estrecha de la tabla.** Son cuatro a seis
+      líneas del analista metidas bajo el símbolo: una sola posición convertía una fila de
+      48 px en una de 200 y empujaba las cifras —el P&L, la distancia al stop— fuera de la
+      primera pantalla. **Es consecuencia directa de F10.1**, que bajó la densidad a cuerpo
+      de 16 px y filas de 48: con la densidad anterior el destrozo era la mitad. Lo que la
+      pantalla sirve para hacer es comparar posiciones, y la prosa en una columna no se
+      compara.
+
+      Plegada, la tabla vuelve a una línea por posición y la tesis está a un clic, a todo lo
+      ancho. Se descartaron dos alternativas: un **tooltip** —no se lee con calma, no se
+      selecciona y no existe en pantalla táctil, y esto es un párrafo, no una nota— y un
+      **panel de detalle** como el de Ciclos, que es mucho aparato para un párrafo y obliga a
+      salir de la tabla para volver a ella.
+
+      La fila desplegada es un **segundo `<tr>`** (`<DetailRow>`, nuevo en `Table.tsx`) y no
+      una celda más alta, porque `align-top` sobre una celda de cuatro líneas deja todas las
+      cifras flotando arriba. `<Row>` gana `expanded`, que le quita la raya inferior: una fila
+      y su detalle son una fila partida en dos, y el filete entre medias las leería como dos.
+      Se descartó renderizar siempre la fila y esconderla con `hidden`, que habría dejado
+      `aria-controls` siempre válido, porque `:last-child` no mira al `display` y la última
+      fila visible se habría quedado con una raya que hoy no tiene. Basta `aria-expanded`, que
+      es lo que pide DESIGN.md para un plegable y lo que ya usa el log de Ciclos.
+
+      **Una posición sin tesis no lleva desplegador**: es texto plano, para que nada invite a
+      un clic que no abriría nada.
+
+      **El filtro de Riesgo abría en «Rechazados», y eso era la pantalla mintiendo sobre
+      cuánto hay.** Enseñaba una tabla vacía en un experimento que había aprobado una docena
+      de propuestas, y la única forma de enterarse era fijarse en que el desplegable no estaba
+      donde parecía. Lo que la pantalla responde es qué ha hecho el Risk Manager, y un rechazo
+      solo significa algo al lado de las aprobaciones entre las que está.
+
+      ⚠️ **Con «Todos», el recuento por regla mezcla dos significados** y lo dice en el pie:
+      en un rechazo la regla es la que lo bloqueó, y en un aprobado la que fijó el tamaño
+      (`binding_rule`, [src/risk.py:248](src/risk.py#L248)). No se separó en dos recuentos
+      porque el pie lo aclara en una línea y dos listas de chips por regla ocupan la pantalla
+      entera. El estado vacío pasa a estar redactado para los tres casos: sin veredictos, sin
+      rechazos y sin aprobaciones significan cosas distintas, y la tercera es la única
+      preocupante.
+
+      **665 tests de Python en verde, 50 del frontend, typecheck limpio.**
 
 ### F9 — Futuro (no bloquea)
 

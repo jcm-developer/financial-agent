@@ -151,12 +151,67 @@ export function TableHead({ children }: { children: ReactNode }) {
  *
  * @param props - Row props.
  * @param props.children - The `Td` cells.
+ * @param props.expanded - Whether a `DetailRow` follows this one.
  * @return The rendered `<tr>`.
  */
-export function Row({ children }: { children: ReactNode }) {
+export function Row({
+  children,
+  expanded = false,
+}: {
+  children: ReactNode;
+  /**
+   * Drops the bottom rule because a `DetailRow` comes next.
+   *
+   * A row and its detail are one row split in two, and the divider between them
+   * would read as two: the eye would tie the text to the row underneath instead
+   * of to the one it belongs to.
+   */
+  expanded?: boolean;
+}) {
   return (
-    <tr className="h-12 border-b border-surface-sunken transition-colors duration-150 last:border-0 hover:bg-background">
+    <tr
+      className={cn(
+        "h-12 border-b border-surface-sunken transition-colors duration-150 last:border-0 hover:bg-background",
+        expanded && "border-b-0",
+      )}
+    >
       {children}
+    </tr>
+  );
+}
+
+/**
+ * The continuation of the `Row` above it: one cell spanning the whole width,
+ * for what does not fit in a column.
+ *
+ * It exists because prose and a table pull in opposite directions. A thesis of
+ * four lines inside the symbol column turns a 48 px row into a 200 px one and
+ * pushes the figures —which is what the table is for— off the screen; the same
+ * text underneath, folded away until asked for, costs nothing and reads better
+ * at full width.
+ *
+ * **It is a second `<tr>` and not a taller cell** so the row above keeps its
+ * height and its alignment: `align-top` over a cell that is four lines tall
+ * leaves every figure floating at the top of the row.
+ *
+ * @param props - Detail props.
+ * @param props.columns - Columns of the table, so the cell spans all of them.
+ *     Passing fewer would leave the row short and break the hover band.
+ * @param props.children - What the row unfolds.
+ * @return The rendered `<tr>`.
+ */
+export function DetailRow({
+  columns,
+  children,
+}: {
+  columns: number;
+  children: ReactNode;
+}) {
+  return (
+    <tr className="border-b border-surface-sunken transition-colors duration-150 last:border-0 hover:bg-background">
+      <td colSpan={columns} className="px-4 pt-0 pb-3">
+        {children}
+      </td>
     </tr>
   );
 }

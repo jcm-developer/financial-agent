@@ -279,6 +279,12 @@ e interletraje: es lo que separa las etiquetas de las cifras sin gastar una regl
   decisiones» significan cosas muy distintas, y un texto genérico obliga a ir a
   mirar la base de datos.
 - `<Pagination>` — enseña «41–80 de 480» y no solo las flechas.
+- `<Row expanded>` + `<DetailRow columns>` — el plegable de una fila: la prosa que no
+  cabe en una columna baja a un segundo `<tr>` a todo lo ancho, y la de arriba
+  suelta su raya inferior para que las dos se lean como una. El disparador va en la
+  celda que nombra la fila, con `aria-expanded`. **Es un `<tr>` y no una celda más
+  alta**: `align-top` sobre una celda de cuatro líneas deja las cifras de las otras
+  columnas flotando arriba.
 
 ### Casillas y radios — `<Checkbox>`, `<RadioGroup>`
 

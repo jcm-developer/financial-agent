@@ -25,13 +25,20 @@ const LIMIT = 50;
  * API offers no per-rule aggregate: presenting it as the experiment's total
  * would be inventing a statistic.
  *
+ * **The filter opens on «Todos» and not on the rejections.** Opening on a
+ * filtered view is the screen lying about how much there is: it showed an empty
+ * table on an experiment that had approved a dozen proposals, and the only way
+ * to find that out was to notice the dropdown was not where it looked. What the
+ * screen answers is what the Risk Manager did, and a rejection only means
+ * something next to the approvals it sits among.
+ *
  * @return The rendered screen, with the per-rule tally above the table.
  */
 export function Risk() {
   const { profile, ref } = useActiveProfile();
   useTitle("Riesgo", profile?.name);
   const [offset, setOffset] = useState(0);
-  const [verdict, setVerdict] = useState("rejected");
+  const [verdict, setVerdict] = useState("");
 
   const query = useRiskEvents(ref, {
     verdict: verdict || undefined,
@@ -50,9 +57,9 @@ export function Risk() {
         label="Veredicto"
         value={verdict}
         options={[
+          ["", "Todos"],
           ["rejected", "Rechazados"],
           ["approved", "Aprobados"],
-          ["", "Todos"],
         ]}
         onChange={(next) => {
           setVerdict(next);
@@ -76,6 +83,8 @@ export function Risk() {
           <p className="mt-2 text-caption text-text-muted">
             Contado sobre las {query.data?.items.length ?? 0} filas de esta página, no
             sobre el histórico completo.
+            {verdict === "" &&
+              " Con «Todos», la regla de un aprobado dice qué límite fijó el tamaño, no qué lo bloqueó."}
           </p>
         </section>
       )}
@@ -84,11 +93,7 @@ export function Risk() {
         {(page) => (
           <>
             {page.items.length === 0 ? (
-              <Empty>
-                {verdict === "rejected"
-                  ? "El Risk Manager no ha rechazado nada todavía. Con pocas propuestas es lo esperable; si sigue así con muchas, conviene comprobar que los límites están donde se cree."
-                  : "No hay eventos con este veredicto."}
-              </Empty>
+              <Empty>{emptyText(verdict)}</Empty>
             ) : (
               <Table title="Veredictos del Risk Manager">
                 <TableHead>
@@ -116,6 +121,39 @@ export function Risk() {
         )}
       </Section>
     </>
+  );
+}
+
+/**
+ * The empty state, worded per verdict.
+ *
+ * An empty table means three different things here, and telling them apart is
+ * most of what the screen is for: the Risk Manager has not evaluated anything
+ * yet, it has blocked nothing, or it has let nothing through. A single generic
+ * line would send you to the database to find out which of the three it is —
+ * and the third one is the only one worth worrying about.
+ *
+ * @param verdict - The filter in force; the empty string is «Todos».
+ * @return The wording for that case.
+ */
+function emptyText(verdict: string): string {
+  if (verdict === "rejected") {
+    return (
+      "El Risk Manager no ha rechazado nada todavía. Con pocas propuestas es lo " +
+      "esperable; si sigue así con muchas, conviene comprobar que los límites están " +
+      "donde se cree."
+    );
+  }
+  if (verdict === "approved") {
+    return (
+      "Ninguna propuesta ha pasado el Risk Manager todavía. Si en «Todos» hay " +
+      "rechazos, su regla dice qué límite está frenando al modelo."
+    );
+  }
+  return (
+    "El Risk Manager no ha emitido ningún veredicto todavía: no ha llegado a " +
+    "evaluar ninguna propuesta. Los primeros aparecen en cuanto un ciclo proponga " +
+    "una operación."
   );
 }
 
