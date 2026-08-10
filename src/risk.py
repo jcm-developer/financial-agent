@@ -265,6 +265,29 @@ class RiskManager:
         if cash_qty < qty:
             qty, binding_rule = cash_qty, "insufficient_cash"
 
+        # --- El peso que pidio el analista, como un tope mas ------------------
+        #
+        # **El tope del perfil era el valor por defecto, y eso es lo que arregla
+        # esto** (F9.13). Con 3 % de riesgo y stops a 1,2× ATR el presupuesto de
+        # riesgo no ataba nunca, así que toda posición aprobada aterrizaba en el
+        # techo: un 40 % que significa «nunca más de esto» se estaba comportando
+        # como «esto». Lo que faltaba era alguien decidiendo cuánto de esa holgura
+        # merece cada idea, y quien tiene la tesis delante es el analista.
+        #
+        # Se aplica como `min` contra lo ya calculado, así que **solo puede pedir
+        # menos**: la premisa del proyecto no se toca, porque el modelo no puede
+        # ampliar un límite ni ejecutar nada, y un peso absurdo lo recorta el techo
+        # de arriba. Es la misma forma que tiene el stop, que el modelo solo puede
+        # ensanchar.
+        weight = proposal.suggested_weight_pct
+        if weight is not None:
+            # Contra el techo del perfil y no contra el 100 %: pedir un 80 % en un
+            # perfil que permite 40 no es una petición, es no haber leído el límite.
+            allowed = min(weight, limits.max_position_pct)
+            weight_qty = math.floor((account.equity * allowed / 100.0) / price)
+            if weight_qty < qty:
+                qty, binding_rule = weight_qty, "suggested_weight"
+
         # --- La conviccion modula, dentro de lo que los topes permiten --------
         #
         # **It scales the result of every cap and not the risk budget** (F9.10),
@@ -286,9 +309,15 @@ class RiskManager:
         span = 100.0 - limits.min_conviction
         reach = (proposal.conviction - limits.min_conviction) / span if span > 0 else 1.0
         conviction_factor = CONVICTION_FLOOR + (1.0 - CONVICTION_FLOOR) * min(1.0, reach)
-        scaled = math.floor(qty * conviction_factor)
-        if scaled < qty:
-            qty, binding_rule = scaled, "conviction"
+        # **Solo cuando el analista no pidió peso** (F9.13). Con las dos cosas a la
+        # vez se contaría dos veces la misma opinión: un peso del 10 % recortado
+        # además a la mitad por una convicción de 60 da un 5 % que nadie decidió.
+        # El peso es la respuesta explícita a «cuánto», y esto es lo que se hace
+        # cuando no la hay.
+        if weight is None:
+            scaled = math.floor(qty * conviction_factor)
+            if scaled < qty:
+                qty, binding_rule = scaled, "conviction"
 
         if qty < 1:
             return _reject(
@@ -369,6 +398,11 @@ class RiskManager:
                 # So the Riesgo screen can tell a position that was cut by a limit
                 # from one the analyst simply did not believe in much.
                 "conviction_factor": round(conviction_factor, 3),
+                # What the analyst asked for, unclamped, so a model that keeps
+                # asking for more than it may have is visible in the record
+                # instead of only in the resulting quantity.
+                "suggested_weight_pct": proposal.suggested_weight_pct,
+                "weight_pct_applied": round(notional / account.equity * 100, 2),
                 "stop_source": stop_source,
                 "target_source": target_source,
                 "binding_rule": binding_rule,

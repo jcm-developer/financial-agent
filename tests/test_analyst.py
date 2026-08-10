@@ -182,3 +182,47 @@ def test_the_interval_is_always_named(snapshot, account):
     for interval, (bar_label, _) in INTERVAL_LABELS.items():
         prompt = _render_entry_prompt(snapshot, account, INTERVAL_LABELS[interval], "EUR")
         assert bar_label in prompt
+
+
+# -- El peso lo pide el analista (F9.13) -------------------------------------
+
+def test_the_entry_prompt_asks_for_a_weight_and_gives_it_a_scale(snapshot, account):
+    """A weight with no ceiling to compare against is noise, not a decision.
+
+    Told the ceiling the model tends to ask for it, and that anchoring is the
+    price paid; the prompt answers it head on and `risk.py` caps regardless. The
+    alternative was a number with no units, which looks like a judgement and is a
+    guess.
+    """
+    prompt = _render_entry_prompt(
+        snapshot, account, INTERVAL_LABELS["1h"], "EUR", 4.11, 40.0
+    )
+
+    assert "40% del capital" in prompt
+    assert "TOPE, no un objetivo" in prompt
+
+
+def test_the_weight_is_read_and_clamped_to_something_a_portfolio_allows():
+    """Over 100 there is no leverage, and at or below zero it is a "hold" written
+    in the wrong field. Both come back None so the sizing falls back to the
+    conviction factor instead of inventing a number."""
+    from src.analyst import _coerce_weight
+
+    assert _coerce_weight(12.5) == pytest.approx(12.5)
+    assert _coerce_weight("30") == pytest.approx(30.0)
+    assert _coerce_weight(None) is None
+    assert _coerce_weight(0) is None
+    assert _coerce_weight(-5) is None
+    assert _coerce_weight(140) is None
+    assert _coerce_weight("mucho") is None
+
+
+def test_the_weight_is_not_clamped_to_the_profile_ceiling_here():
+    """That is `risk.py`'s job, and F6.5 is why: the limits live in one place.
+
+    Clamping here would also hide a model that keeps asking for more than it may
+    have, which is what the verdict records `suggested_weight_pct` for.
+    """
+    from src.analyst import _coerce_weight
+
+    assert _coerce_weight(80) == pytest.approx(80.0)

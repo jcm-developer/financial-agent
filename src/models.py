@@ -79,6 +79,22 @@ class Proposal:
     horizon_days: int | None = None
     suggested_stop: float | None = None
     suggested_target: float | None = None
+    #: What share of the capital the analyst wants in this position, in percent
+    #: (F9.13). **It is a request and not a size**: `risk.py` treats it as one more
+    #: cap, so it can only ask for less than `max_position_pct`, never more.
+    #:
+    #: It exists because the limit was behaving as the default. Before this, size
+    #: came out of the risk budget capped by the limits, and with a 3 % risk and
+    #: 1,2× ATR stops the budget never bound: every approved position landed on
+    #: the ceiling. A 40 % ceiling is an allowance —"never more than this"— and
+    #: what was missing was somebody deciding how much of it each idea deserves.
+    #:
+    #: It is deliberately **separate from `conviction`**. Overloading conviction
+    #: would ruin the one number F5.7 measures —is a 70 right 7 times out of 10?—
+    #: and in practice the model answers 70 to everything, so the size would be a
+    #: constant dressed up as a judgement. "How sure am I" and "how much do I
+    #: want" are different questions and now have different fields.
+    suggested_weight_pct: float | None = None
     reference_price: float = 0.0
     # Metadata of the model call, for auditing.
     model: str = ""

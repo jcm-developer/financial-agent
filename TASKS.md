@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones)
+Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto)
 
 ---
 
@@ -2693,6 +2693,60 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       ⚠️ **El ciclo de las 14:20 se perdió**: la reconstrucción de la imagen recreó el
       planificador a las 14:24, después de la ventana. El primer ciclo del experimento nuevo es
       el de las **15:20**.
+
+- [x] **F9.13** **El tope por posicion era el valor por defecto, y ahora el peso lo pide el
+      analista** (2026-08-10). F9.10 hizo que la conviccion modulara el tamano y **no fue
+      suficiente**, por una razon que la propia medicion ya insinuaba: **el modelo contesta 70 a
+      todo**. Las tres compras del experimento anterior tenian conviccion 70 exacta, asi que
+      escalar por ella daba un numero constante — un 29 % del capital en todo, en vez de un 40 %
+      en todo. Seguia sin haber una decision.
+
+      **El problema de fondo, dicho por quien lo reporto:** «un 40 % es el margen que le dejo, no
+      lo que quiero que compre; si una accion me gusta pero no para un 20 %, tendre un 10 %, y eso
+      es una decision, no una imposicion». Exacto: con 3 % de riesgo y stops a 1,2× ATR el
+      presupuesto de riesgo no ata nunca, asi que toda posicion aprobada aterrizaba en el techo, y
+      un limite que significa «nunca mas de esto» se estaba comportando como «esto».
+
+      **`suggested_weight_pct`: el analista pide un peso y el Risk Manager lo trata como un tope
+      mas.** Se aplica con `min` contra lo ya calculado, asi que **solo puede pedir menos**: no
+      puede ampliar un limite ni ejecutar nada, y un 80 % en un perfil que permite 40 se recorta a
+      40. Es la misma forma que ya tenia el stop, que el modelo solo puede ensanchar. La premisa
+      del proyecto no se toca.
+
+      **Va en un campo aparte de `conviction`, y eso es la mitad del diseno.** Sobrecargar la
+      conviccion habria arruinado el unico numero que mide F5.7 —¿un 70 acierta 7 de 10 veces?— y
+      ademas, siendo constante, el tamano habria sido un constante disfrazado de juicio. «Que
+      seguro estoy» y «cuanto quiero» son dos preguntas y ahora son dos campos. El factor de
+      conviccion **se queda como respaldo**: actua solo cuando el analista no pide peso, porque
+      con las dos cosas a la vez se contaria dos veces la misma opinion.
+
+      **El prompt cambia en tres sitios y uno era una mentira que habia que retirar:**
+      - «NO decides el tamano de la posicion» ya no era cierto, asi que ahora dice que no decide
+        cuantas acciones ni mueve dinero, pero **si** propone el peso, y que es una peticion que el
+        motor recorta.
+      - Tres reglas nuevas sobre el peso, porque el error es predecible: el tope es un maximo y no
+        un objetivo; una idea que gusta poco es un peso pequeno y no un «hold»; y si pide pesos
+        grandes en todo, las dos primeras ideas agotan el capital y las mejores se quedan fuera.
+      - **La calibracion de la conviccion se reescribe contra el anclaje.** Decia «70 significa que
+        en 10 casos acertarias 7», y darle un numero de ejemplo es darle un numero que copiar. Ahora
+        la formula es generica (X → X/10), hay tres puntos de referencia en vez de uno, y se le pide
+        explicitamente que **use el rango**: si todas sus propuestas salen igual, no esta midiendo,
+        esta repitiendo.
+
+      ⚠️ **Se le dice el techo del perfil, y eso ancla.** Es el precio pagado: un modelo al que le
+      dices que puede llegar al 40 % tiende a pedir el 40 %. La alternativa era un numero sin
+      escala —el modelo no puede saber si un 10 % es timido o audaz—, que parece una decision y es
+      una adivinanza. El prompt lo contradice de frente y `risk.py` recorta igual. **Hay que
+      vigilarlo en los primeros ciclos**: si los pesos vuelven a salir todos al maximo, el arreglo
+      no es quitar el campo sino bajar `max_position_pct`, que es la opcion barata de F9.10.
+
+      **Queda registrado, no solo aplicado.** `suggested_weight_pct` se guarda en `decisions` —con
+      migracion aditiva, NULL significa «no pidio peso» y no «pidio cero»— y sale en la API; el
+      veredicto lleva ademas `weight_pct_applied` y el peso pedido **sin recortar**, para que un
+      modelo que insiste en pedir mas de lo que puede se vea en el registro y no solo en la
+      cantidad resultante.
+
+      **695 tests en verde (+7), typecheck limpio, tipos regenerados.**
 
 - [ ] **F9.11** **Auditar que las comisiones entran en *todas* las decisiones, no solo en la
       entrada.** Pedido el 2026-08-10. F9.9 cubrió el dimensionado y el R/R de una compra; lo

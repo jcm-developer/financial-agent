@@ -123,6 +123,10 @@ create table if not exists decisions (
     horizon_days      integer,
     suggested_stop    real,
     suggested_target  real,
+    -- Peso que pidio el analista, en % del capital (F9.13). NULL significa
+    -- que no pidio ninguno, no que pidiera cero: el Risk Manager cae
+    -- entonces al factor de conviccion.
+    suggested_weight_pct real,
     reference_price   real,
     llm_model         text,
     latency_ms        integer,

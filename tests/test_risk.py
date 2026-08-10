@@ -200,6 +200,82 @@ def test_poor_reward_risk_is_rejected(manager):
     assert verdict.rule == "min_reward_risk"
 
 
+# -- El peso lo pide el analista (F9.13) -------------------------------------
+
+def test_the_analyst_weight_decides_the_size_below_the_cap(manager):
+    """The ceiling was behaving as the default, and that is what this fixes.
+
+    With a 3 % risk and 1,2× ATR stops the risk budget never bound, so every
+    approved position landed on `max_position_pct`. A 40 % ceiling means "never
+    more than this", and nobody was deciding how much of it each idea deserved.
+    """
+    verdict = manager.evaluate_entry(
+        proposal(reference_price=20.0, suggested_weight_pct=10.0),
+        account(),  # 100k of equity
+        atr=2.0,
+    )
+
+    assert verdict.approved
+    # 10 % of 100k at 20 the share -> 500 shares, and the risk budget's 250 is
+    # smaller, so the budget still wins. That is the point: it is a cap, not a target.
+    assert verdict.qty == 250
+    assert verdict.rule == "risk_per_trade"
+
+
+def test_a_small_weight_shrinks_the_position(manager):
+    """The case the report was about: "me gusta, pero no para un 20 %"."""
+    # A price of 100 makes `max_position_pct` (20 %) bind at 200 shares, so the
+    # weight is the only thing that can go below it.
+    full = manager.evaluate_entry(proposal(), account(), atr=2.0)
+    half = manager.evaluate_entry(
+        proposal(suggested_weight_pct=10.0), account(), atr=2.0
+    )
+
+    assert full.qty == 200          # el tope del perfil: 20 % de 100k
+    assert half.qty == 100          # lo que pidio el analista: 10 %
+    assert half.rule == "suggested_weight"
+    assert half.details["weight_pct_applied"] == pytest.approx(10.0)
+
+
+def test_the_weight_can_only_ask_for_less_never_more(manager):
+    """A model asking for 80 % in a profile that allows 20 gets 20.
+
+    This is what keeps the premise intact: the analyst can shrink a position and
+    can never enlarge one, exactly like the stop it may only widen.
+    """
+    verdict = manager.evaluate_entry(
+        proposal(suggested_weight_pct=80.0), account(), atr=2.0
+    )
+
+    assert verdict.approved
+    assert verdict.qty == 200       # el 20 % del perfil, no el 80 % pedido
+    assert verdict.rule == "max_position_pct"
+    # Lo pedido se registra sin recortar, para que un modelo que insiste se vea.
+    assert verdict.details["suggested_weight_pct"] == pytest.approx(80.0)
+
+
+def test_conviction_scaling_stands_down_when_a_weight_was_asked_for(manager):
+    """Otherwise the same opinion would be counted twice.
+
+    A 10 % weight halved again by a conviction of 65 gives a 5 % that nobody
+    decided. The weight is the explicit answer to "how much"; the conviction
+    factor is what happens when there is none.
+    """
+    with_weight = manager.evaluate_entry(
+        proposal(conviction=LIMITS.min_conviction, suggested_weight_pct=10.0),
+        account(),
+        atr=2.0,
+    )
+    without = manager.evaluate_entry(
+        proposal(conviction=LIMITS.min_conviction), account(), atr=2.0
+    )
+
+    assert with_weight.qty == 100      # el 10 % pedido, intacto
+    assert without.qty == 100          # el 20 % del tope, escalado al 0,5 del suelo
+    assert with_weight.rule == "suggested_weight"
+    assert without.rule == "conviction"
+
+
 # -- Conviccion y tamano (F9.10) ---------------------------------------------
 
 def test_conviction_scales_the_size_within_the_caps(manager):

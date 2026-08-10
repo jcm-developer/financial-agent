@@ -71,6 +71,13 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # tariff existed: back then the commission really was zero.
         "entry_commission": "real not null default 0",
     },
+    "decisions": {
+        # F9.13. Nullable and with no default on purpose: NULL means "the analyst
+        # did not ask for a weight", which is exactly what every decision taken
+        # before this field existed did. A `default 0` would record them all as
+        # having asked for nothing, which is a different claim.
+        "suggested_weight_pct": "real",
+    },
 }
 
 # Columns that changed name after the schema's first version.
@@ -749,6 +756,7 @@ class Database:
                 "horizon_days": proposal.horizon_days,
                 "suggested_stop": proposal.suggested_stop,
                 "suggested_target": proposal.suggested_target,
+                "suggested_weight_pct": proposal.suggested_weight_pct,
                 "reference_price": round(proposal.reference_price, 4),
                 "llm_model": proposal.model,
                 "latency_ms": proposal.latency_ms,

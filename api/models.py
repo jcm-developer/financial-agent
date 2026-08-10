@@ -462,6 +462,9 @@ class DecisionRow(BaseModel):
     reference_price: float | None = None
     suggested_stop: float | None = None
     suggested_target: float | None = None
+    #: What weight the analyst asked for, in % of capital (F9.13). Null means
+    #: it asked for none, not that it asked for zero.
+    suggested_weight_pct: float | None = None
     llm_model: str | None = None
     latency_ms: int | None = None
     prompt_tokens: int | None = None

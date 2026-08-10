@@ -29,10 +29,24 @@ emitir un juicio razonado sobre si un activo es una compra atractiva a dias o \
 semanas de horizonte.
 
 Frontera de tu rol, no la cruces:
-- NO decides el tamano de la posicion ni cuantas acciones comprar. Un motor de \
-riesgo determinista lo calcula despues a partir de la volatilidad. Si mencionas \
-cantidades, se ignoran.
+- NO decides cuantas acciones se compran ni mueves dinero. Un motor de riesgo \
+determinista calcula la cantidad a partir de la volatilidad y de sus limites, y \
+puede recortar o rechazar lo que propongas. Si mencionas numeros de acciones, se \
+ignoran.
+- SI propones el PESO que merece la idea, en `suggested_weight_pct`: que \
+porcentaje del capital total te parece que deberia ocupar esta posicion. Es una \
+peticion, no una orden -- el motor la recorta contra su tope y contra la caja \
+disponible, nunca la amplia.
 - NO ejecutas nada. Tu salida es una recomendacion que puede ser rechazada.
+
+Sobre el peso, porque es la parte que se hace mal:
+- El tope por posicion es un MAXIMO, no un objetivo. Pedir el maximo en cada \
+idea es no haber decidido nada.
+- Una idea que te gusta poco es un peso pequeño, no un "hold". Reserva los pesos \
+altos para cuando varias señales independientes coincidan, igual que la \
+conviccion.
+- Piensa en la cartera entera: si pides pesos grandes en todo, las primeras dos \
+o tres ideas agotan el capital y las demas no se ejecutan aunque sean mejores.
 
 Operar cuesta dinero, y el objetivo tiene que tenerlo en cuenta:
 - Cada orden paga una comision FIJA, en la compra y otra vez en la venta. El \
@@ -52,9 +66,15 @@ inventes catalizadores, cifras de ingresos, upgrades de analistas ni titulares.
 marcalo como contexto cualitativo y no como hecho reciente.
 - "hold" es la respuesta correcta la mayor parte del tiempo. Un analista que ve \
 oportunidades en todo no aporta senal. No fuerces una compra.
-- La conviccion debe estar calibrada: 50 significa moneda al aire, 70 significa \
-que en 10 casos parecidos acertarias unas 7 veces. Reservar >85 para setups \
-excepcionales donde varias senales independientes coinciden.
+- La conviccion debe estar calibrada y es una probabilidad, no una nota: X \
+significa que en 10 casos parecidos acertarias unas X/10 veces. 50 es moneda al \
+aire, 60 es una ventaja pequeña pero real, 85 es un setup excepcional donde \
+varias senales independientes coinciden.
+- USA EL RANGO. Si todas tus propuestas salen con la misma conviccion, no estas \
+midiendo nada: estas repitiendo un numero. Dos activos distintos casi nunca \
+merecen la misma cifra, y la diferencia entre ellos es la informacion util.
+- La conviccion NO es el peso. Puedes estar muy seguro de un movimiento pequeño, \
+o poco seguro de uno grande; son dos campos porque son dos preguntas.
 
 Responde UNICAMENTE con un objeto JSON, sin texto antes ni despues, con \
 exactamente este esquema:
@@ -67,6 +87,7 @@ exactamente este esquema:
   "horizon_days": <entero, dias que esperas mantener la posicion>,
   "suggested_stop": <precio de invalidacion tecnica, o null>,
   "suggested_target": <precio objetivo realista, o null>,
+  "suggested_weight_pct": <porcentaje del capital que merece esta idea, o null>,
   "key_signals": ["<senal 1>", "<senal 2>"]
 }
 """
@@ -153,6 +174,7 @@ class Analyst:
         interval: str = "1d",
         currency: str = "USD",
         commission_for: Callable[[str], float] | None = None,
+        max_position_pct: float | None = None,
     ) -> None:
         self.llm = llm
         self.interval = interval
@@ -161,6 +183,16 @@ class Analyst:
         #: which adds the profile's surcharge. Default is the bank's tariff and
         #: never zero, which would tell the model that trading is free.
         self._commission_for = commission_for or fees.standard_commission
+        #: The profile's per-position ceiling, so `suggested_weight_pct` has a
+        #: scale. Without it the model cannot tell whether 10 % is timid or bold,
+        #: and the field would be noise.
+        #:
+        #: ⚠️ It **anchors**, and that is the price paid: told the ceiling, a model
+        #: tends to ask for it. The prompt answers that head on —"el tope es un
+        #: MAXIMO, no un objetivo"— and `risk.py` caps regardless. The alternative
+        #: was a number with no units, which is worse: it would look like a
+        #: decision and be a guess.
+        self.max_position_pct = max_position_pct
         #: Currency of the profile's market. **It is passed, never assumed**
         #: (FE.8): the prompt used to say "USD" for every price, so a European
         #: experiment told the model that SAN.MC trades in dollars. It is the
@@ -182,7 +214,7 @@ class Analyst:
         no analysis is skipped, not traded blind."""
         user_prompt = _render_entry_prompt(
             snapshot, account, self.labels, self.currency,
-            self._commission_for(snapshot.symbol),
+            self._commission_for(snapshot.symbol), self.max_position_pct,
         )
         self.calls += 1
         try:
@@ -206,6 +238,7 @@ class Analyst:
             horizon_days=_coerce_int(data.get("horizon_days"), minimum=1, maximum=365),
             suggested_stop=_coerce_price(data.get("suggested_stop")),
             suggested_target=_coerce_price(data.get("suggested_target")),
+            suggested_weight_pct=_coerce_weight(data.get("suggested_weight_pct")),
             reference_price=snapshot.price,
             model=response.model,
             latency_ms=response.latency_ms,
@@ -274,9 +307,16 @@ def _render_entry_prompt(
     labels: tuple[str, str],
     currency: str = "USD",
     commission: float = 0.0,
+    max_position_pct: float | None = None,
 ) -> str:
     bar_label, window_label = labels
     units = _window_units_note(bar_label)
+    techo = (
+        f"- Peso maximo permitido por posicion: {max_position_pct:.0f}% del capital. "
+        f"Es un TOPE, no un objetivo."
+        if max_position_pct is not None
+        else "- Peso maximo por posicion: lo decide el motor de riesgo."
+    )
     open_positions = (
         ", ".join(sorted(account.open_symbols)) if account.positions else "ninguna"
     )
@@ -295,8 +335,9 @@ COSTE DE OPERAR {snapshot.symbol}: {commission:.2f} {currency} por orden, o sea
 {commission * 2:.2f} {currency} de ida y vuelta. Es un importe fijo, no un
 porcentaje, y se descuenta del resultado.
 
-ESTADO DE LA CARTERA (contexto, no es tu decision):
+ESTADO DE LA CARTERA:
 - Posiciones ya abiertas: {open_positions}
+{techo}
 - Diversificacion: evita concentrar en activos muy correlacionados con los ya abiertos.
 
 NOTA: `horizon_days` se expresa siempre en dias naturales, tambien si los datos
@@ -447,6 +488,26 @@ def _coerce_price(value: Any) -> float | None:
     if number <= 0 or number != number or number in (float("inf"), float("-inf")):
         return None
     return round(number, 4)
+
+
+def _coerce_weight(value: Any) -> float | None:
+    """The weight the analyst asks for, clamped to something a portfolio allows.
+
+    Above 100 it is nonsense —there is no leverage— and at or below zero it is a
+    "hold" written in the wrong field, so both come back None and the sizing falls
+    back to the conviction factor. It is **not** clamped to `max_position_pct`
+    here: that is a limit of the profile and belongs to `risk.py`, which is the
+    only place allowed to know the limits (F6.5). Clamping it here would also hide
+    a model that keeps asking for more than it may have, which is exactly what the
+    verdict's `suggested_weight_pct` is recorded for.
+    """
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number or number <= 0 or number > 100:
+        return None
+    return round(number, 2)
 
 
 def _coerce_text(value: Any, *, limit: int) -> str:

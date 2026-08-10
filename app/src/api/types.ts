@@ -194,6 +194,7 @@ export interface DecisionRow {
   reference_price?: number | null;
   suggested_stop?: number | null;
   suggested_target?: number | null;
+  suggested_weight_pct?: number | null;
   llm_model?: string | null;
   latency_ms?: number | null;
   prompt_tokens?: number | null;

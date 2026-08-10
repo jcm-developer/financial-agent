@@ -169,6 +169,9 @@ class TradingCycle:
                 # The prompt states what operating costs, so the model stops
                 # proposing targets whose whole gain is the commission (F9.9).
                 commission_for=broker.commission_for,
+                # And the ceiling, so `suggested_weight_pct` has a scale to be
+                # small against (F9.13).
+                max_position_pct=settings.risk.max_position_pct,
             ),
             # Same reason as the analyst's currency right above: the verdict's
             # text is stored and printed as it is, so an approval in a European

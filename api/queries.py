@@ -485,6 +485,7 @@ def decisions(
         "select d.id, d.cycle_id, d.created_at, d.symbol, d.kind, d.action, "
         "       d.conviction, d.thesis, d.risks, d.horizon_days, "
         "       d.reference_price, d.suggested_stop, d.suggested_target, "
+        "       d.suggested_weight_pct, "
         "       d.llm_model, d.latency_ms, d.prompt_tokens, d.completion_tokens, "
         "       r.verdict, r.rule, r.reason as risk_reason, r.approved_qty, "
         "       r.approved_notional, "
