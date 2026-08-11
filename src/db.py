@@ -51,6 +51,13 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "screener_max_volatility_pct": "real not null default 120",
         "lookback_days": "integer not null default 200",
         "skip_when_market_closed": "integer not null default 1",
+        # F9.16. Nullable like the rest of the hard limits: NULL means "derive it
+        # from the sliders", so a profile created before it existed keeps behaving
+        # as its risk level says instead of inheriting a number nobody chose.
+        "min_target_sigma": "real",
+        # F9.18. `default 0` = no cap, which is what the profiles that predate the
+        # column ran with: their history is not retroactively reinterpreted.
+        "max_new_positions_per_cycle": "integer not null default 0",
     },
     "ingest_runs": {
         # Deliberately without a CHECK: SQLite cannot add a constraint with ALTER

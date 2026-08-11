@@ -129,7 +129,15 @@ class UniverseMarketData:
         self.last_report = report
 
         selected = [c.symbol for c in report.candidates]
-        to_analyze = sorted(set(selected) | set(required))
+        # ⚠️ **Las posiciones abiertas primero y los candidatos EN ORDEN DE
+        # PUNTUACION** (F9.18), porque este orden llega hasta el gasto de la caja:
+        # `cycle.py` analiza y ejecuta uno a uno, asi que reordenar aqui por nombre
+        # —lo que hacia el `sorted()` de antes— convertia la inicial del ticker en
+        # el criterio de asignacion del capital y tiraba el trabajo del screener.
+        #
+        # Las abiertas van delante porque su revision no compite por dinero: es un
+        # `sell` o un `hold`, y llegan igual aunque el screener no las mire.
+        to_analyze = list(required) + [s for s in selected if s not in set(required)]
 
         # 4. If the price runs on another interval, only now is it downloaded
         #    —and only for the selected ones. That is the difference between 20

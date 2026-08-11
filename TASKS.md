@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`; F9.8.2: Resumen ya dice que sus tres primeras cifras van a precio del ultimo ciclo y la tabla de abajo a precio vivo, con `equity_as_of` nuevo en la API porque la hora del ultimo ciclo no es la de la valoracion; F9.14 y F9.15 abiertas: la tabla de riesgo de F6.5 se calibro con barras diarias y el perfil corre en `1h`, asi que el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria y `llm_wider` es hoy la pieza que lo tapa, y hace falta medir con los mismos snapshots cuanto de los objetivos cortos es el intervalo y cuanto es el modelo; F9.15: `tools/replay_analyst.py` mide el intervalo con la base congelada y sin tocar Yahoo, y de paso encuentra que `volatility_20d_pct` tambien estaba 4,19x baja y que un tercio de las propuestas tienen stop y objetivo los dos bajo 0,5 sigma; F9.14 cerrada con la salida (a): los indicadores del analista pasan a ser **siempre diarios** y `bar_interval` queda como reloj del precio y de la ejecucion, con `lookback_days` a 400 y el experimento reseteado; R8 corregida —lo que la capa gratuita limita son peticiones simultaneas, no por minuto—; F9.16 abierta: `min_reward_risk` es adimensional y aprueba operaciones cuyos dos niveles caben en el ruido)
+Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`; F9.8.2: Resumen ya dice que sus tres primeras cifras van a precio del ultimo ciclo y la tabla de abajo a precio vivo, con `equity_as_of` nuevo en la API porque la hora del ultimo ciclo no es la de la valoracion; F9.14 y F9.15 abiertas: la tabla de riesgo de F6.5 se calibro con barras diarias y el perfil corre en `1h`, asi que el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria y `llm_wider` es hoy la pieza que lo tapa, y hace falta medir con los mismos snapshots cuanto de los objetivos cortos es el intervalo y cuanto es el modelo; F9.15: `tools/replay_analyst.py` mide el intervalo con la base congelada y sin tocar Yahoo, y de paso encuentra que `volatility_20d_pct` tambien estaba 4,19x baja y que un tercio de las propuestas tienen stop y objetivo los dos bajo 0,5 sigma; F9.14 cerrada con la salida (a): los indicadores del analista pasan a ser **siempre diarios** y `bar_interval` queda como reloj del precio y de la ejecucion, con `lookback_days` a 400 y el experimento reseteado; R8 corregida —lo que la capa gratuita limita son peticiones simultaneas, no por minuto—; F9.16 cerrada: el objetivo tiene ahora un suelo absoluto en sigmas del horizonte, y el minimo por orden sube de 100 a 500 EUR porque cubrir la comision es un problema de tamaño de orden y no de tamaño de recorrido; F9.17: `horizon_days` era una columna muerta y era la causa de los objetivos del 6 % —una sigma a 14 dias son 6,8 % del precio—, asi que ahora viaja al prompt con la sigma ya calculada y al motor de riesgo; F9.18: el capital se repartia por orden alfabetico porque dos `sorted()` tiraban el ranking del screener justo antes de gastarlo, y un ciclo ya no puede abrir mas de `max_new_positions_per_cycle` posiciones; decision nº 9: el experimento de un mes con horizonte de 45 dias, objetivos del 12 % y siete posiciones del 14 %, con el historico reseteado antes de arrancar; F9.19 y F9.20 abiertas: el reparto en dos pasadas y el modelo que contesta con plantilla —24 de 24 `buy`, conviccion 60 en las 24—)
 
 ---
 
@@ -3371,9 +3371,10 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       diario, y si las tesis siguen siendo coherentes con series largas—, que es información para
       calibrar, no para decidir.
 
-- [ ] **F9.16** **`min_reward_risk` es adimensional, así que aprueba operaciones cuyos dos niveles
+- [x] **F9.16** **`min_reward_risk` es adimensional, así que aprueba operaciones cuyos dos niveles
       están dentro del ruido.** Sale medido de F9.15 el 2026-08-11, y **F9.14 no lo arregla**:
       corregir el intervalo abre los niveles, pero no pone suelo a la esperanza.
+      Cerrada el 2026-08-11 con la unidad **(b) escalada por el horizonte**.
 
       El filtro compara `(objetivo − precio)` contra `(precio − stop)`. Es un **cociente**, así que
       dos números encogidos por el mismo factor dan el mismo ratio: un objetivo de +3,3 % con un
@@ -3406,6 +3407,178 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       ⚠️ **Y volvería a partir el histórico**, porque cambia la regla con la que se aprueba una
       compra. Conviene decidirlo **antes** de que el experimento nuevo acumule días, o se paga otro
       reseteo.
+
+      ---
+
+      **Lo que se hizo, y por qué esa unidad.** El suelo se expresa en **sigmas del horizonte
+      declarado**, y la sigma se construye con el **ATR diario escalado por √sesiones**
+      (`risk.horizon_sigma`). O sea: la magnitud de la alternativa (a) con la vara de la (b). Las
+      tres alternativas de arriba no eran exclusivas y por separado cada una fallaba en algo:
+
+      - **(a) en sigmas** acertaba la magnitud pero obligaba a introducir `volatility_20d_pct` como
+        segunda medida de volatilidad en el motor de riesgo. Una regla que depende de dos
+        estimaciones de lo mismo es una regla que se rompe el día en que discrepan, y ya discreparon
+        una vez: F9.15 encontró la volatilidad 4,19× baja mientras el ATR estaba 4,08× bajo.
+      - **(b) en múltiplos de ATR** usaba la vara correcta pero **no veía el plazo**, que es
+        justamente lo que el cociente tampoco veía. Un objetivo de 3× ATR es ambicioso a tres días y
+        ruido a tres meses; sin el horizonte dentro, el suelo hereda el defecto que venía a corregir.
+      - **(c) sobre la comisión** no era la misma pregunta. Cubrir la fricción es un problema de
+        **tamaño de orden**, no de tamaño de recorrido, y se arregló donde estaba:
+        `MIN_ORDER_NOTIONAL` pasa de **100 € a 500 €**. A 100 € el ida y vuelta de una española son
+        8,22 €, un **8,2 %** que ningún objetivo de ningún plazo cubre; a 500 € es 1,6 %. Los cinco
+        rechazos de `min_reward_risk` del primer ciclo con órdenes de ~105 € eran la respuesta
+        correcta por el camino equivocado: esa orden no tenía que haberse llegado a considerar.
+
+      **El horizonte es el del perfil, no el de la propuesta, y es la parte que decide si la regla
+      sirve.** El suelo crece con el plazo, así que leerlo de `proposal.horizon_days` le daría al
+      modelo la salida: declarar tres días, obtener un suelo tres veces menor y volver a colar un
+      objetivo dentro del ruido. El plazo es el plan del experimento, se le dice al modelo cuál es, y
+      no lo mueve él. Es la misma forma que tienen todos los límites de `risk.py`.
+
+      **Sobre el objetivo derivado.** Cuando el analista no propone objetivo, el derivado pasa a ser
+      `max(el del ratio, el del suelo)`. El derivado por ratio sale del stop, así que con un stop
+      estrecho daba un objetivo estrecho: **el objetivo por defecto del sistema era el más pequeño
+      que la regla admite**. Rechazar en ese caso habría sido peor —el analista deja el objetivo
+      fuera a menudo, y no es culpa suya que la derivación sea corta—.
+
+      **Un ancla más en `risk_presets.py`**, `min_target_sigma`, con 1,0 / 0,8 / 0,6 en los niveles
+      1 / 5 / 10. Se lee como la fila de arriba: el conservador solo paga fricción por un movimiento
+      claramente fuera del ruido, el agresivo se conforma con menos ventaja. ⚠️ **En el extremo
+      conservador no ata nunca, y está bien**: con stop a 3× ATR y ratio exigido de 2,5, el nivel 1
+      ya pide 7,5 ATR de recorrido —unas 2,8 σ a diez días—, así que allí es un respaldo y el filtro
+      de verdad está en el nivel 10, donde el ratio es 1,00 y nadie más mira el tamaño del
+      movimiento.
+
+      **Lo que queda registrado.** El veredicto lleva `horizon_sigma_pct`, `target_sigmas` y
+      `stop_sigmas`, así que la pregunta «¿estuvo este movimiento alguna vez fuera del ruido?» se
+      responde por SQL sin recalcular el ATR de aquel día. Era el trabajo que F9.15 tuvo que hacer a
+      mano con `replay_analyst.py`.
+
+      **Consecuencia asumida: el histórico se resetea.** Se hizo el 2026-08-11 antes de arrancar el
+      mes, con un solo ciclo y cinco posiciones dentro, que es el momento más barato en que podía
+      hacerse. Esperar habría costado otro reseteo con días acumulados.
+
+- [x] **F9.17** **`horizon_days` era una columna muerta, y era la causa de que el agente pidiera
+      objetivos del 6 %.** Encontrado el 2026-08-11 revisando por qué las compras aspiraban a tan
+      poco.
+
+      La columna existía en `agent_settings` (default 10), se editaba en Ajustes con el rótulo
+      «Horizonte objetivo (días)», viajaba por la API y salía en los tipos de TypeScript. **Y no la
+      leía nadie**: ni `resolve_settings` la copiaba a `Settings`, ni el prompt la mencionaba, ni el
+      motor de riesgo la usaba. El único horizonte que circulaba era el que el modelo se inventaba
+      en cada respuesta.
+
+      **Por qué eso explica el 6 %, con los números del primer ciclo tras F9.14** (24 propuestas):
+      `horizon_days = 14` en **24 de 24**, y objetivo mediana **+6,37 %**. Con el ATR diario mediano
+      del universo, 2,14 %, una sigma a 14 días son **6,8 %** del precio. O sea que el modelo pedía
+      exactamente una sigma del plazo que él mismo había elegido: no era timidez, era la respuesta
+      aritméticamente correcta a una pregunta que nadie le había hecho. A 45 días esa sigma son
+      **12,1 %**, y a 90 días **17,2 %**.
+
+      **Lo que se hizo.** El horizonte viaja a los dos sitios donde significa algo:
+      - **Al prompt**, con la sigma **ya calculada** y en las dos unidades (porcentaje e importe).
+        Es la misma regla que ya seguían el hueco de precio y las señales booleanas: la aritmética es
+        donde este modelo falla más, y `atr_14 · √sesiones` sobre un plazo en días naturales son tres
+        sitios donde equivocarse en una línea.
+      - **Al motor de riesgo**, que es sobre lo que mide el suelo de F9.16.
+
+      El prompt dice además el suelo que se va a aplicar. **Es el mismo peaje de anclaje que ya paga
+      `max_position_pct`** —dicho un suelo, el modelo tiende a sentarse en él— y se paga por la misma
+      razón: una regla que el modelo no puede ver es una regla que produce rechazos de los que no
+      puede aprender. El prompt lo contesta de frente («el suelo es un mínimo para descartar ruido,
+      no la cifra a la que apuntar») y `risk.py` filtra igual.
+
+      **Y se le dice también lo contrario sobre el stop**, que tenía el mismo problema al revés: un
+      stop pegado al precio lo perfora el ruido de dos sesiones y saca de una tesis que era correcta.
+
+      ⚠️ **Queda un segundo parámetro muerto y no se ha tocado: `cash_reserve_pct`.** Está en el
+      esquema, en los dos modelos Pydantic y en los tipos del frontend, y `grep` no lo encuentra en
+      `src/`. No se arregla aquí porque con `max_new_positions_per_cycle` (F9.18) el problema que
+      resolvería —comprometer la caja entera de golpe— ya tiene dueño. Si algún día se usa, va con su
+      id; mientras no se use, es un campo editable que no hace nada, y eso es lo que hay que saber.
+
+- [x] **F9.18** **El capital se repartía por orden alfabético, y el ranking del screener se tiraba
+      dos líneas antes de gastarlo.** Encontrado el 2026-08-11.
+
+      `universe_data.fetch_snapshots` terminaba con `to_analyze = sorted(set(selected) | set(required))`
+      y `cycle.run` con `symbols = tuple(sorted(snapshots))`. El screener puntúa el universo y ordena
+      por puntuación; esos dos `sorted()` lo reordenaban por nombre. Y como las entradas se analizan y
+      **ejecutan una a una**, gastando la caja al pasar, el criterio efectivo de asignación del
+      capital era la inicial del ticker.
+
+      **Lo que se vio en el primer ciclo del experimento nuevo**, entre las 11:29 y las 11:38: cinco
+      posiciones abiertas —ABI.BR, ADS.DE, AENA.MC, CS.PA, GRF.MC—, 9.878 € comprometidos y **110 €
+      de caja** para los diecinueve análisis siguientes. De los 12 rechazos por `min_reward_risk`,
+      **cinco eran órdenes de ~105 €**: no se rechazaron por la tesis, se rechazaron por no quedar
+      dinero, y el ratio que no cuadraba era la comisión fija sobre una orden mínima. La lectura
+      «el filtro de R/R rechaza mucho» era en parte un artefacto de eso.
+
+      **Dos cambios, y el segundo es el que importa:**
+      - El orden del proveedor se respeta hasta el final: posiciones abiertas primero —su revisión no
+        compite por dinero, es un `sell` o un `hold`— y candidatos **en orden de puntuación**.
+      - **`max_new_positions_per_cycle`**, columna nueva, 0 = sin tope. El corte va **antes de llamar
+        al modelo** y no después de aprobar: alcanzado el tope, seguir preguntando gasta cuota para
+        producir propuestas que no se pueden ejecutar, y el ciclo siguiente vuelve a mirar los mismos
+        símbolos con datos más frescos. Lo que se pierde es el registro de esas opiniones; lo que se
+        gana es que el ciclo dure lo que dice durar.
+
+      **No es un límite de riesgo y por eso no está en `RiskLimits`:** es ritmo. El Risk Manager juzga
+      una propuesta a la vez y no tiene noción de cuántas lleva aprobadas en este ciclo, que es
+      justamente lo que hay que contar.
+
+- [ ] **F9.19** **El ciclo asigna el capital por orden de llegada, no eligiendo entre lo que ha
+      visto.** Abierta el 2026-08-11 al cerrar F9.18, que la deja a medias a propósito.
+
+      F9.18 arregla *qué orden* se sigue, no *que haya un orden*. El ciclo sigue analizando y
+      ejecutando en la misma pasada, así que las dos primeras aprobadas del ranking se llevan el
+      dinero sin que las siguientes se hayan analizado todavía. La forma correcta son **dos pasadas**:
+      analizar los 20 candidatos, y solo entonces repartir entre los que dijeron `buy`, ordenados por
+      convicción o por sigmas de recorrido prometido.
+
+      **No se hizo ahora porque hoy no compraría nada:** la convicción sale **60 en 24 de 24**
+      propuestas, así que ordenar por ella es ordenar por una constante. Tiene que ir después de la
+      tarea de calibración del modelo, o es refactorizar el ciclo para no cambiar el resultado.
+
+      ⚠️ **Y tiene un coste que hay que decidir:** con dos pasadas, el precio de referencia de la
+      primera propuesta tiene 15 minutos cuando se ejecuta la última. Hoy también pasa —el ciclo dura
+      lo que dura— pero hoy cada orden se manda justo tras su análisis, que es lo menos malo de las
+      dos. Se cruza con **F9.3** (ejecutar al precio vivo del momento de la orden) y probablemente
+      haya que hacer las dos juntas.
+
+- [ ] **F9.20** **El modelo contesta con plantilla, y tres de sus cuatro campos son constantes.**
+      Abierta el 2026-08-11 con id propio, porque venía mezclada con F9.16 y no es lo mismo.
+
+      **Medido en el primer ciclo tras F9.14**, 24 propuestas de entrada:
+      - `action`: **buy en 24 de 24**. Antes del cambio eran 91 de 174, así que empeoró.
+      - `conviction`: **60 en 24 de 24**.
+      - `horizon_days`: **14 en 24 de 24**.
+      - `suggested_weight_pct`: solo tres valores, 10 / 15 / 20, y 20 en 17 de las 24.
+
+      Lo único que sí varía es el par stop/objetivo: objetivo de +3,33 % a +11,94 %, stop de −2,55 %
+      a −9,79 %. O sea que el modelo **mira los datos** —los niveles siguen a la volatilidad de cada
+      activo— y no los usa para nada más.
+
+      El prompt le dice explícitamente que «hold es la respuesta correcta la mayor parte del tiempo»
+      y que «si todas tus propuestas salen con la misma convicción, no estás midiendo nada». No sirve
+      de nada, que es el dato interesante: **no es un prompt que falte escribir, es un modelo que no
+      discrimina**. `meta/llama-3.3-70b-instruct` a temperatura 0,2.
+
+      **Lo que esto rompe aguas arriba, y por eso importa más de lo que parece:**
+      - `min_conviction` no es un filtro sino un interruptor: a 50 pasa todo, a 65 no pasa nada.
+      - El factor de convicción de F9.10 no modula nada, porque la convicción es constante (y hoy
+        además no se aplica nunca: el modelo siempre pide peso, y F9.13 los hizo excluyentes).
+      - **F9.19** no se puede hacer: ordenar 20 propuestas por convicción es ordenarlas por 60.
+
+      **Qué medirlo, en este orden:**
+      1. **Subir `llm_temperature`** de 0,2 a ~0,6 y volver a mirar la dispersión. Es el cambio de un
+         número y es el sospechoso más barato. ⚠️ No se ha hecho junto con F9.16/F9.17 **a propósito**:
+         mezclar un cambio de prompt con un cambio de temperatura en el mismo experimento hace que no
+         se pueda atribuir la diferencia a ninguno de los dos.
+      2. **Probar otro modelo.** La capa gratuita de NIM sirve varios; `llm_model` es una columna del
+         perfil precisamente para esto.
+      3. **F5.7 (`screener_mode = random`)** sigue siendo la medición que lo cierra: si el agente rinde
+         igual con candidatos al azar, la convicción constante no era el problema porque no había
+         señal que perder.
 
 ---
 
@@ -3629,6 +3802,16 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
    minutos son 160 de los 510 de la ventana—. El aviso sigue vigente para el día que se
    active un segundo perfil sin pausar el primero.
 
+   ⚠️ **Bajado a 4 ciclos el 2026-08-11, y el argumento de arriba es el que cambia.** Con el
+   experimento del mes (decisión nº 9) el horizonte declarado son **45 días**, y el stop pasa
+   de 1,2× a **3× ATR diario**: unos −6,4 % en el activo mediano en lugar de −2,6 %. Un stop a
+   esa distancia no lo perfora el ruido de una hora, así que la rotación que justificaba los
+   ocho ciclos —mirar los niveles ocho veces al día— deja de comprar gran cosa, mientras el
+   coste sigue entero: 25 candidatos × 8 ciclos son 200 llamadas al modelo al día sobre los
+   mismos nombres. Quedan **10:20, 12:20, 14:20 y 16:20** con `screener_top_n=20`, o sea 80
+   llamadas. El reloj horario del precio no se toca: sigue siendo lo que hace que los cuatro
+   ciclos vean precios distintos.
+
    ~~**Lo que sigue dependiendo de F2.1c** es solo si se queda en `1d` o pasa a `1h`…~~
    ⚠️ **Decidido el 2026-08-10, y decidido antes de F2.1c a propósito:** `bar_interval=1h`
    con los ocho ciclos, `10:20,11:20,…,17:20 Europe/Madrid`. Es la pauta que este mismo
@@ -3746,3 +3929,53 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
    conviene mirarlo pronto y no al final.
 4. ~~¿Se conserva el broker simulado, o se pasa a Alpaca paper?~~ **Resuelto: solo
    simulador.** Alpaca fuera del proyecto.
+9. **El experimento del mes, y la aritmética que lo ata.** ✅ **Resuelto el 2026-08-11.**
+   Pedido: un mes completo —21 sesiones— con planificación a medio plazo y compras de las que
+   sacar **un 10–20 %**, no un 6 %.
+
+   **El objetivo no se elige: sale del plazo.** Con el ATR diario mediano del universo
+   (2,14 %), una sigma vale:
+
+   | Horizonte declarado | 1σ del precio |
+   |---|---|
+   | 14 días (lo que hacía el agente solo) | 6,8 % |
+   | 21 días | 8,3 % |
+   | **45 días** | **12,1 %** |
+   | 90 días | 17,2 % |
+
+   Así que pedir un 12 % obliga a declarar ~45 días, y **eso decide qué mide el mes**: la
+   mayoría de las posiciones seguirán abiertas el día 21. Se acepta a sabiendas — el mes mide
+   la calidad de las entradas y el camino recorrido, y el resultado se lee **liquidando**
+   («Cerrar experimento», F5.8), no contando objetivos alcanzados. Las tres salidas se
+   plantearon como alternativas y esta es la elegida; las otras eran 21 días con objetivos del
+   8–10 % que resuelven dentro del mes, y 90 días, que en 21 sesiones no mide casi nada.
+
+   **Los parámetros, y por qué el deslizador no puede expresarlos.** La tabla de F6.5 acopla
+   cinco ejes en un solo número, y «riesgo 10» significa *también* el stop más estrecho
+   (1,2× ATR), que es un supuesto de operar dentro del día. Para lo que se pide hace falta lo
+   contrario: tamaño agresivo con **stop paciente**. Por eso va en modo avanzado:
+
+   | Parámetro | Valor | Por qué |
+   |---|---|---|
+   | `horizon_days` | **45** | De aquí sale todo lo demás (F9.17) |
+   | `stop_atr_multiple` | **3,0** | −6,4 % en el mediano. A 1,2× (−2,6 %) el ruido de dos sesiones saca de una tesis de seis semanas |
+   | `min_target_sigma` | **0,8** | Suelo del objetivo en **9,7 %**, que es el «mínimo 10 %» pedido, y se adapta a la volatilidad de cada activo en vez de ser un porcentaje fijo |
+   | `min_reward_risk` | **1,3** | Calibrado para atar **en el mismo punto** que el suelo: 9,7 % contra −6,4 % en una orden de 1.400 € da 1,30 neto. Dos reglas que se contradicen es peor que una |
+   | `max_position_pct` | **14 %** | 1.400 € por orden: la comisión pasa de ser el 7,8 % de la orden (a 105 €) a un 0,6 % |
+   | `max_open_positions` | **7** | 7 × 14 % ≈ invertido del todo, y siete decisiones se pueden leer una a una al final del mes |
+   | `max_new_positions_per_cycle` | **2** | F9.18: que un ciclo no se coma la caja entera |
+   | `min_order_notional` | **500 €** | F9.16 |
+   | `risk_per_trade_pct` | **2 %** | Deliberadamente holgado: se deja que ate el peso y no el presupuesto de riesgo, porque quien tiene la tesis delante es el analista (F9.13) |
+   | `min_conviction` | **50** | Con la convicción constante en 60 (F9.20) este parámetro es un interruptor, no un filtro. A 50 no estorba; el filtro de verdad es el suelo del objetivo |
+   | `screener_min_turnover` | **5.000.000 €** | Estaba en 100.000, contra los 5 M que documenta EXPERIMENT.md. Medido: **los 89 símbolos del universo pasan igual** (mediana 83 M, mínimo 5,31 M), así que restaurarlo no cuesta un candidato y devuelve la honestidad al simulador de ejecución |
+
+   ⚠️ **Lo que NO se toca, y es una decisión:** `llm_temperature` se queda en 0,2 aunque sea el
+   sospechoso más barato de la respuesta con plantilla. Cambiar el prompt (F9.17) y la
+   temperatura en el mismo experimento hace que la diferencia no se pueda atribuir a ninguno de
+   los dos. Va en **F9.20**, después.
+
+   ⚠️ **Y el riesgo de método de este mes:** el suelo del objetivo está en 9,7 % y la mediana de
+   lo que el modelo pedía era 6,4 %. Si el prompt nuevo no le mueve los objetivos, **el agente
+   no compra nada** y el mes mide el prompt, no la estrategia. Hay que mirar la mediana del
+   objetivo en el primer ciclo: si sigue por debajo del suelo, la salida es bajar
+   `min_target_sigma` a 0,6 —7,3 %— y anotarlo, no esperar tres semanas a comprobarlo.

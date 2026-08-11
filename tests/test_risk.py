@@ -23,6 +23,13 @@ LIMITS = RiskLimits(
     min_conviction=65,
     stop_atr_multiple=2.0,
     min_reward_risk=1.5,
+    # **Zero on purpose, and it is the same decision as conviction 100 below**
+    # (F9.16). The sigma floor runs before the ratio check and depends on the ATR
+    # and the horizon, so leaving it at its real default would make every test in
+    # this file about two rules at once: the ratio test stopped failing for its own
+    # reason and started failing for this one. It has its own block at the bottom,
+    # with its own limits.
+    min_target_sigma=0.0,
     min_order_notional=100.0,
 )
 
@@ -638,6 +645,125 @@ def test_manager_without_a_currency_writes_a_bare_figure(manager):
     assert verdict.approved
     assert "por 20,000.00" in verdict.reason
     assert "$" not in verdict.reason
+
+
+# -- El suelo del objetivo, en sigmas del horizonte (F9.16) ------------------
+#
+# 0,8 sigma, ATR 2,0 y un horizonte de 45 dias naturales = 32 sesiones:
+#   sigma = 2,0 * sqrt(32,14) = 11,34  ->  suelo = 100 + 9,07 = 109,07
+SIGMA_LIMITS = RiskLimits(**{**LIMITS.__dict__, "min_target_sigma": 0.8})
+
+
+def sigma_manager(horizon_days=45, limits=SIGMA_LIMITS):
+    return RiskManager(limits, horizon_days=horizon_days)
+
+
+def test_horizon_sigma_scales_with_the_square_root_of_the_sessions():
+    """The horizon is in calendar days and the ATR is per session, so the
+    conversion is part of the formula and not a detail of the caller."""
+    from src.risk import horizon_sigma
+
+    assert horizon_sigma(2.0, 7) == pytest.approx(2.0 * 5**0.5)
+    # Four times the horizon is twice the sigma, not four times.
+    assert horizon_sigma(2.0, 28) == pytest.approx(2 * horizon_sigma(2.0, 7), rel=1e-3)
+    # Closed by default, like everything else here: no ATR, no sigma.
+    assert horizon_sigma(0.0, 45) == 0.0
+    assert horizon_sigma(2.0, 0) == 0.0
+
+
+def test_a_target_inside_the_noise_is_rejected_however_good_its_ratio():
+    """The case F9.16 exists for: a ratio of 1,75 that is 0,62 sigma of travel.
+
+    Stop at 96 (risk 4) and target at 107 (gain 7) clears the 1,50 the profile
+    demands and would have been approved. Over 45 days it promises 0,62 sigma of
+    an 11,34 sigma move, and the ratio cannot see that: it is a quotient, so
+    shrinking both levels by the same factor leaves it untouched.
+    """
+    verdict = sigma_manager().evaluate_entry(
+        proposal(suggested_target=107.0), account(), atr=2.0
+    )
+
+    assert not verdict.approved
+    assert verdict.rule == "min_target_sigma"
+    assert verdict.details["target_sigmas"] == pytest.approx(0.62, abs=0.01)
+    # The floor travels in the rejection so it can be aggregated later in SQL
+    # without recomputing that day's ATR.
+    assert verdict.details["target_floor"] == pytest.approx(109.07, abs=0.01)
+    assert "0.8 sigma" in verdict.reason
+
+
+def test_the_same_target_passes_at_a_short_horizon():
+    """The floor is the horizon's, so it is the horizon that makes a level small.
+
+    Same proposal, same ATR: over 10 days one sigma is 5,35 and 7 % of travel is
+    1,31 of it. Nothing about the asset changed, only what we said we were
+    waiting for.
+    """
+    verdict = sigma_manager(horizon_days=10).evaluate_entry(
+        proposal(suggested_target=107.0), account(), atr=2.0
+    )
+
+    assert verdict.approved
+    assert verdict.details["target_sigmas"] == pytest.approx(1.31, abs=0.01)
+
+
+def test_the_floor_is_the_profiles_horizon_and_not_the_proposals():
+    """Otherwise the model dodges it by declaring a shorter horizon.
+
+    The floor grows with the horizon, so a proposal that says "three days" would
+    get a floor three times smaller and its target back inside the noise. The
+    horizon is the experiment's, and the model is told what it is.
+    """
+    verdict = sigma_manager().evaluate_entry(
+        proposal(suggested_target=107.0, horizon_days=3), account(), atr=2.0
+    )
+
+    assert not verdict.approved
+    assert verdict.rule == "min_target_sigma"
+    assert verdict.details["horizon_days"] == 45
+
+
+def test_a_derived_target_respects_the_floor_instead_of_being_rejected_by_it():
+    """A proposal with no target of its own gets one that clears both rules.
+
+    The ratio-derived target comes from the stop, so a tight stop used to give a
+    tight target: the system's own default target was the smallest the rule
+    admits. Rejecting it instead would have been worse — the analyst leaves the
+    target out often, and it is not the analyst's fault the derivation is narrow.
+    """
+    verdict = sigma_manager().evaluate_entry(proposal(), account(), atr=2.0)
+
+    assert verdict.approved
+    assert verdict.details["target_source"] == "derived"
+    assert verdict.target_price >= 109.07
+    # And it is the floor that bound, not the ratio: 1,5 x 4 would have given 106.
+    assert verdict.target_price == pytest.approx(109.07, abs=0.01)
+
+
+def test_an_ambitious_target_passes_and_the_record_says_how_ambitious():
+    verdict = sigma_manager().evaluate_entry(
+        proposal(suggested_target=115.0), account(), atr=2.0
+    )
+
+    assert verdict.approved
+    assert verdict.details["target_sigmas"] == pytest.approx(1.32, abs=0.01)
+    assert verdict.details["stop_sigmas"] == pytest.approx(0.35, abs=0.01)
+    assert verdict.details["horizon_sigma_pct"] == pytest.approx(11.34, abs=0.01)
+
+
+def test_a_floor_of_zero_switches_the_rule_off():
+    """Which is what the profiles that predate the column keep running with: the
+    limit is nullable and NULL derives from the sliders, but an explicit zero is a
+    choice and has to be honoured."""
+    off = RiskManager(
+        RiskLimits(**{**LIMITS.__dict__, "min_target_sigma": 0.0}), horizon_days=45
+    )
+
+    verdict = off.evaluate_entry(
+        proposal(suggested_target=107.0), account(), atr=2.0
+    )
+
+    assert verdict.approved
 
 
 # -- Configuracion -----------------------------------------------------------

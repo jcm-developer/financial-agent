@@ -279,6 +279,12 @@ function SettingsForm({
 
       <Group title="Estrategia">
         <NumberField label="Horizonte objetivo (días)" field="horizon_days" value={value} set={set} />
+        <NumberField
+          label="Máx. entradas nuevas por ciclo"
+          field="max_new_positions_per_cycle"
+          value={value}
+          set={set}
+        />
         <Select
           label="Modo del screener"
           value={value("screener_mode")}
@@ -386,6 +392,12 @@ function SettingsForm({
           <NumberField label="Convicción mínima" field="min_conviction" value={value} set={set} />
           <NumberField label="Múltiplo de ATR del stop" field="stop_atr_multiple" value={value} set={set} />
           <NumberField label="Reward/risk mínimo" field="min_reward_risk" value={value} set={set} />
+          <NumberField
+            label="Objetivo mínimo (σ del horizonte)"
+            field="min_target_sigma"
+            value={value}
+            set={set}
+          />
           <NumberField label="Notional mínimo" field="min_order_notional" value={value} set={set} />
           <p className="text-caption leading-relaxed text-text-muted sm:col-span-2 lg:col-span-3">
             Un campo vacío vuelve a NULL, que significa «derívalo de los deslizadores». No es

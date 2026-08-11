@@ -266,6 +266,38 @@ def test_max_open_positions_is_respected_across_the_watchlist(db):
     assert len(db.query("select * from sim_positions")) == 2
 
 
+def test_a_cycle_opens_at_most_the_configured_number_of_new_positions(db):
+    """F9.18. Without the cap, the first cycle spends the whole book.
+
+    Measured on the real experiment: five positions opened in nine minutes on the
+    first cycle, 110 EUR of cash left, and the nineteen candidates analysed
+    afterwards could only be rejected for not having money rather than for not
+    being good. The cap turns the cycle into one that picks.
+    """
+    settings = make_settings(
+        watchlist=("AAPL", "MSFT", "NVDA"), max_new_positions_per_cycle=2
+    )
+    market = StubMarketData({s: rising() for s in ("AAPL", "MSFT", "NVDA")})
+
+    report = make_cycle(db, settings, StubLLM(entry=BUY, exit_=HOLD_EXIT), market).run()
+
+    assert len(db.query("select * from sim_positions")) == 2
+    # And the third one was not even asked about: the cap cuts before the model
+    # call, so the quota is not spent producing proposals that cannot execute.
+    assert report.analyst_calls == 2
+
+
+def test_without_a_cap_a_cycle_fills_as_far_as_the_limits_let_it(db):
+    """The default is 0 = no cap, which is what the profiles predating the column
+    ran with. Their history is not reinterpreted retroactively."""
+    settings = make_settings(watchlist=("AAPL", "MSFT", "NVDA"))
+    market = StubMarketData({s: rising() for s in ("AAPL", "MSFT", "NVDA")})
+
+    make_cycle(db, settings, StubLLM(entry=BUY, exit_=HOLD_EXIT), market).run()
+
+    assert len(db.query("select * from sim_positions")) == 3
+
+
 def test_a_second_cycle_does_not_reopen_the_same_symbol(db):
     settings = make_settings(watchlist=("AAPL",))
     llm = StubLLM(entry=BUY, exit_=HOLD_EXIT)

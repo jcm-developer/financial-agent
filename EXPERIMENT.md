@@ -5,24 +5,25 @@ en qué orden, con qué datos y en qué momento. Es la referencia sobre la que s
 construye lo que venga después.
 
 Está escrito el 2026-08-10, con el primer experimento (`eu-05-muy-agresivo`)
-arrancando ese mismo día, y revisado el **2026-08-11** al separar el reloj del
-precio del de los indicadores (F9.14, sección 6). Cuando algo aquí deje de ser
-cierto, se corrige aquí —no en un comentario suelto—, porque es el sitio donde se
-mira antes de tocar el ciclo.
+arrancando ese mismo día, y revisado el **2026-08-11** dos veces: al separar el
+reloj del precio del de los indicadores (F9.14, sección 6) y al poner suelo al
+recorrido del objetivo (F9.16–F9.18, secciones 6 y 12). Cuando algo aquí deje de
+ser cierto, se corrige aquí —no en un comentario suelto—, porque es el sitio donde
+se mira antes de tocar el ciclo.
 
 ---
 
 ## 1. Qué es un experimento
 
 Un **perfil** es un experimento. Lo define entero una fila de `agent_settings`
-(41 columnas) más su universo, y lleva su propia cartera con su propio dinero
+(45 columnas) más su universo, y lleva su propia cartera con su propio dinero
 simulado. Dos experimentos con el mismo criterio en dos bolsas distintas son dos
 perfiles, no dos ramas del código.
 
 De un perfil salen: el mercado (y con él horario, calendario, divisa, benchmark y
 suelo de liquidez), el capital, el universo, el modelo de lenguaje, el intervalo
 de barras, las horas de ciclo y los dos deslizadores —**perfil de riesgo** y
-**diversificación**— de los que se derivan los nueve límites duros.
+**diversificación**— de los que se derivan los diez límites duros.
 
 `profiles.status` decide si corre: **solo los `active` se planifican y solo sus
 símbolos se siguen en vivo.**
@@ -94,7 +95,7 @@ modelo.
 1. Cerrojo         ¿hay otro ciclo corriendo sobre esta misma cartera? → se salta
 2. Calendario      ¿toca operar ahora? (skip_when_market_closed)
 3. Reconciliación  broker ↔ base: lo que el broker dice que hay manda
-4. Snapshot        copia de los 41 parámetros → cycles.settings_json
+4. Snapshot        copia de los 45 parámetros → cycles.settings_json
 5. Screener        89 símbolos → 20 candidatos       DETERMINISTA, sin LLM, segundos
                    (criba con barras DIARIAS, que son también las de los indicadores)
 6. Salidas obligatorias  stop y objetivo de cada posición abierta   SIN LLM
@@ -111,8 +112,15 @@ con reglas fijas. Ese corte es la premisa del proyecto.
 
 **Los pasos 5, 6 y 9 no gastan modelo**, y eso importa: las salidas obligatorias
 —stop perforado, objetivo alcanzado— se comprueban **en cada ciclo y gratis**. Ahí
-está el valor de tener ocho ciclos al día en vez de uno: no en preguntarle ocho
-veces al modelo, sino en mirar los stops ocho veces.
+está el valor de tener varios ciclos al día en vez de uno: no en preguntarle varias
+veces al modelo, sino en mirar los stops varias veces.
+
+⚠️ **Cuántos ciclos depende de lo ancho que sea el stop, y por eso bajaron de ocho a
+cuatro el 2026-08-11.** Con el stop a 1,2× ATR (−2,6 %) mirarlo cada hora compraba
+algo real. Con el del experimento del mes, 3× ATR (−6,4 %) y un horizonte de 45
+días, el ruido de una hora no lo alcanza, mientras el coste seguía entero: 25
+candidatos × 8 ciclos son 200 llamadas al modelo al día sobre los mismos nombres.
+Quedan **10:20, 12:20, 14:20 y 16:20**.
 
 **Una posición abierta se revisa siempre, aunque el screener no la mire.** Entra
 en cada ciclo como símbolo obligatorio, y **sin gastar una de las 20 plazas**: se
@@ -157,6 +165,20 @@ Ahora deja aviso en el log, una línea `SIN PRECIO` en el resumen y un
 `risk_event` con regla `no_price`, que sale en la pantalla de Riesgo y en la
 gráfica de rechazos por regla. **No se cierra la posición**: vender al precio que
 justamente no tenemos sería peor que aguantar.
+
+---
+
+⚠️ **Un ciclo no puede abrir posiciones sin límite, y el orden en que las abre no
+es alfabético** (F9.18). El paso 8 analiza y **ejecuta en la misma pasada**,
+gastando la caja al pasar, así que el orden de los candidatos era el criterio real
+de asignación del capital — y dos `sorted()` lo dejaban en manos de la inicial del
+ticker. Medido: el primer ciclo del experimento abrió cinco posiciones en nueve
+minutos —ABI, ADS, AENA, CS, GRF— y dejó 110 € de caja para los diecinueve
+análisis siguientes. Ahora los candidatos llegan **en orden de puntuación del
+screener** y `max_new_positions_per_cycle` topa cuántas abre un ciclo. El corte va
+**antes de llamar al modelo**: pasado el tope, preguntar gasta cuota para producir
+propuestas que no se pueden ejecutar. Lo que sigue faltando —elegir entre las 20
+propuestas en vez de coger las dos primeras del ranking— es **F9.19**.
 
 ---
 
@@ -280,7 +302,7 @@ experimento signifique algo:
 
 | Descarte | Por qué |
 |---|---|
-| Liquidez < 5.000.000 €/día | El simulador supone que se compra a la apertura **sin mover el mercado**. En un valor ilíquido eso es mentira, y contamina el resultado |
+| Liquidez < 5.000.000 €/día | El simulador supone que se compra a la apertura **sin mover el mercado**. En un valor ilíquido eso es mentira, y contamina el resultado. Es `screener_min_turnover` y es del perfil: había estado en 100.000 €, y volvió a 5 M el 2026-08-11 al medir que los 89 símbolos del universo lo pasan igual (mediana 83 M, mínimo 5,31 M) |
 | Precio < 5 € | Chicharros: el ruido de tick domina el movimiento |
 | Volatilidad anualizada > 120 % | El stop por ATR saldría tan ancho que la posición resultante sería irrelevante |
 | Menos de 60 barras, o sin ATR | Los indicadores largos no significan nada, y el risk manager rechazaría la entrada igualmente |
@@ -310,13 +332,73 @@ nada**, y ese es exactamente el grupo de control que lo mide.
 
 ---
 
+## 7 bis. El horizonte manda sobre el tamaño del objetivo (F9.16, F9.17)
+
+Es la pieza que hay que entender antes de opinar sobre si el agente es ambicioso o
+tímido, y es nueva del 2026-08-11.
+
+**El objetivo no se elige: se deduce del plazo.** Con el ATR diario mediano del
+universo europeo (2,14 % del precio), lo que la volatilidad permite recorrer es:
+
+| Horizonte declarado | 1σ del precio |
+|---|---|
+| 14 días | 6,8 % |
+| 21 días | 8,3 % |
+| 45 días | 12,1 % |
+| 90 días | 17,2 % |
+
+Así que un objetivo del 6 % **no es timidez del modelo a 14 días: es exactamente
+una sigma**. Y hasta F9.17 el modelo elegía él el plazo —14 días en 24 de 24
+propuestas— porque `agent_settings.horizon_days` era una **columna muerta**: se
+guardaba, se editaba en Ajustes, viajaba por la API, y no la leía nadie.
+
+Hoy el horizonte del perfil viaja a los dos sitios donde significa algo:
+
+| Dónde | Qué hace |
+|---|---|
+| **El prompt** | Declara el plazo y da **una sigma ya calculada** en % y en importe, más el suelo que se va a aplicar. La aritmética se precalcula porque es donde este modelo falla más |
+| **El Risk Manager** | Es la base sobre la que `min_target_sigma` mide el suelo del objetivo |
+
+**El suelo, y por qué `min_reward_risk` no podía serlo.** El ratio es un
+**cociente**: `+3,3 %` contra `−2,8 %` da 1,15, y `+13 %` contra `−11 %` da lo
+mismo. Encoger los dos niveles por el mismo factor no lo mueve, así que no puede
+ver si las distancias son grandes *para el plazo*. Medido sobre 94 compras
+propuestas, **32 tenían los dos niveles por debajo de 0,5σ**: ahí el nivel se
+alcanza por azar y no por la tesis, y con la comisión fija en medio es esperanza
+negativa que pasaba el filtro con nota.
+
+`min_target_sigma` es ese suelo, en sigmas del horizonte, y la sigma se construye
+con el ATR diario escalado por **√sesiones** (`risk.horizon_sigma`). Tres cosas que
+conviene tener claras:
+
+- **El horizonte es el del perfil, no el de la propuesta.** El suelo crece con el
+  plazo, así que leerlo de `proposal.horizon_days` le daría al modelo la salida:
+  declarar tres días y volver a colar un objetivo dentro del ruido.
+- **Con objetivo propio del analista se rechaza; sin objetivo, se deriva.** Subirle
+  el objetivo a una propuesta sería inventarle una tesis. Pero cuando no propone
+  ninguno, el derivado es `max(el del ratio, el del suelo)`: el del ratio sale del
+  stop, así que con un stop estrecho el objetivo por defecto del sistema era el más
+  pequeño que la regla admite.
+- **Queda registrado en sigmas.** `risk_events.details_json` lleva
+  `horizon_sigma_pct`, `target_sigmas` y `stop_sigmas`, así que «¿estuvo este
+  movimiento fuera del ruido?» se responde por SQL sin recalcular el ATR de aquel
+  día.
+
+⚠️ **Y la fricción es un problema distinto, resuelto en otro sitio.** Cubrir la
+comisión no es cuestión de recorrido sino de **tamaño de orden**: el ida y vuelta de
+una española son 8,22 €, que en una orden de 100 € es el 8,2 % y en una de 500 € el
+1,6 %. Por eso `MIN_ORDER_NOTIONAL` pasó de 100 a **500 €** en lugar de añadirse una
+tercera regla de ratio.
+
+---
+
 ## 8. Qué queda registrado
 
 Todo, y a propósito: el experimento se interpreta después.
 
 | Tabla | Qué guarda |
 |---|---|
-| `cycles` | Cada ejecución, con **copia de los 41 parámetros** con los que corrió |
+| `cycles` | Cada ejecución, con **copia de los 45 parámetros** con los que corrió |
 | `decisions` | Cada propuesta del modelo: acción, convicción, tesis, riesgos, horizonte |
 | `risk_events` | Qué hizo el risk manager con cada propuesta y **bajo qué regla** |
 | `orders` | Lo que se mandó al broker |
@@ -378,7 +460,9 @@ Para no volver a preguntárselo:
 | Leer noticias o fundamentales | **F9.7** (spike), luego **F9.4** |
 | Aplicar el tope por sector (lo calcula y no lo hace cumplir) | **FE.12** / **F6.5** |
 | Operar en corto | `allow_shorts` existe y está a 0 |
-| Cerrar por horizonte cumplido (`horizon_days` se registra, no cierra) | — |
+| Cerrar por horizonte cumplido (`horizon_days` fija la escala del objetivo y del suelo, pero no cierra ninguna posición al expirar) | — |
+| Elegir entre las propuestas de un ciclo: coge las mejor puntuadas por el screener, no las de más convicción | **F9.19** |
+| Usar `cash_reserve_pct`, que está en el esquema y en la interfaz y no lo lee nadie | **F9.17** (apuntado, no arreglado) |
 | Convertir divisa | **nunca**, es una restricción del diseño (D8) |
 | Operar con dinero real | **nunca**, el único broker es el simulador |
 
@@ -391,7 +475,12 @@ Para no volver a preguntárselo:
    agente.**
 3. El **planificador** lanza un ciclo a cada hora configurada del perfil.
 4. Cada ciclo: screener determinista criba 89 → 20; el modelo opina sobre esos 20
-   y sobre cada posición abierta; el risk manager decide; el broker ejecuta.
+   —**en orden de puntuación**, que es el orden en que se gasta la caja— y sobre
+   cada posición abierta; el risk manager decide; el broker ejecuta, hasta
+   `max_new_positions_per_cycle` entradas nuevas.
+4 bis. **El plazo del perfil (`horizon_days`) fija el tamaño del objetivo**, y hay un
+   suelo en sigmas de ese plazo por debajo del cual la propuesta se rechaza
+   (sección 7 bis). Una sigma a 14 días son 6,8 % del precio; a 45 días, 12,1 %.
 5. Se decide con la **última barra completa** de `bar_interval` y se ejecuta en la
    **apertura de la siguiente**, con deslizamiento en contra y la comisión del banco
    por cada lado (4,11 € en españolas, 3,00 € en el resto de Europa).

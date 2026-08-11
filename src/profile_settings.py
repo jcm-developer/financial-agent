@@ -176,6 +176,11 @@ def resolve_settings(db: Database, profile_id: str, *, infra: Infra) -> Settings
         bar_interval=bar_interval,
         market=market.code,
         skip_when_market_closed=bool(row["skip_when_market_closed"]),
+        # F9.17: hasta aqui `horizon_days` se guardaba, se editaba en Ajustes y no
+        # se leia en ninguna parte. Era la causa de que el agente pidiera objetivos
+        # del 6 %: el modelo no sabia a que plazo se le juzgaba.
+        horizon_days=int(row["horizon_days"]),
+        max_new_positions_per_cycle=int(row["max_new_positions_per_cycle"] or 0),
         risk=risk,
         screener=screener,
         profile_id=profile_id,
@@ -503,7 +508,10 @@ def import_env_profile(
         "min_conviction": risk.min_conviction,
         "stop_atr_multiple": risk.stop_atr_multiple,
         "min_reward_risk": risk.min_reward_risk,
+        "min_target_sigma": risk.min_target_sigma,
         "min_order_notional": risk.min_order_notional,
+        "horizon_days": env_settings.horizon_days,
+        "max_new_positions_per_cycle": env_settings.max_new_positions_per_cycle,
     }
 
     profile_id = db.create_profile(

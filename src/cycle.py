@@ -203,6 +203,12 @@ class TradingCycle:
                 # And the ceiling, so `suggested_weight_pct` has a scale to be
                 # small against (F9.13).
                 max_position_pct=settings.risk.max_position_pct,
+                # El horizonte del experimento y el suelo que se aplicara al
+                # objetivo a ese plazo (F9.16, F9.17). Hasta aqui el modelo no
+                # sabia a que plazo se le juzgaba, asi que contestaba 14 dias a
+                # todo y ponia el objetivo a una sigma de dos semanas.
+                horizon_days=settings.horizon_days,
+                min_target_sigma=settings.risk.min_target_sigma,
             ),
             # Same reason as the analyst's currency right above: the verdict's
             # text is stored and printed as it is, so an approval in a European
@@ -215,6 +221,10 @@ class TradingCycle:
                 # surcharge, so a what-if with heavier friction is sized and
                 # filtered with the friction it declares (F9.9).
                 commission_for=broker.commission_for,
+                # El horizonte sobre el que se mide el suelo del objetivo (F9.16).
+                # El del perfil y no el que declare la propuesta: ver el comentario
+                # de `RiskManager.horizon_days`.
+                horizon_days=settings.horizon_days,
             ),
             portfolio_id=portfolio_id,
         )
@@ -263,7 +273,15 @@ class TradingCycle:
         # price source of its own, so without it the book cannot be valued nor
         # anything executed.
         snapshots = self.market_data.fetch_snapshots(required)
-        symbols = tuple(sorted(snapshots))
+        # ⚠️ **En el orden en que los devolvio el proveedor, que es el del screener,
+        # y no alfabetico** (F9.18). Este `sorted()` fue durante meses el sitio
+        # donde se tiraba el ranking: el screener puntua el universo y ordena por
+        # puntuacion, y aqui se reordenaba por nombre. Como las entradas se
+        # ejecutan una a una y la caja se gasta al pasar, el primer ciclo del
+        # experimento nuevo compro los cinco primeros del abecedario —ABI, ADS,
+        # AENA, CS, GRF— y dejo 110 EUR para los diecinueve analisis siguientes.
+        # Quien decide en que se gasta el dinero no puede ser la inicial.
+        symbols = tuple(snapshots)
         self._prime_broker(snapshots)
 
         account = self.broker.get_account_state()
@@ -740,9 +758,26 @@ class TradingCycle:
             )
         log.info("Evaluando %d candidatos a entrada.", len(candidates))
 
+        # Cuantas puede abrir este ciclo (F9.18). 0 = sin tope.
+        #
+        # El corte va **antes de llamar al modelo**, no despues de aprobar: una vez
+        # alcanzado el tope, seguir preguntando gasta cuota para producir propuestas
+        # que no se pueden ejecutar, y el ciclo siguiente vuelve a mirar los mismos
+        # simbolos con datos mas frescos. Lo que se pierde es el registro de esas
+        # opiniones; lo que se gana es que el ciclo dure lo que dice durar.
+        per_cycle_cap = self.settings.max_new_positions_per_cycle
+        opened_this_cycle = 0
+
         for symbol in candidates:
             if len(account.positions) >= self.settings.risk.max_open_positions:
                 log.info("Limite de posiciones abiertas alcanzado; se detiene la busqueda.")
+                break
+            if per_cycle_cap > 0 and opened_this_cycle >= per_cycle_cap:
+                log.info(
+                    "Tope de %d entradas nuevas por ciclo alcanzado; los %d candidatos "
+                    "restantes se dejan para el ciclo siguiente.",
+                    per_cycle_cap, len(candidates) - candidates.index(symbol),
+                )
                 break
 
             self._check_stop(cycle_id)
@@ -784,6 +819,7 @@ class TradingCycle:
                 report, portfolio_id, cycle_id, snapshot, proposal, verdict,
                 decision_id, risk_event_id,
             ):
+                opened_this_cycle += 1
                 # Refreshed so the limits for the following candidates account
                 # for the position just opened.
                 account = self.broker.get_account_state()

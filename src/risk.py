@@ -35,6 +35,47 @@ from .models import AccountState, BrokerPosition, ExitSignal, Proposal, RiskVerd
 #: and conviction decides how much of the allowance it takes.
 CONVICTION_FLOOR = 0.5
 
+#: Trading sessions in a calendar day, for turning a declared horizon into the
+#: number of bars its volatility accumulates over (F9.16).
+#:
+#: `horizon_days` is in **calendar** days —the prompt says so and the model
+#: answers in them— while the ATR is per **session**. Scaling a per-session sigma
+#: by the square root of calendar days would overstate it by sqrt(7/5) = 1,18, so
+#: a 45-day horizon would be sold as 14,3 % of travel instead of 12,1 %. Small,
+#: and exactly the kind of unit slip F9.14 spent a day on.
+SESSIONS_PER_CALENDAR_DAY = 5.0 / 7.0
+
+
+def horizon_sigma(atr: float, horizon_days: int) -> float:
+    """One standard deviation of price over `horizon_days`, in currency.
+
+    Built from the **daily** ATR and not from `volatility_20d_pct`, which also
+    travels in the bundle and would do the job. Two reasons, and the second is the
+    one that decides:
+
+      1. The ATR is already the system's yardstick: `stop_atr_multiple` places the
+         stop with it, so stop and target end up measured with the same ruler and
+         the resulting ratio means something.
+      2. It is the figure the Risk Manager **already receives**. Reading the
+         volatility instead would mean passing a second estimate down from the
+         snapshot, and a rule that depends on two volatility measures is a rule
+         that fails when they disagree.
+
+    The random-walk scaling —sigma over N bars is sigma per bar times sqrt(N)— is
+    an approximation, and a generous one: real returns trend and cluster. It is
+    used because being roughly right about the order of magnitude is the whole
+    point. The alternative was a fixed percentage floor, which would demand the
+    same 10 % of a utility at 1,3 % of daily ATR and of a cyclical at 3,6 %.
+
+    @param atr: Daily ATR in currency, as `indicators['atr_14']` carries it.
+    @param horizon_days: Calendar days the idea is judged over.
+    @return: One sigma in currency. Zero if either input is not usable.
+    """
+    if atr <= 0 or horizon_days <= 0:
+        return 0.0
+    sessions = max(1.0, horizon_days * SESSIONS_PER_CALENDAR_DAY)
+    return atr * math.sqrt(sessions)
+
 
 @dataclass(frozen=True)
 class KillSwitch:
@@ -49,8 +90,20 @@ class RiskManager:
         limits: RiskLimits,
         currency_symbol: str = "",
         commission_for: Callable[[str], float] | None = None,
+        horizon_days: int = 10,
     ) -> None:
         self.limits = limits
+        #: The experiment's declared horizon, which is what `min_target_sigma`'s
+        #: floor is built on (F9.16).
+        #:
+        #: ⚠️ **The profile's and not the proposal's, and that is the whole design
+        #: of the rule.** The floor grows with the horizon, so reading it from
+        #: `proposal.horizon_days` would hand the model the way out: declare three
+        #: days, get a floor three times smaller, and a target inside the noise
+        #: passes again. The horizon is the experiment's plan, the model is told
+        #: what it is, and it does not get to move it. Same shape as every other
+        #: limit here — the model may propose within them, never widen them.
+        self.horizon_days = horizon_days
         #: What one leg costs, injected by whoever knows: `cycle.py` passes the
         #: broker's own method, which adds the profile's surcharge on top of the
         #: bank's tariff.
@@ -349,11 +402,55 @@ class RiskManager:
         # ratio computed before the quantity exists cannot know that, which is
         # why the check used to pass trades that were losers by construction —
         # measured on this experiment, a paper 1,02 was really 0,72.
+        # --- El suelo absoluto del recorrido (F9.16) -------------------------
+        #
+        # `min_reward_risk` es un cociente y por eso no puede ver esto: `+3,3 %`
+        # contra `−2,8 %` da 1,15 y pasa, igual que `+13 %` contra `−11 %`. Medido
+        # sobre 94 compras propuestas, 32 tenían **los dos niveles por debajo de
+        # 0,5 sigma** del horizonte que ellas mismas declaraban: a esa distancia el
+        # nivel se alcanza por azar y no por la tesis, así que el acierto tiende a
+        # la moneda al aire con la comisión fija en medio. Es esperanza negativa
+        # que pasaba el filtro con nota.
+        sigma = horizon_sigma(atr, self.horizon_days)
+        target_floor = price + sigma * limits.min_target_sigma
+
         target = proposal.suggested_target
         target_source = "llm"
         if target is None or target <= price:
-            target = _target_for_ratio(price, stop, qty, round_trip, limits.min_reward_risk)
+            # **El máximo de los dos y no solo el del ratio.** El derivado por
+            # ratio sale del stop, así que con un stop estrecho da un objetivo
+            # estrecho: es justo el mecanismo que hacía que el objetivo por defecto
+            # del sistema fuese el más pequeño que la regla admite. Que el suelo
+            # participe aquí es lo que impide que «no propuso objetivo» signifique
+            # «objetivo mínimo».
+            target = max(
+                _target_for_ratio(price, stop, qty, round_trip, limits.min_reward_risk),
+                target_floor,
+            )
             target_source = "derived"
+        elif target < target_floor:
+            # Con objetivo propio del analista se **rechaza**, no se corrige hacia
+            # arriba: subirle el objetivo sería inventarle una tesis que no tiene, y
+            # este módulo dimensiona y filtra, no opina. Que el rechazo lleve el
+            # suelo dentro es lo que lo hace legible después en SQL.
+            return _reject(
+                "min_target_sigma",
+                f"El objetivo {target:.2f} promete {(target / price - 1) * 100:.2f}% "
+                f"cuando a {self.horizon_days} dias una sigma son "
+                f"{sigma / price * 100:.2f}%: por debajo del suelo de "
+                f"{limits.min_target_sigma:g} sigma ({target_floor:.2f}, "
+                f"{(target_floor / price - 1) * 100:.2f}%) el nivel se alcanza por "
+                f"ruido y no por la tesis.",
+                details={
+                    "target": round(target, 4),
+                    "target_floor": round(target_floor, 4),
+                    "horizon_days": self.horizon_days,
+                    "horizon_sigma": round(sigma, 4),
+                    "horizon_sigma_pct": round(sigma / price * 100, 2),
+                    "target_sigmas": round((target - price) / sigma, 2) if sigma else None,
+                    "min_target_sigma": limits.min_target_sigma,
+                },
+            )
 
         gain = (target - price) * qty - round_trip
         loss = risk_per_share * qty + round_trip
@@ -405,6 +502,13 @@ class RiskManager:
                 "weight_pct_applied": round(notional / account.equity * 100, 2),
                 "stop_source": stop_source,
                 "target_source": target_source,
+                # In sigmas of the horizon, so the record can be read back as
+                # "was this move ever outside the noise?" without recomputing the
+                # ATR of that day (F9.16).
+                "horizon_days": self.horizon_days,
+                "horizon_sigma_pct": round(sigma / price * 100, 2) if sigma else None,
+                "target_sigmas": round((target - price) / sigma, 2) if sigma else None,
+                "stop_sigmas": round(risk_per_share / sigma, 2) if sigma else None,
                 "binding_rule": binding_rule,
                 "pct_of_equity": round(notional / account.equity * 100, 2),
                 "conviction": proposal.conviction,

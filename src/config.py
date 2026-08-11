@@ -101,7 +101,18 @@ class RiskLimits:
     min_conviction: int = 65
     stop_atr_multiple: float = 2.0
     min_reward_risk: float = 1.5
-    min_order_notional: float = 100.0
+    #: Minimum travel the target has to promise, in sigmas of the **declared
+    #: horizon** (F9.16). It is the floor `min_reward_risk` cannot be, because a
+    #: ratio is dimensionless: `+3,3 % / -2,8 %` gives 1,15 and so does
+    #: `+13 % / -11 %`, and only one of the two is outside the noise.
+    #:
+    #: The sigma is built from the daily ATR scaled by the square root of the
+    #: horizon's sessions, which is the same yardstick `stop_atr_multiple` already
+    #: uses. See `risk.horizon_sigma`.
+    min_target_sigma: float = 0.8
+    #: Below this the fixed commission is a percentage of the order that no
+    #: honest ratio survives: 8,22 EUR round trip on a 105 EUR order is 7,8 %.
+    min_order_notional: float = 500.0
 
     def __post_init__(self) -> None:
         if self.risk_per_trade_pct > self.max_position_pct:
@@ -125,7 +136,8 @@ class RiskLimits:
             min_conviction=_get_int("MIN_CONVICTION", 65, minimum=0, maximum=100),
             stop_atr_multiple=_get_float("STOP_ATR_MULTIPLE", 2.0, minimum=0.1, maximum=20.0),
             min_reward_risk=_get_float("MIN_REWARD_RISK", 1.5, minimum=0.1, maximum=100.0),
-            min_order_notional=_get_float("MIN_ORDER_NOTIONAL", 100.0, minimum=0.0),
+            min_target_sigma=_get_float("MIN_TARGET_SIGMA", 0.8, minimum=0.0, maximum=10.0),
+            min_order_notional=_get_float("MIN_ORDER_NOTIONAL", 500.0, minimum=0.0),
         )
 
 
@@ -276,6 +288,34 @@ class Settings:
     bar_interval: str = "1d"
     # If true, a cycle with the market closed analyses nothing and ends.
     skip_when_market_closed: bool = True
+
+    #: The horizon, in calendar days, the experiment judges an idea at (F9.17).
+    #:
+    #: **It used to be a dead column** and that was the whole reason the agent
+    #: asked for 6 % targets. It lived in `agent_settings`, was editable in
+    #: Ajustes and reached neither the prompt nor the Risk Manager, so the model
+    #: was never told the plan and answered 14 days to everything. The target is
+    #: proportional to the horizon —one sigma over 14 days is 6,8 % of the price
+    #: on this universe, over 45 days it is 12,1 %— so an unset horizon is an
+    #: unset target size.
+    #:
+    #: It travels to two places now: `analyst` states it in the prompt with one
+    #: sigma precomputed, and `risk` builds `min_target_sigma`'s floor on it.
+    horizon_days: int = 10
+
+    #: How many positions a single cycle may open. 0 = no cap (F9.18).
+    #:
+    #: It exists because the first cycle of the new experiment spent the whole
+    #: 10.000 EUR in nine minutes on the five alphabetically-first candidates,
+    #: leaving 110 EUR of cash: the nineteen names analysed afterwards could only
+    #: be rejected, and five of them were rejected for a ratio that was really
+    #: the fixed commission over a 105 EUR order. A cap turns the cycle into one
+    #: that picks rather than one that fills.
+    #:
+    #: It is not a `RiskLimits` field on purpose: it is pacing, not risk
+    #: appetite, and the Risk Manager judges one proposal at a time with no
+    #: notion of how many it has already approved in this cycle.
+    max_new_positions_per_cycle: int = 0
 
     risk: RiskLimits = field(default_factory=RiskLimits)
     screener: ScreenerSettings = field(default_factory=ScreenerSettings)

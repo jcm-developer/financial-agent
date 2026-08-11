@@ -1,4 +1,4 @@
-"""From two sliders to the Risk Manager's nine hard limits.
+"""From two sliders to the Risk Manager's ten hard limits.
 
 The user moves `risk_profile` (1-10) and `diversification` (1-10); the limits
 [risk.py](risk.py) applies come from there. The translation lives here, apart,
@@ -45,6 +45,17 @@ _BY_RISK: dict[str, tuple[tuple[float, float, float], int]] = {
     "min_conviction":         ((85.0, 65.0,  45.0), 0),
     "stop_atr_multiple":      ((3.0,   2.0,   1.2), 2),
     "min_reward_risk":        ((2.5,   1.5,   1.0), 2),
+    # F9.16. How much of the horizon's own volatility the target has to promise,
+    # and it reads the same way as the row above it: the conservative profile only
+    # pays friction for a move that is clearly outside the noise, the aggressive
+    # one settles for a smaller edge.
+    #
+    # ⚠️ **It never binds at the conservative end, and that is fine.** With a stop
+    # at 3x ATR and a demanded ratio of 2,5, level 1 is already asking for 7,5 ATR
+    # of travel — about 2,8 sigma over a ten-day horizon— so the floor is a
+    # backstop there and the real filter at level 10, where the ratio is 1,00 and
+    # nothing else looks at the size of the move.
+    "min_target_sigma":       ((1.0,   0.8,   0.6), 2),
 }
 
 # Diversificacion 1 -> 3 posiciones (concentracion permitida); 10 -> 25.
@@ -59,7 +70,16 @@ SECTOR_SHARE_AT_MAX = 25.0
 # The per-order minimum is not risk appetite but execution friction: below this
 # the commission eats the result. It does not depend on the sliders, and that is
 # why it is a constant and not an anchor.
-MIN_ORDER_NOTIONAL = 100.0
+#
+# **It was 100 EUR until F9.16, and that was too low to mean anything.** The
+# bank charges 4,11 EUR per leg on a Spanish stock, so a 100 EUR order pays 8,2 %
+# of round trip: no target reachable in any horizon covers that. Measured on the
+# first cycle of the new experiment, five proposals landed as ~105 EUR orders
+# because the cash was already spent, and all five were rejected for
+# `min_reward_risk` — the right answer reached by the wrong route, since the order
+# should never have been considered. At 500 EUR the round trip is 1,6 %, which a
+# 12 % target does cover.
+MIN_ORDER_NOTIONAL = 500.0
 
 # The fields this function produces. It matches exactly those of `RiskLimits` and
 # the nullable columns of `agent_settings`: if someone adds a limit in one of the
@@ -77,7 +97,7 @@ _INTEGER_FIELDS = frozenset({"min_conviction", "max_open_positions"})
 # ----------------------------------------------------------------------
 
 def derive_limits(risk_profile: int, diversification: int) -> dict[str, Any]:
-    """The nine limits these two sliders correspond to.
+    """The ten limits these two sliders correspond to.
 
     The result can be passed straight to `RiskLimits(**...)`.
     """
@@ -185,6 +205,7 @@ def describe(settings: Mapping[str, Any]) -> str:
         f"conviccion minima {limits.min_conviction}, "
         f"stop a {limits.stop_atr_multiple:g}x ATR con R/R minimo "
         f"{limits.min_reward_risk:g}, "
+        f"objetivo minimo {limits.min_target_sigma:g} sigma del horizonte, "
         f"kill switch a -{limits.max_daily_loss_pct:g}% diario"
     )
 

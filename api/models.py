@@ -158,7 +158,7 @@ class ProfileSummary(BaseModel):
 
 
 class DerivedLimits(BaseModel):
-    """The nine effective limits and where each one comes from.
+    """The ten effective limits and where each one comes from.
 
     `derived_fields` is what the interface paints in grey: the limits that come
     from the sliders and not from a number written by hand (F6.8).
@@ -172,6 +172,7 @@ class DerivedLimits(BaseModel):
     min_conviction: int
     stop_atr_multiple: float
     min_reward_risk: float
+    min_target_sigma: float
     min_order_notional: float
     sector_cap: int | None = None
     derived_fields: list[str]
@@ -270,6 +271,7 @@ class AgentSettings(BaseModel):
     risk_profile: int
     diversification: int
     horizon_days: int
+    max_new_positions_per_cycle: int
     market: MarketCode
     universe_file: str | None = None
     screener_mode: str
@@ -303,6 +305,7 @@ class AgentSettings(BaseModel):
     min_conviction: int | None = None
     stop_atr_multiple: float | None = None
     min_reward_risk: float | None = None
+    min_target_sigma: float | None = None
     min_order_notional: float | None = None
 
     extra_json: str
@@ -345,6 +348,7 @@ class SettingsUpdate(BaseModel):
     risk_profile: int | None = Field(default=None, ge=1, le=10)
     diversification: int | None = Field(default=None, ge=1, le=10)
     horizon_days: int | None = Field(default=None, gt=0)
+    max_new_positions_per_cycle: int | None = Field(default=None, ge=0, le=100)
     market: MarketCode | None = None
     universe_file: str | None = None
     screener_mode: Literal["score", "random"] | None = None
@@ -378,6 +382,7 @@ class SettingsUpdate(BaseModel):
     min_conviction: int | None = Field(default=None, ge=0, le=100)
     stop_atr_multiple: float | None = Field(default=None, ge=0.1, le=20)
     min_reward_risk: float | None = Field(default=None, ge=0.1, le=100)
+    min_target_sigma: float | None = Field(default=None, ge=0, le=10)
     min_order_notional: float | None = Field(default=None, ge=0)
 
     extra_json: str | None = None

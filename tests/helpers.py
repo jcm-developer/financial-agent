@@ -132,12 +132,19 @@ def make_cycle(
             llm,
             price_interval=settings.bar_interval,
             indicator_interval=INDICATOR_INTERVAL,
+            # The horizon travels to both, like in `build`: it is what the target's
+            # floor is measured on (F9.16) and it was a dead column until F9.17, so
+            # not wiring it here would leave the whole point of the change outside
+            # the only test that runs the pieces together.
+            horizon_days=settings.horizon_days,
+            min_target_sigma=settings.risk.min_target_sigma,
         ),
         # Wired like `TradingCycle.build`: the risk manager gets the profile's
         # currency, because its verdict text is stored and shown as it is.
         risk_manager=RiskManager(
             settings.risk,
             currency_symbol=get_market(settings.market).currency_symbol,
+            horizon_days=settings.horizon_days,
         ),
         portfolio_id=portfolio_id,
     )

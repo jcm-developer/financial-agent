@@ -44,6 +44,7 @@ export interface AgentSettings {
   risk_profile: number;
   diversification: number;
   horizon_days: number;
+  max_new_positions_per_cycle: number;
   market: "us" | "eu";
   universe_file?: string | null;
   screener_mode: string;
@@ -73,6 +74,7 @@ export interface AgentSettings {
   min_conviction?: number | null;
   stop_atr_multiple?: number | null;
   min_reward_risk?: number | null;
+  min_target_sigma?: number | null;
   min_order_notional?: number | null;
   extra_json: string;
   updated_at: string;
@@ -210,7 +212,7 @@ export interface DecisionRow {
 }
 
 /**
- * The nine effective limits and where each one comes from.
+ * The ten effective limits and where each one comes from.
  *
  * `derived_fields` is what the interface paints in grey: the limits that come
  * from the sliders and not from a number written by hand (F6.8).
@@ -224,6 +226,7 @@ export interface DerivedLimits {
   min_conviction: number;
   stop_atr_multiple: number;
   min_reward_risk: number;
+  min_target_sigma: number;
   min_order_notional: number;
   sector_cap?: number | null;
   derived_fields: Array<string>;
@@ -565,6 +568,7 @@ export interface SettingsUpdate {
   risk_profile?: number | null;
   diversification?: number | null;
   horizon_days?: number | null;
+  max_new_positions_per_cycle?: number | null;
   market?: "us" | "eu" | null;
   universe_file?: string | null;
   screener_mode?: "score" | "random" | null;
@@ -594,6 +598,7 @@ export interface SettingsUpdate {
   min_conviction?: number | null;
   stop_atr_multiple?: number | null;
   min_reward_risk?: number | null;
+  min_target_sigma?: number | null;
   min_order_notional?: number | null;
   extra_json?: string | null;
 }

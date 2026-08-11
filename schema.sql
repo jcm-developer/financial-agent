@@ -380,7 +380,19 @@ create table if not exists agent_settings (
                            check (risk_profile between 1 and 10),
     diversification        integer not null default 5
                            check (diversification between 1 and 10),
+    -- Plazo, en dias naturales, al que se juzga una idea. **Desde F9.17 se usa de
+    -- verdad**: viaja al prompt del analista con una sigma del horizonte ya
+    -- calculada, y es sobre el que `min_target_sigma` mide el suelo del objetivo.
+    -- Hasta entonces se guardaba y no lo leia nadie, y era la causa de que el
+    -- agente pidiera objetivos del 6 %: una sigma a 14 dias son 6,8 % del precio,
+    -- y a 45 dias son 12,1 %.
     horizon_days           integer not null default 10 check (horizon_days > 0),
+    -- Cuantas posiciones puede abrir un solo ciclo. 0 = sin tope (F9.18). No es un
+    -- limite de riesgo sino de ritmo: sin el, el primer ciclo gasta la caja entera
+    -- en los primeros candidatos que analiza y los siguientes solo pueden ser
+    -- rechazados por falta de dinero.
+    max_new_positions_per_cycle integer not null default 0
+                           check (max_new_positions_per_cycle >= 0),
 
     -- Bolsa contra la que opera el perfil. Decide el horario, el calendario de
     -- festivos y **la divisa de la cartera**: no hay conversion de divisa en
@@ -439,6 +451,11 @@ create table if not exists agent_settings (
     min_conviction         integer,
     stop_atr_multiple      real,
     min_reward_risk        real,
+    -- F9.16. Recorrido minimo que tiene que prometer el objetivo, en sigmas del
+    -- horizonte declarado. Es el suelo que `min_reward_risk` no puede ser: un
+    -- cociente no distingue +3,3 %/-2,8 % de +13 %/-11 %, y solo uno de los dos
+    -- esta fuera del ruido.
+    min_target_sigma       real,
     min_order_notional     real,
 
     extra_json             text not null default '{}',

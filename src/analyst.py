@@ -6,6 +6,15 @@ none of their business.
 
 Every output of the model is validated and clamped to legal ranges before it
 leaves this module: `risk.py` can assume it receives a well-formed `Proposal`.
+
+⚠️ **It imports `risk` for one pure function, `horizon_sigma`, and that is not the
+module knowing the limits.** The rule of F6.5 —only `risk.py` decides what a limit
+is— is about deciding, and nothing is decided here: the floor arrives as a
+parameter from `cycle.py`, exactly like `max_position_pct` does. What is shared is
+the arithmetic that turns a daily ATR into one sigma of the horizon, and it is
+shared precisely so the figure the prompt states and the figure the Risk Manager
+applies cannot drift apart. Two copies of that formula would be a prompt that
+promises a floor the engine does not use.
 """
 
 from __future__ import annotations
@@ -16,7 +25,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
-from . import fees
+from . import fees, risk
 from .llm import LLMClient, LLMError
 from .models import AccountState, BrokerPosition, MarketSnapshot, Proposal
 
@@ -25,8 +34,9 @@ log = logging.getLogger(__name__)
 
 ENTRY_SYSTEM_PROMPT = """\
 Eres un analista de renta variable en una mesa cuantitativa. Tu unica funcion es \
-emitir un juicio razonado sobre si un activo es una compra atractiva a dias o \
-semanas de horizonte.
+emitir un juicio razonado sobre si un activo es una compra atractiva AL HORIZONTE \
+QUE SE TE INDICA EN CADA CONSULTA. Ese plazo no lo eliges tu: es el del \
+experimento, y de el sale la escala de todo lo que propongas.
 
 Frontera de tu rol, no la cruces:
 - NO decides cuantas acciones se compran ni mueves dinero. Un motor de riesgo \
@@ -48,15 +58,29 @@ conviccion.
 - Piensa en la cartera entera: si pides pesos grandes en todo, las primeras dos \
 o tres ideas agotan el capital y las demas no se ejecutan aunque sean mejores.
 
+El objetivo se mide contra la volatilidad del horizonte, y es la parte que se \
+hace mal:
+- Abajo te doy cuanto vale UNA SIGMA de este activo al horizonte del \
+experimento, ya calculada. Es la vara: un objetivo muy por debajo de una sigma \
+se alcanza por azar y no por tu tesis, aunque el ratio contra el stop parezca \
+bueno.
+- El motor de riesgo RECHAZA la propuesta si el objetivo no llega al suelo en \
+sigmas que tambien te doy. El suelo es un minimo para descartar ruido, no la \
+cifra a la que apuntar: apuntar al suelo es no haber estimado nada.
+- Un objetivo por debajo de una sigma no es prudencia: es proponer una moneda al \
+aire y pagar la comision por lanzarla. Si el activo no da para un recorrido de \
+ese tamano al plazo indicado, la respuesta correcta es "hold".
+- El stop es lo contrario y tiene el mismo problema: un stop demasiado pegado al \
+precio lo perfora el ruido de dos sesiones y te saca de una tesis que era \
+correcta. Situalo donde la tesis quede INVALIDADA de verdad, no donde te \
+incomode la primera vela roja.
+
 Operar cuesta dinero, y el objetivo tiene que tenerlo en cuenta:
 - Cada orden paga una comision FIJA, en la compra y otra vez en la venta. El \
 coste concreto de este activo te lo doy abajo.
 - El motor de riesgo calcula el ratio beneficio/riesgo DESPUES de comisiones y \
 rechaza la propuesta si no llega al minimo. Un objetivo pegado al precio de \
 entrada hace que la operacion se descarte por buena que sea la tesis.
-- Asi que no propongas objetivos de recorrido simbolico: si el movimiento que \
-esperas no supera con holgura la comision de ida y vuelta, la respuesta correcta \
-es "hold".
 
 Reglas de honestidad intelectual, son lo que hace util este sistema:
 - Solo puedes usar los datos numericos que te doy. No tienes acceso a noticias, \
@@ -178,6 +202,28 @@ ultimo cierre diario completo, {context_price:.2f} {currency}. El precio de arri
 es el actual, {gap:+.2f}% respecto de ese cierre: usa los indicadores para juzgar
 la situacion tecnica y el precio actual para situar stop y objetivo."""
 
+#: The horizon and the size of the move it allows, precomputed (F9.17).
+#:
+#: **It is the note that fixes the 6 % targets.** The horizon was a dead column:
+#: nobody told the model the plan, so it answered 14 days to everything and put
+#: the target at one sigma of two weeks —6,4 % of median, measured over 24
+#: proposals— which was the arithmetically correct answer to a question nobody had
+#: asked. The horizon is stated here, and the sigma with it.
+#:
+#: The sigma is **precomputed and handed over as a percentage and as an amount**,
+#: which is the same rule the price gap and the boolean signals follow: arithmetic
+#: is where this model goes wrong most often, and `atr_14 * sqrt(sessions)` over a
+#: horizon in calendar days is three chances to go wrong in one line.
+HORIZON_NOTE = """HORIZONTE DEL EXPERIMENTO: {horizon_days} dias naturales (~{sessions} sesiones).
+Es el plazo al que se juzga esta idea. Situa stop y objetivo a la escala de ESE
+plazo, no a la de un par de sesiones.
+- Una sigma de {symbol} a ese plazo son {sigma_pct:.1f}% del precio ({sigma:.2f} {currency}),
+  calculado a partir de su ATR diario. Un objetivo razonable esta en el orden de
+  una sigma; por encima de dos sigma es optimismo sin base.
+- SUELO QUE APLICA EL MOTOR DE RIESGO: el objetivo tiene que superar
+  {floor_sigmas:g} sigma, o sea {floor_pct:.1f}% ({floor:.2f} {currency}). Por debajo de
+  eso la propuesta se rechaza entera, tesis incluida."""
+
 
 class Analyst:
     """One analyst per cycle: the counters belong to that run, not to the process.
@@ -197,6 +243,8 @@ class Analyst:
         currency: str = "USD",
         commission_for: Callable[[str], float] | None = None,
         max_position_pct: float | None = None,
+        horizon_days: int = 10,
+        min_target_sigma: float = 0.0,
     ) -> None:
         """Two intervals and not one, since F9.14.
 
@@ -235,6 +283,17 @@ class Analyst:
         #: same invariant the interface obeys, and it was being broken in the one
         #: place where nobody would see it — inside the prompt.
         self.currency = currency
+        #: The experiment's horizon, in calendar days, and the floor the Risk
+        #: Manager will apply to the target at that horizon (F9.17).
+        #:
+        #: Both are stated in the prompt, and the second one is the anchoring
+        #: trade-off `max_position_pct` already pays: told a floor, a model tends
+        #: to sit on it. It is told anyway, for the same reason — a rule the model
+        #: cannot see is a rule that produces rejections it cannot learn from— and
+        #: the prompt answers it head on: "el suelo es un minimo para descartar
+        #: ruido, no la cifra a la que apuntar".
+        self.horizon_days = horizon_days
+        self.min_target_sigma = min_target_sigma
         self.price_labels = INTERVAL_LABELS.get(price_interval, INTERVAL_LABELS["1d"])
         self.labels = INTERVAL_LABELS.get(
             indicator_interval, INTERVAL_LABELS["1d"]
@@ -254,7 +313,7 @@ class Analyst:
         user_prompt = _render_entry_prompt(
             snapshot, account, self.labels, self.currency,
             self._commission_for(snapshot.symbol), self.max_position_pct,
-            self.price_labels,
+            self.price_labels, self.horizon_days, self.min_target_sigma,
         )
         self.calls += 1
         try:
@@ -350,11 +409,14 @@ def _render_entry_prompt(
     commission: float = 0.0,
     max_position_pct: float | None = None,
     price_labels: tuple[str, str] | None = None,
+    horizon_days: int = 10,
+    min_target_sigma: float = 0.0,
 ) -> str:
     bar_label, window_label = labels
     _, price_window_label = price_labels or labels
     units = _window_units_note(bar_label)
     context = _price_context_note(snapshot, bar_label, price_labels, currency)
+    horizon = _horizon_note(snapshot, horizon_days, min_target_sigma, currency)
     techo = (
         f"- Peso maximo permitido por posicion: {max_position_pct:.0f}% del capital. "
         f"Es un TOPE, no un objetivo."
@@ -375,6 +437,7 @@ INDICADORES TECNICOS (calculados sobre {bar_label}; null = no disponible):
 ULTIMAS 10 {window_label} (fecha, apertura, maximo, minimo, cierre, volumen):
 {_format_bars(snapshot.recent_bars)}
 
+{horizon}
 COSTE DE OPERAR {snapshot.symbol}: {commission:.2f} {currency} por orden, o sea
 {commission * 2:.2f} {currency} de ida y vuelta. Es un importe fijo, no un
 porcentaje, y se descuenta del resultado.
@@ -385,7 +448,9 @@ ESTADO DE LA CARTERA:
 - Diversificacion: evita concentrar en activos muy correlacionados con los ya abiertos.
 
 NOTA: `horizon_days` se expresa siempre en dias naturales, tambien si los datos
-vienen en {bar_label}.
+vienen en {bar_label}. Es tu estimacion de cuanto habra que aguantar la posicion,
+y deberia ser coherente con el horizonte del experimento: si crees que la tesis
+necesita mucho mas plazo del indicado, eso es un argumento para "hold".
 
 Emite tu juicio sobre {snapshot.symbol} en el JSON especificado."""
 
@@ -473,6 +538,43 @@ def _price_context_note(
         context_price=context_price,
         currency=currency,
         gap=(snapshot.price / context_price - 1.0) * 100.0,
+    ) + "\n"
+
+
+def _horizon_note(
+    snapshot: MarketSnapshot,
+    horizon_days: int,
+    min_target_sigma: float,
+    currency: str,
+) -> str:
+    """The horizon and the move it allows, or nothing when the ATR is missing.
+
+    Without an ATR there is no sigma to state, and `risk.evaluate_entry` rejects
+    that proposal for `atr_unavailable` anyway. Writing the horizon with no scale
+    next to it would be worse than writing nothing: it would name a plazo and leave
+    the model to guess the size, which is what it was already doing.
+
+    It comes back with a trailing newline so the caller drops it in without a blank
+    line appearing when there is nothing to say.
+    """
+    atr = snapshot.indicators.get("atr_14")
+    price = snapshot.price
+    if not isinstance(atr, (int, float)) or atr <= 0 or price <= 0:
+        return ""
+    sigma = risk.horizon_sigma(float(atr), horizon_days)
+    if sigma <= 0:
+        return ""
+    floor = sigma * min_target_sigma
+    return "\n" + HORIZON_NOTE.format(
+        horizon_days=horizon_days,
+        sessions=int(horizon_days * risk.SESSIONS_PER_CALENDAR_DAY),
+        symbol=snapshot.symbol,
+        sigma=sigma,
+        sigma_pct=sigma / price * 100.0,
+        currency=currency,
+        floor_sigmas=min_target_sigma,
+        floor=price + floor,
+        floor_pct=floor / price * 100.0,
     ) + "\n"
 
 

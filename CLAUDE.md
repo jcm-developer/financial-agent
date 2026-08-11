@@ -47,7 +47,7 @@ Mira `git log` antes de escribir. La convención es propia y conviene respetarla
 - **En español, sin acentos en vocales pero conservando la ñ** (`graficas`, `tenia`, `añaden`).
 - **Cuerpo largo y explicativo**, en prosa: qué se decidió, qué se descartó, qué medición
   lo respalda, qué consecuencia hay que asumir. Los apartes van con ` -- `.
-- **Penúltima línea:** la verificación (`665 tests en verde, typecheck limpio`).
+- **Penúltima línea:** la verificación (`761 tests en verde, typecheck limpio`).
 - **Última línea:** `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`
 
 ---
@@ -123,7 +123,7 @@ se parecen.
 ### Backend (Python 3.12)
 
 ```bash
-python -m pytest tests -q                            # los 665 tests
+python -m pytest tests -q                            # los 761 tests
 python -m pytest tests/test_risk.py -q                # un módulo
 python -m pytest tests/test_risk.py::test_nombre -q   # un solo test
 python -m pytest tests -q -k "calendario"             # por nombre
@@ -222,7 +222,7 @@ interfaz ni el agente se enteran.
 
 ### La configuración vive en el perfil, no en el `.env`
 
-`agent_settings` tiene 41 columnas por perfil; del `.env` solo sale la infraestructura
+`agent_settings` tiene 45 columnas por perfil; del `.env` solo sale la infraestructura
 ([src/config.py](src/config.py)). Los límites duros del risk manager **nacen NULL a
 propósito**: NULL significa «derívalo de los sliders», y si nacieran con números mover el
 slider de riesgo no cambiaría nada.
