@@ -445,6 +445,11 @@ create table if not exists agent_settings (
     advanced_overrides     integer not null default 0,
     risk_per_trade_pct     real,
     max_position_pct       real,
+    -- F9.21. Suelo de la banda de tamaño de posicion: cuanto de pequeña puede
+    -- pedir el analista una posicion. Existe porque el techo solo no evita que la
+    -- cartera se quede a medio invertir -- el modelo pedia 8 % en 11 de 11
+    -- propuestas, y con siete plazas eso deja el 44 % del capital en caja.
+    min_position_pct       real,
     max_total_exposure_pct real,
     max_open_positions     integer,
     max_daily_loss_pct     real,

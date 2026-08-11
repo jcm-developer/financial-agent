@@ -68,6 +68,7 @@ export interface AgentSettings {
   advanced_overrides: boolean;
   risk_per_trade_pct?: number | null;
   max_position_pct?: number | null;
+  min_position_pct?: number | null;
   max_total_exposure_pct?: number | null;
   max_open_positions?: number | null;
   max_daily_loss_pct?: number | null;
@@ -212,7 +213,7 @@ export interface DecisionRow {
 }
 
 /**
- * The ten effective limits and where each one comes from.
+ * The eleven effective limits and where each one comes from.
  *
  * `derived_fields` is what the interface paints in grey: the limits that come
  * from the sliders and not from a number written by hand (F6.8).
@@ -220,6 +221,7 @@ export interface DecisionRow {
 export interface DerivedLimits {
   risk_per_trade_pct: number;
   max_position_pct: number;
+  min_position_pct: number;
   max_total_exposure_pct: number;
   max_open_positions: number;
   max_daily_loss_pct: number;
@@ -592,6 +594,7 @@ export interface SettingsUpdate {
   advanced_overrides?: boolean | null;
   risk_per_trade_pct?: number | null;
   max_position_pct?: number | null;
+  min_position_pct?: number | null;
   max_total_exposure_pct?: number | null;
   max_open_positions?: number | null;
   max_daily_loss_pct?: number | null;

@@ -58,6 +58,8 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # F9.18. `default 0` = no cap, which is what the profiles that predate the
         # column ran with: their history is not retroactively reinterpreted.
         "max_new_positions_per_cycle": "integer not null default 0",
+        # F9.21. Nullable like the rest of the band: NULL derives from the sliders.
+        "min_position_pct": "real",
     },
     "ingest_runs": {
         # Deliberately without a CHECK: SQLite cannot add a constraint with ALTER

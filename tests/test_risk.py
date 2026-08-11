@@ -17,6 +17,10 @@ from src.risk import RiskManager
 LIMITS = RiskLimits(
     risk_per_trade_pct=1.0,
     max_position_pct=20.0,
+    # Zero for the same reason as `min_target_sigma` below: the band's floor would
+    # lift every weight in this file and each test would be about two rules. It has
+    # its own block at the bottom.
+    min_position_pct=0.0,
     max_total_exposure_pct=80.0,
     max_open_positions=5,
     max_daily_loss_pct=5.0,
@@ -764,6 +768,83 @@ def test_a_floor_of_zero_switches_the_rule_off():
     )
 
     assert verdict.approved
+
+
+# -- La banda de tamaño de posicion (F9.21) ----------------------------------
+
+BAND = RiskLimits(**{**LIMITS.__dict__, "min_position_pct": 12.0, "max_position_pct": 14.0})
+
+
+def test_a_weight_below_the_floor_is_lifted_to_it():
+    """The case F9.21 exists for: the model asked 8 % in 11 of 11 proposals.
+
+    With seven slots that is a book 56 % invested and 44 % of the capital in cash
+    for the month, which divides the result of the experiment by almost two. The
+    floor is the profile's, so the analyst still has somewhere to be quiet without
+    deciding how much of the experiment gets played.
+    """
+    verdict = RiskManager(BAND).evaluate_entry(
+        proposal(suggested_weight_pct=8.0), account(), atr=2.0
+    )
+
+    assert verdict.approved
+    # 12 % of 100k at 100 per share.
+    assert verdict.qty == 120
+    assert verdict.details["suggested_weight_pct"] == 8.0
+    assert verdict.details["weight_pct_allowed"] == 12.0
+    assert verdict.details["weight_pct_applied"] == 12.0
+
+
+def test_a_weight_inside_the_band_is_honoured_untouched():
+    """The band is a band and not a fixed size: between the two ends the analyst
+    still decides, which is what F9.13 was for."""
+    verdict = RiskManager(BAND).evaluate_entry(
+        proposal(suggested_weight_pct=13.0), account(), atr=2.0
+    )
+
+    assert verdict.approved
+    assert verdict.qty == 130
+    assert verdict.details["weight_pct_allowed"] == 13.0
+
+
+def test_a_weight_above_the_ceiling_is_still_cut_to_it():
+    """The floor does not touch the other end: asking for more than the profile
+    allows is not a request, and the invariant is that the model can never widen a
+    limit."""
+    verdict = RiskManager(BAND).evaluate_entry(
+        proposal(suggested_weight_pct=80.0), account(), atr=2.0
+    )
+
+    assert verdict.approved
+    assert verdict.qty == 140
+    assert verdict.details["weight_pct_allowed"] == 14.0
+
+
+def test_the_floor_never_beats_the_cash():
+    """It is a floor on the **weight**, not on the caps.
+
+    Otherwise it would be the one thing this module must never do: approve an order
+    the account cannot pay for. With 1.000 of cash the floor would ask for 12.000.
+    """
+    verdict = RiskManager(BAND).evaluate_entry(
+        proposal(suggested_weight_pct=8.0),
+        account(equity=100_000.0, cash=1_000.0),
+        atr=2.0,
+    )
+
+    assert verdict.approved
+    assert verdict.rule == "insufficient_cash"
+    # 10 and not the 120 the floor would have asked for: the cash is what bound.
+    assert verdict.qty == 10
+
+
+def test_a_floor_above_the_ceiling_is_rejected_at_construction():
+    """An inverted band would make the floor rule over the ceiling, and the ceiling
+    is the one that bounds the risk."""
+    from src.config import ConfigError
+
+    with pytest.raises(ConfigError):
+        RiskLimits(min_position_pct=30.0, max_position_pct=20.0)
 
 
 # -- Configuracion -----------------------------------------------------------

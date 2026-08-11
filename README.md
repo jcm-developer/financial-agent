@@ -664,7 +664,7 @@ el `.env`.** Del entorno solo sale la infraestructura: `DB_PATH`,
 la interfaz cuando exista; cada cambio real queda en `agent_settings_history`,
 que es lo que permite explicar después por qué el agente cambió de conducta.
 
-Los diez límites duros no se editan de uno en uno: **salen de dos deslizadores**
+Los once límites duros no se editan de uno en uno: **salen de dos deslizadores**
 ([`src/risk_presets.py`](src/risk_presets.py)).
 
 | `risk_profile` | Riesgo/op. | Máx. posición | Máx. exposición | Convicción mín. | Stop×ATR | R/R mín. | Kill switch |

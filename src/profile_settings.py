@@ -502,6 +502,7 @@ def import_env_profile(
         "advanced_overrides": 1,
         "risk_per_trade_pct": risk.risk_per_trade_pct,
         "max_position_pct": risk.max_position_pct,
+        "min_position_pct": risk.min_position_pct,
         "max_total_exposure_pct": risk.max_total_exposure_pct,
         "max_open_positions": risk.max_open_positions,
         "max_daily_loss_pct": risk.max_daily_loss_pct,

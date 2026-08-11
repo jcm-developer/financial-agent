@@ -7,23 +7,23 @@ construye lo que venga después.
 Está escrito el 2026-08-10, con el primer experimento (`eu-05-muy-agresivo`)
 arrancando ese mismo día, y revisado el **2026-08-11** dos veces: al separar el
 reloj del precio del de los indicadores (F9.14, sección 6) y al poner suelo al
-recorrido del objetivo (F9.16–F9.18, secciones 6 y 12). Cuando algo aquí deje de
-ser cierto, se corrige aquí —no en un comentario suelto—, porque es el sitio donde
-se mira antes de tocar el ciclo.
+recorrido del objetivo y banda al tamaño de la posición (F9.16–F9.18 y F9.21,
+secciones 4, 6 y 7 bis). Cuando algo aquí deje de ser cierto, se corrige aquí —no
+en un comentario suelto—, porque es el sitio donde se mira antes de tocar el ciclo.
 
 ---
 
 ## 1. Qué es un experimento
 
 Un **perfil** es un experimento. Lo define entero una fila de `agent_settings`
-(45 columnas) más su universo, y lleva su propia cartera con su propio dinero
+(46 columnas) más su universo, y lleva su propia cartera con su propio dinero
 simulado. Dos experimentos con el mismo criterio en dos bolsas distintas son dos
 perfiles, no dos ramas del código.
 
 De un perfil salen: el mercado (y con él horario, calendario, divisa, benchmark y
 suelo de liquidez), el capital, el universo, el modelo de lenguaje, el intervalo
 de barras, las horas de ciclo y los dos deslizadores —**perfil de riesgo** y
-**diversificación**— de los que se derivan los diez límites duros.
+**diversificación**— de los que se derivan los once límites duros.
 
 `profiles.status` decide si corre: **solo los `active` se planifican y solo sus
 símbolos se siguen en vivo.**
@@ -95,7 +95,7 @@ modelo.
 1. Cerrojo         ¿hay otro ciclo corriendo sobre esta misma cartera? → se salta
 2. Calendario      ¿toca operar ahora? (skip_when_market_closed)
 3. Reconciliación  broker ↔ base: lo que el broker dice que hay manda
-4. Snapshot        copia de los 45 parámetros → cycles.settings_json
+4. Snapshot        copia de los 46 parámetros → cycles.settings_json
 5. Screener        89 símbolos → 20 candidatos       DETERMINISTA, sin LLM, segundos
                    (criba con barras DIARIAS, que son también las de los indicadores)
 6. Salidas obligatorias  stop y objetivo de cada posición abierta   SIN LLM
@@ -107,8 +107,26 @@ modelo.
 ```
 
 **El modelo nunca ejecuta.** Propone `{acción, convicción, tesis, riesgos,
-horizonte, stop sugerido, objetivo sugerido}` y [src/risk.py](src/risk.py) decide
-con reglas fijas. Ese corte es la premisa del proyecto.
+horizonte, stop sugerido, objetivo sugerido, peso sugerido}` y
+[src/risk.py](src/risk.py) decide con reglas fijas. Ese corte es la premisa del
+proyecto.
+
+Y de las tres cosas que el modelo propone y el motor acota, **las tres están
+acotadas por un extremo distinto**, que es la forma de saber quién manda en cada
+una:
+
+| Lo que propone | Lo que el motor le permite | Por qué ese extremo |
+|---|---|---|
+| **Stop** | Solo **más lejos** que `1,2×–3× ATR` | Más aire implica posición más pequeña; acercarlo sería quitar protección |
+| **Objetivo** | Solo **por encima** del suelo en sigmas del horizonte | Debajo del suelo el nivel se alcanza por ruido (sección 7 bis) |
+| **Peso** | Solo **dentro** de la banda `min_position_pct`–`max_position_pct` | El techo evita concentrar; el suelo evita que la cartera se quede sin invertir (F9.21) |
+
+⚠️ **El suelo del peso es del perfil y no del modelo, y por eso no rompe la
+premisa.** Existe porque el modelo pedía `8 %` en 11 de 11 propuestas: con siete
+plazas eso deja el 44 % del capital en caja, y una cartera a medio invertir divide
+el resultado por dos —un +12 % en las siete es un +6,7 % de cartera—. El analista
+sigue eligiendo dentro de la banda, que era el punto de F9.13; lo que no puede es
+dejar el experimento sin jugar.
 
 **Los pasos 5, 6 y 9 no gastan modelo**, y eso importa: las salidas obligatorias
 —stop perforado, objetivo alcanzado— se comprueban **en cada ciclo y gratis**. Ahí
@@ -127,7 +145,7 @@ en cada ciclo como símbolo obligatorio, y **sin gastar una de las 20 plazas**: 
 excluye de la puntuación del screener —para no falsear su informe— y se
 reincorpora para el análisis. Con 4 posiciones abiertas, un ciclo analiza 24
 activos. Así, un valor que no vuelve a salir cribado en dos semanas sigue teniendo
-su stop comprobado y su tesis revisada ocho veces al día.
+su stop comprobado y su tesis revisada en cada uno de los cuatro ciclos del día.
 
 **Un ciclo se puede parar a mitad, y para en un sitio elegido** (F4.21). Antes de
 cada llamada al modelo —pasos 7 y 8, que son donde se va el tiempo— el ciclo mira
@@ -398,7 +416,7 @@ Todo, y a propósito: el experimento se interpreta después.
 
 | Tabla | Qué guarda |
 |---|---|
-| `cycles` | Cada ejecución, con **copia de los 45 parámetros** con los que corrió |
+| `cycles` | Cada ejecución, con **copia de los 46 parámetros** con los que corrió |
 | `decisions` | Cada propuesta del modelo: acción, convicción, tesis, riesgos, horizonte |
 | `risk_events` | Qué hizo el risk manager con cada propuesta y **bajo qué regla** |
 | `orders` | Lo que se mandó al broker |

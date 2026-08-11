@@ -25,9 +25,9 @@ import { useActiveProfile } from "@/profile/useActiveProfile";
 /**
  * The experiment's parameters (F6.8).
  *
- * **The two sliders are the screen, and the 45 fields are the small print.**
+ * **The two sliders are the screen, and the 46 fields are the small print.**
  * That is the shape F6.5 asks for: risk profile and diversification decide the
- * ten hard limits, and the panel beside them says what those limits are while
+ * eleven hard limits, and the panel beside them says what those limits are while
  * the slider moves. Everything else is grouped underneath in the four families
  * the parameters actually have —model, strategy, execution and hard limits— and
  * the last of those only opens in advanced mode.
@@ -41,7 +41,7 @@ import { useActiveProfile } from "@/profile/useActiveProfile";
  *
  * ⚠️ **Only what changed is sent.** `update_settings` ignores a field arriving
  * with the value it already had, and `agent_settings_history` records real
- * changes only (F6.2). Sending the 45 fields on every save would not corrupt
+ * changes only (F6.2). Sending the 46 fields on every save would not corrupt
  * anything, but it would fill the history with rows saying "5 → 5" and the
  * history is what makes an experiment readable afterwards.
  *
@@ -252,7 +252,7 @@ function SettingsForm({
               setSaved(null);
               setAdvanced(e.target.checked);
             }}
-            label="Modo avanzado: fijar los diez límites a mano"
+            label="Modo avanzado: fijar los once límites a mano"
             /* This is the master switch of F6.5, and its wording matters: with
                it off the sliders win *even if the columns still hold numbers
                from a previous session*. Without saying so, turning it off looks
@@ -443,6 +443,13 @@ function SettingsForm({
         <Group title="Límites duros (modo avanzado)">
           <NumberField label="Riesgo por operación (%)" field="risk_per_trade_pct" value={value} set={set} />
           <NumberField label="Máx. por posición (%)" field="max_position_pct" value={value} set={set} />
+          <NumberField
+            label="Mín. por posición (%)"
+            field="min_position_pct"
+            value={value}
+            set={set}
+            hint="Suelo de la banda: por debajo de esto no baja aunque el analista pida menos. Es lo que evita que la cartera se quede a medio invertir."
+          />
           <NumberField label="Exposición total (%)" field="max_total_exposure_pct" value={value} set={set} />
           <NumberField label="Máx. posiciones abiertas" field="max_open_positions" value={value} set={set} />
           <NumberField label="Pérdida diaria máxima (%)" field="max_daily_loss_pct" value={value} set={set} />
@@ -613,7 +620,7 @@ function coerce(
   }
   if (typeof stored === "number") return Number(typed);
   // A limit sitting at NULL is numeric even though there is nothing stored to
-  // tell by: those are exactly the ten of advanced mode.
+  // tell by: those are exactly the eleven of advanced mode.
   if (stored === null && field !== "universe_file" && field !== "analyst_persona") {
     const asNumber = Number(typed);
     if (!isNaN(asNumber)) return asNumber;

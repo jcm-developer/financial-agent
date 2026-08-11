@@ -66,7 +66,7 @@ def limits_preview(
     risk_profile: int = Query(5, ge=1, le=10),
     diversification: int = Query(5, ge=1, le=10),
 ):
-    """The ten limits these two sliders would give, without writing anything.
+    """The eleven limits these two sliders would give, without writing anything.
 
     ⚠️ **It answers what the sliders alone give, so it is only the truth when
     advanced mode is off.** The form has to pick between this and the profile's own
@@ -138,7 +138,7 @@ def get_settings_history(
 
 @router.get("/{profile_ref}/limits", response_model=DerivedLimits)
 def get_limits(db: ReadDb, profile_ref: str):
-    """The ten effective limits, to paint them live while editing."""
+    """The eleven effective limits, to paint them live while editing."""
     profile = find_profile(db, profile_ref)
     return queries.derived_limits(db.get_settings(profile["id"]))
 

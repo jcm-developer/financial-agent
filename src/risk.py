@@ -333,10 +333,30 @@ class RiskManager:
         # de arriba. Es la misma forma que tiene el stop, que el modelo solo puede
         # ensanchar.
         weight = proposal.suggested_weight_pct
+        #: The banded weight, or None when the analyst asked for none. Recorded in
+        #: the verdict so "the analyst asked 8 and the floor made it 12" is legible
+        #: in the history instead of only in the resulting quantity.
+        allowed: float | None = None
         if weight is not None:
             # Contra el techo del perfil y no contra el 100 %: pedir un 80 % en un
             # perfil que permite 40 no es una petición, es no haber leído el límite.
-            allowed = min(weight, limits.max_position_pct)
+            #
+            # **Y contra el suelo por abajo** (F9.21), que es la mitad que faltaba.
+            # F9.13 le dio al analista la decisión de cuánto merece cada idea porque
+            # el techo se estaba comportando como valor por defecto; el modelo
+            # contestó `8,0` en 11 de 11 propuestas, así que la decisión volvió a ser
+            # una constante y el efecto pasó a ser el contrario: con siete plazas al
+            # 8 %, el 44 % del capital se queda en caja el mes entero, y una cartera
+            # a medio invertir divide el resultado por dos. Un +12 % en las siete es
+            # un +6,7 % de cartera.
+            #
+            # La banda deja las dos cosas en pie: el analista sigue pudiendo bajar el
+            # peso —hay dónde ser prudente— y no puede dejar el experimento sin
+            # jugar. Y **el suelo es del perfil, no del modelo**, así que la premisa
+            # no se toca: el modelo sigue sin poder ampliar ningún límite, y quien
+            # dimensiona es este módulo, que es lo que su docstring dice desde el
+            # primer día.
+            allowed = min(max(weight, limits.min_position_pct), limits.max_position_pct)
             weight_qty = math.floor((account.equity * allowed / 100.0) / price)
             if weight_qty < qty:
                 qty, binding_rule = weight_qty, "suggested_weight"
@@ -499,6 +519,9 @@ class RiskManager:
                 # asking for more than it may have is visible in the record
                 # instead of only in the resulting quantity.
                 "suggested_weight_pct": proposal.suggested_weight_pct,
+                # What the band left of that ask (F9.21), so a weight the floor
+                # lifted can be told from one the analyst really chose.
+                "weight_pct_allowed": allowed,
                 "weight_pct_applied": round(notional / account.equity * 100, 2),
                 "stop_source": stop_source,
                 "target_source": target_source,

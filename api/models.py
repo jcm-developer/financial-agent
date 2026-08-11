@@ -158,7 +158,7 @@ class ProfileSummary(BaseModel):
 
 
 class DerivedLimits(BaseModel):
-    """The ten effective limits and where each one comes from.
+    """The eleven effective limits and where each one comes from.
 
     `derived_fields` is what the interface paints in grey: the limits that come
     from the sliders and not from a number written by hand (F6.8).
@@ -166,6 +166,7 @@ class DerivedLimits(BaseModel):
 
     risk_per_trade_pct: float
     max_position_pct: float
+    min_position_pct: float
     max_total_exposure_pct: float
     max_open_positions: int
     max_daily_loss_pct: float
@@ -299,6 +300,7 @@ class AgentSettings(BaseModel):
     advanced_overrides: bool
     risk_per_trade_pct: float | None = None
     max_position_pct: float | None = None
+    min_position_pct: float | None = None
     max_total_exposure_pct: float | None = None
     max_open_positions: int | None = None
     max_daily_loss_pct: float | None = None
@@ -376,6 +378,7 @@ class SettingsUpdate(BaseModel):
     advanced_overrides: bool | None = None
     risk_per_trade_pct: float | None = Field(default=None, ge=0.01, le=100)
     max_position_pct: float | None = Field(default=None, ge=0.1, le=100)
+    min_position_pct: float | None = Field(default=None, ge=0, le=100)
     max_total_exposure_pct: float | None = Field(default=None, ge=0.1, le=100)
     max_open_positions: int | None = Field(default=None, ge=1, le=100)
     max_daily_loss_pct: float | None = Field(default=None, ge=0.1, le=100)

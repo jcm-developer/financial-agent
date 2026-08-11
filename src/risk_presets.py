@@ -1,4 +1,4 @@
-"""From two sliders to the Risk Manager's ten hard limits.
+"""From two sliders to the Risk Manager's eleven hard limits.
 
 The user moves `risk_profile` (1-10) and `diversification` (1-10); the limits
 [risk.py](risk.py) applies come from there. The translation lives here, apart,
@@ -40,6 +40,19 @@ from .config import ConfigError, RiskLimits
 _BY_RISK: dict[str, tuple[tuple[float, float, float], int]] = {
     "risk_per_trade_pct":     ((0.25,  1.0,   3.0), 2),
     "max_position_pct":       ((5.0,  20.0,  40.0), 2),
+    # F9.21. Suelo de la banda de tamaño, y por defecto **la mitad del techo** en
+    # los tres niveles. Es una elección y se lee así: el analista puede reducir una
+    # posición a la mitad cuando la idea le gusta menos, y no puede convertirla en
+    # simbólica. Debajo de la mitad el peso deja de ser una gradación y pasa a ser
+    # otra forma de decir «hold» sin decirlo, que es justo lo que el prompt le pide
+    # que no haga.
+    #
+    # ⚠️ **En el nivel 10 el suelo derivado (20 %) no cabe siete veces**, así que
+    # con los deslizadores a tope la exposición máxima ata antes y salen cinco
+    # posiciones en vez de siete. No es un error: es lo que «muy agresivo» significa
+    # en esta tabla —concentración—, y un perfil que quiera siete plazas llenas
+    # escribe la banda a mano, que es para lo que existe el modo avanzado.
+    "min_position_pct":       ((2.5,  10.0,  20.0), 2),
     "max_total_exposure_pct": ((30.0, 70.0, 100.0), 2),
     "max_daily_loss_pct":     ((2.0,   5.0,  10.0), 2),
     "min_conviction":         ((85.0, 65.0,  45.0), 0),
@@ -97,7 +110,7 @@ _INTEGER_FIELDS = frozenset({"min_conviction", "max_open_positions"})
 # ----------------------------------------------------------------------
 
 def derive_limits(risk_profile: int, diversification: int) -> dict[str, Any]:
-    """The ten limits these two sliders correspond to.
+    """The eleven limits these two sliders correspond to.
 
     The result can be passed straight to `RiskLimits(**...)`.
     """
@@ -200,7 +213,11 @@ def describe(settings: Mapping[str, Any]) -> str:
         f"diversificacion {diversity}/10 ({origin}): "
         f"max. {limits.max_open_positions} posiciones ({sector}), "
         f"{limits.risk_per_trade_pct:g}% de riesgo por operacion, "
-        f"max. {limits.max_position_pct:g}% por posicion y "
+        # La banda entera y no solo el techo (F9.21): con el suelo fuera, esta linea
+        # decia «max. 14% por posicion» sobre un perfil cuyas posiciones no bajan
+        # del 12%, que es la mitad de la informacion y justamente la que explica
+        # cuanto capital se pone a trabajar.
+        f"posiciones del {limits.min_position_pct:g}% al {limits.max_position_pct:g}% y "
         f"{limits.max_total_exposure_pct:g}% de exposicion, "
         f"conviccion minima {limits.min_conviction}, "
         f"stop a {limits.stop_atr_multiple:g}x ATR con R/R minimo "

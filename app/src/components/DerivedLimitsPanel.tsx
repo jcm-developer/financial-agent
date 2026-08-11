@@ -5,7 +5,7 @@ import { money, percent } from "@/lib/format";
 /**
  * What the limits in force are, in numbers (F6.8).
  *
- * **The arithmetic is not repeated here.** The ten limits come from the API,
+ * **The arithmetic is not repeated here.** The eleven limits come from the API,
  * which calls the same `resolve_limits` the Risk Manager uses. A second
  * implementation in TypeScript would be two formulas condemned to disagree the
  * day an anchor is tweaked, and then this panel would be promising limits the
@@ -50,7 +50,7 @@ interface Props {
 const HAND_SET = "Fijado a mano en los limites duros de abajo.";
 
 /**
- * The panel showing the ten limits in force.
+ * The panel showing the eleven limits in force.
  *
  * @param props - Panel props.
  * @param props.limits - The limits, as the API resolved them.
@@ -66,7 +66,7 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
    * Marks the limits that are not coming from the sliders.
    *
    * Only in advanced mode: with the overrides off every limit is derived, so the
-   * marker would be on all ten and would say nothing.
+   * marker would be on all eleven and would say nothing.
    *
    * @param field - The limit's field name.
    * @return The `title` for the figure, or undefined.
@@ -92,9 +92,13 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
           title={origin("risk_per_trade_pct")}
         />
         <Stat
-          label="Máx. por posición"
-          value={percent(limits.max_position_pct)}
-          title={origin("max_position_pct")}
+          label="Posición"
+          value={`${percent(limits.min_position_pct)} – ${percent(limits.max_position_pct)}`}
+          title={
+            origin("max_position_pct") ??
+            origin("min_position_pct") ??
+            "Banda de tamaño: el analista elige dentro, y el suelo es lo que evita que la cartera se quede a medio invertir (F9.21)."
+          }
         />
         <Stat
           label="Exposición total"

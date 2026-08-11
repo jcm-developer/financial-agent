@@ -95,6 +95,21 @@ class RiskLimits:
 
     risk_per_trade_pct: float = 1.0
     max_position_pct: float = 20.0
+    #: Floor of the position band: how small the analyst may ask a position to be
+    #: (F9.21). It is the other end of `max_position_pct`, and it exists because
+    #: the ceiling alone cannot stop the book from starving.
+    #:
+    #: **It is the profile deciding, not the model.** `suggested_weight_pct` came
+    #: in at 8,0 % in 11 of 11 proposals, so with seven slots the book topped out
+    #: at 56 % invested and 44 % of the capital sat in cash for the month —the same
+    #: return dilution F9.13 went to fix, with the owner swapped. The band gives
+    #: the analyst somewhere to be quiet without letting a repeated constant decide
+    #: how much of the experiment gets played.
+    #:
+    #: ⚠️ It is a floor on the **weight the analyst asks for**, never on the caps:
+    #: risk budget, exposure and cash still cut afterwards, so this cannot approve
+    #: an order the account cannot pay for.
+    min_position_pct: float = 10.0
     max_total_exposure_pct: float = 80.0
     max_open_positions: int = 5
     max_daily_loss_pct: float = 5.0
@@ -120,6 +135,12 @@ class RiskLimits:
                 "RISK_PER_TRADE_PCT no puede superar MAX_POSITION_PCT: se arriesgaria "
                 "mas de lo que la posicion puede llegar a valer."
             )
+        if self.min_position_pct > self.max_position_pct:
+            raise ConfigError(
+                f"MIN_POSITION_PCT ({self.min_position_pct:g}%) no puede superar "
+                f"MAX_POSITION_PCT ({self.max_position_pct:g}%): la banda de tamaño de "
+                "posicion quedaria al reves y el suelo mandaria sobre el techo."
+            )
         if self.max_position_pct * self.max_open_positions < self.max_total_exposure_pct:
             # This is not an error: it only means the total exposure limit will
             # never be reached because the other two bind first.
@@ -130,6 +151,7 @@ class RiskLimits:
         return cls(
             risk_per_trade_pct=_get_float("RISK_PER_TRADE_PCT", 1.0, minimum=0.01, maximum=100.0),
             max_position_pct=_get_float("MAX_POSITION_PCT", 20.0, minimum=0.1, maximum=100.0),
+            min_position_pct=_get_float("MIN_POSITION_PCT", 10.0, minimum=0.0, maximum=100.0),
             max_total_exposure_pct=_get_float("MAX_TOTAL_EXPOSURE_PCT", 80.0, minimum=0.1, maximum=100.0),
             max_open_positions=_get_int("MAX_OPEN_POSITIONS", 5, minimum=1, maximum=100),
             max_daily_loss_pct=_get_float("MAX_DAILY_LOSS_PCT", 5.0, minimum=0.1, maximum=100.0),

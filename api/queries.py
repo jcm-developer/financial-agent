@@ -241,7 +241,7 @@ def profile_detail(db: Database, profile: dict[str, Any]) -> dict[str, Any]:
 
 
 def derived_limits(settings: dict[str, Any]) -> dict[str, Any]:
-    """The ten effective limits, plus which ones come from the sliders.
+    """The eleven effective limits, plus which ones come from the sliders.
 
     `src/risk_presets.py` computes it, the same module the cycle uses. The
     interface not redoing the arithmetic is the whole point of F6.5: two formulas

@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`; F9.8.2: Resumen ya dice que sus tres primeras cifras van a precio del ultimo ciclo y la tabla de abajo a precio vivo, con `equity_as_of` nuevo en la API porque la hora del ultimo ciclo no es la de la valoracion; F9.14 y F9.15 abiertas: la tabla de riesgo de F6.5 se calibro con barras diarias y el perfil corre en `1h`, asi que el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria y `llm_wider` es hoy la pieza que lo tapa, y hace falta medir con los mismos snapshots cuanto de los objetivos cortos es el intervalo y cuanto es el modelo; F9.15: `tools/replay_analyst.py` mide el intervalo con la base congelada y sin tocar Yahoo, y de paso encuentra que `volatility_20d_pct` tambien estaba 4,19x baja y que un tercio de las propuestas tienen stop y objetivo los dos bajo 0,5 sigma; F9.14 cerrada con la salida (a): los indicadores del analista pasan a ser **siempre diarios** y `bar_interval` queda como reloj del precio y de la ejecucion, con `lookback_days` a 400 y el experimento reseteado; R8 corregida —lo que la capa gratuita limita son peticiones simultaneas, no por minuto—; F9.16 cerrada: el objetivo tiene ahora un suelo absoluto en sigmas del horizonte, y el minimo por orden sube de 100 a 500 EUR porque cubrir la comision es un problema de tamaño de orden y no de tamaño de recorrido; F9.17: `horizon_days` era una columna muerta y era la causa de los objetivos del 6 % —una sigma a 14 dias son 6,8 % del precio—, asi que ahora viaja al prompt con la sigma ya calculada y al motor de riesgo; F9.18: el capital se repartia por orden alfabetico porque dos `sorted()` tiraban el ranking del screener justo antes de gastarlo, y un ciclo ya no puede abrir mas de `max_new_positions_per_cycle` posiciones; decision nº 9: el experimento de un mes con horizonte de 45 dias, objetivos del 12 % y siete posiciones del 14 %, con el historico reseteado antes de arrancar; F9.19 y F9.20 abiertas: el reparto en dos pasadas y el modelo que contesta con plantilla —24 de 24 `buy`, conviccion 60 en las 24—; F10.11: la tarjeta «Con estos ajustes» enseñaba los limites de los deslizadores encima de un perfil que corria con otros, y cuatro campos de la pantalla —benchmark, reserva de caja, sectores excluidos y permitir cortos— se guardan y no los lee nadie, asi que ahora lo dicen)
+Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`; F9.8.2: Resumen ya dice que sus tres primeras cifras van a precio del ultimo ciclo y la tabla de abajo a precio vivo, con `equity_as_of` nuevo en la API porque la hora del ultimo ciclo no es la de la valoracion; F9.14 y F9.15 abiertas: la tabla de riesgo de F6.5 se calibro con barras diarias y el perfil corre en `1h`, asi que el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria y `llm_wider` es hoy la pieza que lo tapa, y hace falta medir con los mismos snapshots cuanto de los objetivos cortos es el intervalo y cuanto es el modelo; F9.15: `tools/replay_analyst.py` mide el intervalo con la base congelada y sin tocar Yahoo, y de paso encuentra que `volatility_20d_pct` tambien estaba 4,19x baja y que un tercio de las propuestas tienen stop y objetivo los dos bajo 0,5 sigma; F9.14 cerrada con la salida (a): los indicadores del analista pasan a ser **siempre diarios** y `bar_interval` queda como reloj del precio y de la ejecucion, con `lookback_days` a 400 y el experimento reseteado; R8 corregida —lo que la capa gratuita limita son peticiones simultaneas, no por minuto—; F9.16 cerrada: el objetivo tiene ahora un suelo absoluto en sigmas del horizonte, y el minimo por orden sube de 100 a 500 EUR porque cubrir la comision es un problema de tamaño de orden y no de tamaño de recorrido; F9.17: `horizon_days` era una columna muerta y era la causa de los objetivos del 6 % —una sigma a 14 dias son 6,8 % del precio—, asi que ahora viaja al prompt con la sigma ya calculada y al motor de riesgo; F9.18: el capital se repartia por orden alfabetico porque dos `sorted()` tiraban el ranking del screener justo antes de gastarlo, y un ciclo ya no puede abrir mas de `max_new_positions_per_cycle` posiciones; decision nº 9: el experimento de un mes con horizonte de 45 dias, objetivos del 12 % y siete posiciones del 14 %, con el historico reseteado antes de arrancar; F9.19 y F9.20 abiertas: el reparto en dos pasadas y el modelo que contesta con plantilla —24 de 24 `buy`, conviccion 60 en las 24—; F9.21: el tamaño de posicion pasa a ser una banda `min_position_pct`-`max_position_pct`, porque el techo solo no evitaba que la cartera se quedara a medio invertir —el modelo pedia 8 % en 11 de 11 propuestas y con siete plazas eso deja el 44 % del capital en caja, o sea un +12 % por operacion convertido en un +6,7 % de cartera—; F10.11: la tarjeta «Con estos ajustes» enseñaba los limites de los deslizadores encima de un perfil que corria con otros, y cuatro campos de la pantalla —benchmark, reserva de caja, sectores excluidos y permitir cortos— se guardan y no los lee nadie, asi que ahora lo dicen)
 
 ---
 
@@ -3588,6 +3588,67 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       lo que dura— pero hoy cada orden se manda justo tras su análisis, que es lo menos malo de las
       dos. Se cruza con **F9.3** (ejecutar al precio vivo del momento de la orden) y probablemente
       haya que hacer las dos juntas.
+
+- [x] **F9.21** **El techo por posición no podía evitar que la cartera se quedara a medio
+      invertir, así que el tamaño pasa a ser una banda.** Abierta y cerrada el 2026-08-11, a
+      raíz de una frase: «lo lógico sería que si tiene capital y ve una oportunidad, lo
+      invierta».
+
+      **El problema, medido.** F9.13 le dio al analista la decisión de cuánto merece cada idea
+      —`suggested_weight_pct`— porque el techo del perfil se estaba comportando como valor por
+      defecto: con 3 % de riesgo y stops a 1,2× ATR el presupuesto no ataba nunca y toda
+      posición aterrizaba en el 40 %. El diagnóstico era correcto y el remedio no funcionó,
+      porque el modelo contestó **8,0 en 11 de 11 propuestas**. O sea que la decisión volvió a
+      ser una constante, solo que ahora con otro dueño, y el efecto se dio la vuelta:
+
+      | Peso | Invertido con 7 plazas | En caja | Si las 7 llegan a +12 % |
+      |---|---|---|---|
+      | 8 % (lo que pedía) | 5.600 € · 56 % | 4.400 € | **+6,7 %** de cartera |
+      | 14 % (el techo) | 9.800 € · 98 % | 200 € | +11,8 % de cartera |
+
+      Es el mismo 6 % de F9.17 entrando por otra puerta: allí el objetivo era pequeño, aquí lo
+      es la posición. **Una cartera a medio invertir divide el resultado por dos**, y eso no lo
+      arregla ningún objetivo.
+
+      **Por qué no servía ninguna de las salidas obvias:**
+      - **Subir el techo** no hace nada: `min(8, 40)` sigue siendo 8.
+      - **Quitar la petición de peso del prompt** devuelve el mando al factor de convicción de
+        F9.10, que con convicción 60 y mínimo 50 da 0,6 → 14 % × 0,6 = **8,4 %**. Casualmente lo
+        mismo. Dos caminos distintos al mismo sitio.
+      - **Que el motor le suba el peso al modelo** sería lo único que este módulo no puede
+        hacer... si lo decidiera el modelo. Lo decide el perfil, y eso es otra cosa.
+
+      **Lo que se hizo: `min_position_pct`**, el otro extremo de `max_position_pct`, aplicado
+      como `min(max(peso, suelo), techo)`. El analista sigue eligiendo **dentro** de la banda
+      —hay dónde ser prudente, que era el punto de F9.13— y no puede dejar el experimento sin
+      jugar.
+
+      **Y la premisa no se toca, aunque lo parezca.** El invariante es que el modelo no puede
+      ampliar ningún límite ni ejecutar nada, y sigue intacto: el suelo es del perfil, no suyo,
+      y `risk.py` lleva en su docstring desde el primer día que «the position size, the stop and
+      the final verdict come from here». Lo que hace la banda es **devolverle al motor parte del
+      dimensionado** que F9.13 le había prestado al analista, y solo la parte que el analista no
+      estaba usando.
+
+      ⚠️ **El suelo es sobre el PESO, nunca sobre los topes.** Presupuesto de riesgo, exposición
+      y caja siguen cortando después, así que no puede aprobar una orden que la cuenta no pueda
+      pagar — hay test con 1.000 € de caja y un suelo que pediría 12.000.
+
+      **El ancla es la mitad del techo** en los tres niveles (2,5 / 10 / 20 contra 5 / 20 / 40),
+      y se lee así: el analista puede reducir una posición a la mitad cuando la idea le gusta
+      menos, y no puede convertirla en simbólica. Debajo de la mitad el peso deja de ser una
+      gradación y pasa a ser otra forma de decir «hold» sin decirlo. ⚠️ En el nivel 10 el suelo
+      derivado (20 %) no cabe siete veces, así que con los deslizadores a tope la exposición ata
+      antes y salen cinco posiciones; no es un error, es lo que «muy agresivo» significa en esa
+      tabla. El perfil del mes escribe la banda a mano: **12–14 %**, que con siete plazas es
+      entre el 84 % y el 98 % invertido.
+
+      **La alternativa que se descartó, y por qué.** Si el modelo quiere posiciones del 8 %, la
+      cartera coherente tiene **doce**, no siete: subir `max_open_positions` a 12 habría llenado
+      la cartera sin tocar el motor de riesgo, con un solo número. Se descartó porque la
+      concentración ya estaba decidida —siete u ocho posiciones del ~13 %, decisión nº 9— y
+      porque doce posiciones del 8 % es una cartera que tiende al índice: el mes mediría menos.
+      Queda apuntado: si algún día se prefiere lo contrario, es un número y no un cambio.
 
 - [ ] **F9.20** **El modelo contesta con plantilla, y tres de sus cuatro campos son constantes.**
       Abierta el 2026-08-11 con id propio, porque venía mezclada con F9.16 y no es lo mismo.
