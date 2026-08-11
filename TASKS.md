@@ -3205,12 +3205,29 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
 
       **Lo que hubo que hacer además del código:**
 
-      - **`lookback_days` de 200 a 400.** Con 200 **días naturales** la caché diaria tiene 140
-        sesiones y `sma_200`, `above_sma_200` y `golden_cross` salían nulos en 174 de 174 (F9.15).
+      - **`lookback_days` de 200 a 400**, por `PATCH .../settings` para que quede en
+        `agent_settings_history` y se pueda deshacer desde Ajustes. Con 200 **días naturales** la
+        caché diaria tenía 140 sesiones y `sma_200`, `above_sma_200` y `golden_cross` salían nulos
+        en 174 de 174 (F9.15).
       - **Rellenar la caché diaria con `force_full`**, porque el refresco incremental pide desde
         `last_ts` y **nunca rellena hacia atrás**: subir `lookback_days` por sí solo no habría
         traído ni una barra vieja, y el síntoma sería que los tres indicadores siguen nulos sin que
-        nada avise.
+        nada avise. Resultado: **2 peticiones a Yahoo, 89 símbolos, de 12.458 a 24.862 barras**
+        —de 140 a 280 sesiones por símbolo— y `sma_200` ya no es nulo en ninguno.
+
+      **Lo aplicado, el 2026-08-11 a las 13:20 CEST:** imagen reconstruida y los tres servicios
+      redesplegados, los 752 tests en verde también dentro del contenedor, relleno de la caché,
+      y **336 filas borradas** por `reset_experiment.py` (199 decisiones, 95 `risk_events`, 8
+      ciclos, 8 `equity_snapshots`, 7 órdenes, 6 posiciones y el libro del bróker). El universo de
+      89 símbolos y los 41 parámetros, intactos. Comprobado que los ocho endpoints y el frontend
+      responden con el experimento vacío. **El primer ciclo limpio lo lanza quien dirige el
+      experimento**, no este cambio.
+
+      ⚠️ **Y `run.py check` volvió a dejar la cartera huérfana de F9.12** —es el único comando que
+      corre sin perfil, así que `ensure_portfolio` le fabrica un `experimento-01` sin `profile_id`—.
+      Borrada otra vez, comprobando antes que no tenía histórico. **Va a repetirse cada vez que se
+      ejecute `check`**, así que o `check` deja de crear cartera o el arreglo es un apunte
+      permanente; hoy es lo segundo, y queda escrito aquí para que la tercera vez no parezca nueva.
 
       **Consecuencias que se asumen:**
 
