@@ -519,6 +519,36 @@ def test_the_metrics_carry_the_cash_of_the_broker_ledger(client, db_path, profil
     assert metrics["cash"] == pytest.approx(9_670.0)
 
 
+def test_the_metrics_say_when_the_equity_was_marked(client, db_path, profile):
+    """`equity_as_of` is the snapshot's mark and not the last cycle's start.
+
+    The difference is the whole point of the field (F9.8.2): a cycle that is
+    running has already started and has not written its snapshot yet, so a
+    screen footnoting these figures with `last_cycle_at` would name a valuation
+    that did not happen. Here a second cycle is started and left running, which
+    moves `last_cycle_at` forward while the only snapshot stays where it was.
+    """
+    seeded = seed_history(db_path, profile["id"])
+
+    with Database(path=db_path) as db:
+        db.start_cycle(
+            portfolio_id=seeded["portfolio_id"], equity_start=10_120.0,
+            cash_start=9_670.0, market_open=True, symbols=["SAN.MC"],
+            llm_model="stub", settings={"market": "eu", "risk_profile": 5},
+        )
+        snapshot = db.query(
+            "select as_of from equity_snapshots where portfolio_id = ? "
+            "order by as_of desc limit 1",
+            (seeded["portfolio_id"],),
+        )[0]["as_of"]
+
+    profiles = client.get("/api/profiles").json()
+    metrics = next(p for p in profiles if p["id"] == profile["id"])["metrics"]
+
+    assert metrics["equity_as_of"] == snapshot
+    assert metrics["equity_as_of"] != metrics["last_cycle_at"]
+
+
 def test_decisions_bring_the_risk_verdict(client, db_path, profile):
     seed_history(db_path, profile["id"])
     pagina = client.get(f"/api/decisions?profile={profile['id']}").json()

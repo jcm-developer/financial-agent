@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`)
+Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`; F9.8.2: Resumen ya dice que sus tres primeras cifras van a precio del ultimo ciclo y la tabla de abajo a precio vivo, con `equity_as_of` nuevo en la API porque la hora del ultimo ciclo no es la de la valoracion)
 
 ---
 
@@ -2739,6 +2739,8 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       grupo de control de F5.7 compara screener con y sin criterio; comparar «con noticias»
       contra «sin noticias» pide **otro perfil más**, no cambiar el que corre.
 - [ ] **F9.8** ⚠️ **Tres sitios donde la interfaz enseña un número correcto que se lee mal.**
+      **El 2 cerrado el 2026-08-11; quedan el 1 (la columna «Δ capital» de Ciclos) y el resto
+      del 3 (las comisiones en `OrderRow`).**
       Apuntado el 2026-08-10 al explicar las cifras de `eu-05-muy-agresivo` una por una: los
       tres son ciertos, ninguno es un fallo de cálculo, y los tres necesitaron que alguien
       mirara la base para entenderse. Eso los convierte en trabajo de interfaz, no en dudas.
@@ -2752,19 +2754,39 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
          marcó 0,00 € mientras el capital caía 6,30 € entre las 10:33 y las 11:20. La suma de la
          columna **no da el resultado del experimento**, y hoy nada lo dice. La curva de
          Analítica sí lo tiene.
-      2. **Resumen enseña dos precios distintos a la vez sin avisar.** Capital, Rentabilidad y
-         P&L del día salen de `equity_snapshots` —una fila por ciclo, a precio de la barra del
-         ciclo— y la tabla de debajo va al precio del ingestor. Es la decisión correcta y es la
-         de los tres precios de [EXPERIMENT.md](EXPERIMENT.md), pero en pantalla son dos cifras
-         del mismo experimento que no cuadran entre sí y nada las distingue. F4.15 lo evitó en
-         Posiciones calculando las tarjetas de las filas; en Resumen sigue abierto, y la
-         solución **no** es unificar el precio: es decirlo, probablemente en el pie de las
-         cifras que vienen del ciclo, con la hora del último.
+      2. ~~**Resumen enseña dos precios distintos a la vez sin avisar.**~~ ✅ **Hecho el
+         2026-08-11.** Capital, Rentabilidad total y P&L del día salen de `equity_snapshots`
+         —una fila por ciclo, a precio de la barra del ciclo— y la tabla de debajo va al precio
+         del ingestor. Es la decisión correcta y es la de los tres precios de
+         [EXPERIMENT.md](EXPERIMENT.md), pero en pantalla eran dos cifras del mismo experimento
+         que no cuadraban y nada las distinguía. **Medido antes de arreglarlo:** 9.932,58 € de
+         «Capital» contra 9.936,50 € de «Valor de la cartera» en Posiciones, 3,92 € de
+         diferencia, las dos correctas.
 
-         ⚠️ **F4.17 lo ha vuelto más visible, no menos**: la tarjeta «Valor de la cartera» de
+         **La solución no era unificar el precio** —marcar estas tres a precio vivo tira el
+         reloj propio del histórico, que es lo que hace interpretable un ciclo pasado— sino
+         decir en qué reloj va cada cifra: las tres llevan «a precio del ciclo de las 11:20» y
+         debajo de la fila hay una línea que dice que la tabla y Posiciones van al precio vivo,
+         y que la diferencia es lo que se ha movido el mercado desde esa hora. Las tres marcas
+         solas no bastaban: dicen en qué reloj va **esa** cifra, no que haya otro reloj en la
+         misma pantalla.
+
+         ⚠️ **Hizo falta un campo nuevo en la API, y el motivo es la trampa de esta tarea.**
+         Esta ficha decía «con la hora del último ciclo», y **el último ciclo no es cuando se
+         marcaron las cifras**: un ciclo en marcha ya ha empezado y todavía no ha escrito su
+         snapshot, y uno fallido puede no escribirlo nunca, así que `last_cycle_at` habría
+         puesto a estas tres cifras una hora de una valoración que no ocurrió — el pie mintiendo,
+         justo en el sitio escrito para que dejara de mentir. Se añade
+         `ProfileMetrics.equity_as_of`, que es el `as_of` del snapshot del que salen. Hay test
+         que arranca un segundo ciclo y lo deja corriendo, para fijar que los dos difieren.
+
+         ⚠️ **F4.17 lo había vuelto más visible, no menos**: la tarjeta «Valor de la cartera» de
          Posiciones es `cash + valor a precio vivo`, o sea el capital **de ahora**, mientras que
          el «Capital» de Resumen es esa misma suma marcada a la barra del último ciclo. Son dos
          cifras del mismo concepto en dos pantallas, y la de Posiciones es la fresca.
+
+         **717 tests de Python en verde (1 nuevo), 88 del frontend, typecheck limpio, tipos
+         regenerados.**
       3. ~~**Las comisiones no se ven en ninguna pantalla.**~~ **Medio hecho en F4.17**:
          `entry_commission` sale ya en `PositionRow` y el P&L latente va neto, así que la
          posición abierta y la cerrada por fin significan lo mismo. **Queda `OrderRow`**, que es

@@ -154,6 +154,7 @@ def profile_metrics(
         "initial_budget": float(settings["initial_budget"]),
         "total_return_pct": None,
         "day_pnl_pct": None,
+        "equity_as_of": None,
         "open_positions": 0,
         "closed_trades": 0,
         "win_rate_pct": None,
@@ -172,6 +173,13 @@ def profile_metrics(
         "     order by as_of desc limit 1) as equity, "
         "  (select day_pnl_pct from equity_snapshots where portfolio_id = ? "
         "     order by as_of desc limit 1) as day_pnl_pct, "
+        # When the three cycle-priced figures were marked, so the screen can say
+        # so (F9.8.2). It is **not** `last_cycle_at`: a cycle that is running has
+        # already started and has not written its snapshot yet, and one that
+        # failed may never write one, so naming the last cycle would put a time
+        # on these figures that is not the time they were valued at.
+        "  (select as_of from equity_snapshots where portfolio_id = ? "
+        "     order by as_of desc limit 1) as equity_as_of, "
         "  (select count(1) from positions where portfolio_id = ? "
         "     and status = 'open') as open_positions, "
         "  (select count(1) from positions where portfolio_id = ? "
@@ -191,7 +199,7 @@ def profile_metrics(
         # so it has no reason to be as old as the last cycle. It only moves on a
         # fill, and a fill only happens inside a cycle.
         "  (select cash from sim_accounts where id = ?) as cash",
-        (portfolio_id,) * 11,
+        (portfolio_id,) * 12,
     )[0]
 
     budget = float(settings["initial_budget"])
@@ -207,6 +215,7 @@ def profile_metrics(
             round((equity / budget - 1) * 100, 2) if equity and budget else None
         ),
         "day_pnl_pct": row["day_pnl_pct"],
+        "equity_as_of": row["equity_as_of"],
         "open_positions": int(row["open_positions"] or 0),
         "closed_trades": closed,
         "win_rate_pct": (

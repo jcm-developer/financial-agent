@@ -96,6 +96,20 @@ class ProfileMetrics(BaseModel):
     initial_budget: float | None = None
     total_return_pct: float | None = None
     day_pnl_pct: float | None = None
+    #: When `equity`, `total_return_pct` and `day_pnl_pct` were marked (F9.8.2).
+    #:
+    #: The three come from the last row of `equity_snapshots`, which is written
+    #: inside a cycle at the cycle's bar price, so during a session they are
+    #: older than the table underneath them —valued at the ingestor's price— and
+    #: the two do not add up. The fix is not to unify the price, which would
+    #: throw away the history's own clock: it is to say which clock each figure
+    #: is on, and this is what lets the screen say it.
+    #:
+    #: ⚠️ **It is not `last_cycle_at`.** A running cycle has already started and
+    #: has not written its snapshot yet, and a failed one may never write one, so
+    #: the last cycle's start would put a time on these figures that is not the
+    #: time they were valued at — the very mistake this field exists to stop.
+    equity_as_of: str | None = None
     open_positions: int = 0
     closed_trades: int = 0
     win_rate_pct: float | None = None

@@ -443,6 +443,7 @@ export interface ProfileMetrics {
   initial_budget?: number | null;
   total_return_pct?: number | null;
   day_pnl_pct?: number | null;
+  equity_as_of?: string | null;
   open_positions?: number;
   closed_trades?: number;
   win_rate_pct?: number | null;
