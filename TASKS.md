@@ -3650,6 +3650,25 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       porque doce posiciones del 8 % es una cartera que tiende al índice: el mes mediría menos.
       Queda apuntado: si algún día se prefiere lo contrario, es un número y no un cambio.
 
+      ⚠️ **Y aquí NO se resetea el histórico, a diferencia de F9.16 esta misma mañana.** La
+      distinción vale la pena tenerla clara porque decide cuándo hay que pagar un reseteo:
+
+      - **F9.16 cambió QUÉ operaciones se aprueban.** Las dos mitades del histórico contienen
+        operaciones distintas, así que no hay nada que comparar entre ellas.
+      - **F9.21 cambia CUÁNTO se compra de las aprobadas.** El conjunto de decisiones es
+        idéntico, y **todo lo que el experimento mide de verdad es por decisión**: tasa de
+        acierto, calibración de la convicción, si el objetivo se alcanza antes que el stop,
+        sigmas de recorrido. Nada de eso depende del tamaño de la posición.
+
+      Lo único que sale mezclado es la **cifra de rentabilidad de cartera**: las cuatro
+      posiciones abiertas el 2026-08-11 antes del cambio son de ~790 € y las siguientes de
+      ~1.200 €, o sea un 68 % invertido en vez del 84 %. Sobre un +12 % por operación, el mes
+      marcaría +8,2 % en lugar de +10,1 %. Se asume, y se lee sabiéndolo, por dos razones:
+      `cycles.settings_json` guarda la banda con la que corrió cada ciclo —para eso existe esa
+      columna—, y el sesgo va **en contra** del resultado y no a favor: las cuatro pequeñas son
+      las primeras del ranking del screener, así que si el filtro aporta algo, las mejores ideas
+      se llevaron las posiciones más chicas.
+
 - [ ] **F9.20** **El modelo contesta con plantilla, y tres de sus cuatro campos son constantes.**
       Abierta el 2026-08-11 con id propio, porque venía mezclada con F9.16 y no es lo mismo.
 
