@@ -5,7 +5,7 @@ import {
   useProfileSettings,
   useUpdateSettings,
 } from "@/api/hooks";
-import type { AgentSettings, SettingsUpdate } from "@/api/types";
+import type { AgentSettings, DerivedLimits, SettingsUpdate } from "@/api/types";
 import { DerivedLimitsPanel } from "@/components/DerivedLimitsPanel";
 import { Checkbox } from "@/components/Checkbox";
 import {
@@ -25,22 +25,23 @@ import { useActiveProfile } from "@/profile/useActiveProfile";
 /**
  * The experiment's parameters (F6.8).
  *
- * **The two sliders are the screen, and the 41 fields are the small print.**
+ * **The two sliders are the screen, and the 45 fields are the small print.**
  * That is the shape F6.5 asks for: risk profile and diversification decide the
- * nine hard limits, and the panel beside them says what those limits are while
+ * ten hard limits, and the panel beside them says what those limits are while
  * the slider moves. Everything else is grouped underneath in the four families
  * the parameters actually have —model, strategy, execution and hard limits— and
  * the last of those only opens in advanced mode.
  *
- * **Nothing is derived in the browser.** The limits come from
- * `/api/profiles/limits-preview`, which runs the same `derive_limits` as the
- * cycle. A copy of that arithmetic in TypeScript would disagree the day an
- * anchor is tweaked and the screen would promise limits the agent does not
- * apply.
+ * **Nothing is derived in the browser.** The limits come from the API, which
+ * runs the same `resolve_limits` as the cycle. A copy of that arithmetic in
+ * TypeScript would disagree the day an anchor is tweaked and the screen would
+ * promise limits the agent does not apply. ⚠️ Which endpoint, though, depends on
+ * advanced mode, and getting that wrong was a real bug until 2026-08-11: see the
+ * comment where `DerivedLimitsPanel` is rendered.
  *
  * ⚠️ **Only what changed is sent.** `update_settings` ignores a field arriving
  * with the value it already had, and `agent_settings_history` records real
- * changes only (F6.2). Sending the 41 fields on every save would not corrupt
+ * changes only (F6.2). Sending the 45 fields on every save would not corrupt
  * anything, but it would fill the history with rows saying "5 → 5" and the
  * history is what makes an experiment readable afterwards.
  *
@@ -64,6 +65,7 @@ export function Settings() {
             key={data.settings.updated_at}
             profileRef={profile.name}
             settings={data.settings}
+            effective={data.limits}
             symbol={profile.currency_symbol}
           />
         )}
@@ -87,6 +89,34 @@ export function Settings() {
 const SURCHARGE_HINT =
   "Se suma a la tarifa del banco, que ya se aplica sola y depende de la bolsa de cada símbolo. 0 = solo la tarifa.";
 
+/**
+ * The four columns that are stored, editable, and **read by nobody**.
+ *
+ * Audited on 2026-08-11 after a screen-by-screen read of this form: `grep` finds
+ * none of them in `src/`. They are not removed from the screen —they are real
+ * columns, and three of the four are things the project intends to do— but a field
+ * that looks like it configures the experiment and does not is worse than a
+ * missing one: it invites a decision that has no effect and cannot be seen not
+ * working.
+ *
+ * It is the same treatment `sector_cap` already gets in `DerivedLimitsPanel`, and
+ * for the same reason: the absence of these limits is invisible. Nothing fails.
+ *
+ * `horizon_days` was the fifth until F9.17, and it was the one that cost real
+ * money: nobody had told the model the plan, so it aimed at one sigma of the two
+ * weeks it invented. That is the precedent for marking the rest.
+ */
+const NOT_APPLIED = {
+  benchmark:
+    "No se usa todavía: la Analítica no compara contra el índice. El que sale en Mercado es el del mercado del perfil, no este.",
+  cash_reserve_pct:
+    "No se aplica todavía: el ciclo gasta hasta la exposición máxima. Para no comprometer la caja de golpe, usa «Máx. entradas nuevas por ciclo».",
+  excluded_sectors_json:
+    "No se aplica: no hay dato de sector por símbolo en tiempo de ejecución (F6.5, FE.12), el mismo motivo por el que el tope por sector solo se calcula.",
+  allow_shorts:
+    "No se aplica, y es del diseño: el analista solo propone compra o mantener, y el Risk Manager rechaza cualquier otra acción.",
+} as const;
+
 /** The subset of settings this form edits as free values, keyed as they are sent. */
 type Draft = Record<string, string | number | boolean>;
 
@@ -101,16 +131,21 @@ type Draft = Record<string, string | number | boolean>;
  * @param props - Form props.
  * @param props.profileRef - Profile name, as it travels in the URL.
  * @param props.settings - The saved settings, already typed.
+ * @param props.effective - The limits **in force**, overrides included, as the
+ *     API resolved them. Not the same thing as the sliders' preview: see the
+ *     comment where the panel is rendered.
  * @param props.symbol - Currency symbol of the profile's market.
  * @return The rendered form.
  */
 function SettingsForm({
   profileRef,
   settings,
+  effective,
   symbol,
 }: {
   profileRef: string;
   settings: AgentSettings;
+  effective: DerivedLimits;
   symbol: string;
 }) {
   const save = useUpdateSettings();
@@ -217,7 +252,7 @@ function SettingsForm({
               setSaved(null);
               setAdvanced(e.target.checked);
             }}
-            label="Modo avanzado: fijar los nueve límites a mano"
+            label="Modo avanzado: fijar los diez límites a mano"
             /* This is the master switch of F6.5, and its wording matters: with
                it off the sliders win *even if the columns still hold numbers
                from a previous session*. Without saying so, turning it off looks
@@ -226,12 +261,25 @@ function SettingsForm({
           />
         </Card>
 
-        {preview.data && (
-          <DerivedLimitsPanel
-            limits={preview.data}
-            symbol={symbol}
-            stale={preview.isFetching}
-          />
+        {/* ⚠️ **Cuál de los dos, y no siempre el mismo.** Con el modo avanzado
+            apagado mandan los deslizadores, así que la vista previa por posición
+            del deslizador es la respuesta correcta y es lo que F6.8 pedía.
+            Encendido, mandan los números escritos a mano y la vista previa
+            contesta a otra pregunta: enseñarla ahí era poner en pantalla dos
+            juegos de límites a la vez, con el rótulo «Con estos ajustes» sobre el
+            que no se aplica. `effective` ya viene resuelto por la misma
+            `resolve_limits` del ciclo. */}
+        {advanced ? (
+          <DerivedLimitsPanel limits={effective} symbol={symbol} source="effective" />
+        ) : (
+          preview.data && (
+            <DerivedLimitsPanel
+              limits={preview.data}
+              symbol={symbol}
+              stale={preview.isFetching}
+              source="sliders"
+            />
+          )
         )}
       </div>
 
@@ -317,12 +365,20 @@ function SettingsForm({
           label="Benchmark"
           value={value("benchmark")}
           onChange={(e) => set("benchmark", e.target.value)}
+          hint={NOT_APPLIED.benchmark}
         />
-        <NumberField label="Reserva de caja (%)" field="cash_reserve_pct" value={value} set={set} />
+        <NumberField
+          label="Reserva de caja (%)"
+          field="cash_reserve_pct"
+          value={value}
+          set={set}
+          hint={NOT_APPLIED.cash_reserve_pct}
+        />
         <Input
           label="Sectores excluidos (JSON)"
           value={value("excluded_sectors_json")}
           onChange={(e) => set("excluded_sectors_json", e.target.value)}
+          hint={NOT_APPLIED.excluded_sectors_json}
         />
         <Check
           label="Permitir cortos"
@@ -330,6 +386,7 @@ function SettingsForm({
           settings={settings}
           draft={draft}
           set={set}
+          hint={NOT_APPLIED.allow_shorts}
         />
       </Group>
 
@@ -507,20 +564,27 @@ function Check({
   settings,
   draft,
   set,
+  hint,
 }: {
   label: string;
   field: keyof AgentSettings;
   settings: AgentSettings;
   draft: Draft;
   set: (field: string, next: boolean) => void;
+  hint?: string;
 }) {
   const checked = Boolean(draft[field as string] ?? settings[field]);
   return (
     <Checkbox
-      className="self-end pb-2.5"
+      // `self-end` sube la caja a la altura de los campos de al lado, y con
+      // `hint` eso ya no vale: la linea de debajo tiene que caber. Sin nota se
+      // mantiene el ajuste de antes, porque en la fila de «Dry run» la casilla
+      // sigue alineandose contra un campo con etiqueta.
+      className={hint ? undefined : "self-end pb-2.5"}
       checked={checked}
       onChange={(e) => set(field as string, e.target.checked)}
       label={label}
+      hint={hint}
     />
   );
 }
@@ -549,7 +613,7 @@ function coerce(
   }
   if (typeof stored === "number") return Number(typed);
   // A limit sitting at NULL is numeric even though there is nothing stored to
-  // tell by: those are exactly the nine of advanced mode.
+  // tell by: those are exactly the ten of advanced mode.
   if (stored === null && field !== "universe_file" && field !== "analyst_persona") {
     const asNumber = Number(typed);
     if (!isNaN(asNumber)) return asNumber;

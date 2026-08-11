@@ -422,7 +422,7 @@ export function useLimitsPreview(risk: number, diversification: number) {
 }
 
 /**
- * The nine effective limits and which of them come from the sliders.
+ * The ten effective limits and which of them come from the sliders.
  *
  * The derivation is **not repeated in the frontend** (F6.8): `derive_limits`
  * interpolates by stretches in `src/risk_presets.py`, and a second

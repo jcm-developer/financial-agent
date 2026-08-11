@@ -239,7 +239,7 @@ export function NewProfileForm({ onCancel }: Props) {
             />
           </div>
           <p className="text-caption text-text-muted">
-            Los nueve límites duros se derivan de estos dos deslizadores. Se pueden fijar a
+            Los diez límites duros se derivan de estos dos deslizadores. Se pueden fijar a
             mano después, en Ajustes, activando el modo avanzado.
           </p>
         </fieldset>
