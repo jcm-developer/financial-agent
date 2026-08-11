@@ -2773,12 +2773,18 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
 
          ⚠️ **Hizo falta un campo nuevo en la API, y el motivo es la trampa de esta tarea.**
          Esta ficha decía «con la hora del último ciclo», y **el último ciclo no es cuando se
-         marcaron las cifras**: un ciclo en marcha ya ha empezado y todavía no ha escrito su
-         snapshot, y uno fallido puede no escribirlo nunca, así que `last_cycle_at` habría
-         puesto a estas tres cifras una hora de una valoración que no ocurrió — el pie mintiendo,
-         justo en el sitio escrito para que dejara de mentir. Se añade
-         `ProfileMetrics.equity_as_of`, que es el `as_of` del snapshot del que salen. Hay test
-         que arranca un segundo ciclo y lo deja corriendo, para fijar que los dos difieren.
+         marcaron las cifras**. Se añade `ProfileMetrics.equity_as_of`, que es el `as_of` del
+         snapshot del que salen las tres.
+
+         **La primera versión de este razonamiento se quedó corta y conviene dejar las dos
+         escritas.** Se argumentó por el caso raro —un ciclo en marcha ya ha empezado y aún no
+         ha escrito su snapshot, uno fallido puede no escribirlo nunca—, y al verificarlo
+         desplegado apareció el caso **normal**: el snapshot se escribe al **final** de un ciclo
+         que dura ~20 minutos, así que `started_at` va sistemáticamente adelantado. Medido en
+         `eu-05-muy-agresivo` con el ciclo ya terminado: arranque 09:20:49 y valoración
+         09:38:39, **18 minutos**. O sea que `last_cycle_at` no fallaba en un caso de borde:
+         fallaba siempre. El test fija el caso del ciclo en marcha, que es el que se puede
+         montar de forma determinista.
 
          ⚠️ **F4.17 lo había vuelto más visible, no menos**: la tarjeta «Valor de la cartera» de
          Posiciones es `cash + valor a precio vivo`, o sea el capital **de ahora**, mientras que

@@ -105,10 +105,14 @@ class ProfileMetrics(BaseModel):
     #: throw away the history's own clock: it is to say which clock each figure
     #: is on, and this is what lets the screen say it.
     #:
-    #: ⚠️ **It is not `last_cycle_at`.** A running cycle has already started and
-    #: has not written its snapshot yet, and a failed one may never write one, so
-    #: the last cycle's start would put a time on these figures that is not the
-    #: time they were valued at — the very mistake this field exists to stop.
+    #: ⚠️ **It is not `last_cycle_at`, and the gap is not an edge case.** The
+    #: snapshot is written at the *end* of a cycle that takes ~20 minutes, so the
+    #: cycle's `started_at` is systematically that much too early: measured on
+    #: `eu-05-muy-agresivo`, a cycle starting 09:20:49 valued at 09:38:39. On top
+    #: of that a running cycle has started and not written its snapshot at all,
+    #: and a failed one may never write one. Any of the three puts a time on these
+    #: figures that is not the time they were valued at — the very mistake this
+    #: field exists to stop.
     equity_as_of: str | None = None
     open_positions: int = 0
     closed_trades: int = 0
