@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`; F9.8.2: Resumen ya dice que sus tres primeras cifras van a precio del ultimo ciclo y la tabla de abajo a precio vivo, con `equity_as_of` nuevo en la API porque la hora del ultimo ciclo no es la de la valoracion)
+Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`; F9.8.2: Resumen ya dice que sus tres primeras cifras van a precio del ultimo ciclo y la tabla de abajo a precio vivo, con `equity_as_of` nuevo en la API porque la hora del ultimo ciclo no es la de la valoracion; F9.14 y F9.15 abiertas: la tabla de riesgo de F6.5 se calibro con barras diarias y el perfil corre en `1h`, asi que el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria y `llm_wider` es hoy la pieza que lo tapa, y hace falta medir con los mismos snapshots cuanto de los objetivos cortos es el intervalo y cuanto es el modelo)
 
 ---
 
@@ -3078,6 +3078,99 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
 
       Ya no hay «no lo sé»: hay tres decisiones escritas y dos huecos con nombre.
 
+- [ ] **F9.14** **La tabla de riesgo de F6.5 se calibro con barras diarias, y el perfil corre en
+      `1h`: el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria.**
+      Encontrado el 2026-08-11 midiendo por que el analista propone objetivos tan cortos.
+
+      **El paso a `bar_interval=1h` del 2026-08-10 dejo apuntada una sola consecuencia** —que
+      `SMA200` pasa a ser 200 horas y no 200 dias, decision nº 2 de la seccion 5— **y la del ATR
+      no.** Pero `stop_atr_multiple` es la otra columna de la tabla de F6.5, y el ATR de 14
+      barras horarias no mide lo mismo que el de 14 barras diarias:
+
+      | | ATR(14) horario, lo que ve el modelo | ATR(14) diario equivalente | ratio |
+      |---|---|---|---|
+      | AIR.PA | 1,22 € — 0,58 % | 4,84 € — 2,28 % | 4,0× |
+      | NDA-FI.HE | 0,066 € — 0,38 % | 0,264 € — 1,53 % | 4,0× |
+      | ITX.MC | 0,274 € — 0,46 % | 1,231 € — 2,09 % | 4,5× |
+      | GLE.PA | 0,394 € — 0,47 % | 2,001 € — 2,38 % | 5,1× |
+      | BAYN.DE | 0,419 € — 0,86 % | 1,303 € — 2,68 % | 3,1× |
+
+      Con `eu-05-muy-agresivo` (1,2× ATR) eso es **un stop entre −0,46 % y −1,04 %** para un
+      horizonte que el propio analista declara de 7 a 14 dias. La misma regla sobre barras
+      diarias daria −1,83 % a −3,22 %, que es lo que la tabla queria decir. El ATR horario del
+      universo europeo se mueve en 0,38–1,21 % del precio, mediana 0,51 %.
+
+      ⚠️ **No ha explotado porque `llm_wider` es hoy la pieza que sostiene el sistema, y eso no
+      es lo que [src/risk.py](src/risk.py) cree.** El motor toma el stop del modelo solo si es
+      **mas ancho** que el del ATR, y el comentario lo trata como la excepcion («Never the other
+      way round»). En la practica salta **siempre**: las 6 entradas aprobadas del experimento
+      llevan `stop_source: llm_wider`, con stops del orden de 5× el ATR horario. El suelo
+      determinista no llega a mandar nunca.
+
+      **Lo latente, no activo:** de las 82 propuestas de compra, **cero** llegaron sin
+      `suggested_stop`. Si una llegara, el motor situaria el stop a −0,5 % y dimensionaria
+      contra esa distancia: con 3 % de riesgo sobre 10.000 € salen ~205 acciones de AIR.PA,
+      ~43.500 € de nocional, y lo unico que lo pararia es el tope del 40 % por posicion. O sea
+      una posicion en el techo con un stop que barre el ruido de la primera hora.
+
+      **Y el filtro de R/R no lo detecta porque es adimensional:** compara un objetivo pequeño
+      con un stop pequeño y da 1,15. Los seis aprobados salen entre **1,01 y 1,56** contra un
+      minimo de 1,00. Escalando por √t sobre el ATR diario, un objetivo de +3,5 % a 14 dias es
+      ~0,4 sigma y un stop de −2,7 % es ~0,3 sigma: casi simetricos, acierto cercano a la moneda
+      al aire, y la comision en medio. Es esperanza negativa que pasa el filtro con nota.
+
+      **Tres salidas, y son alternativas, no complementarias.** Hacer dos seria corregir dos
+      veces el mismo error:
+      - **(a) Indicadores diarios para el analista, `1h` solo para precio de referencia y
+        ejecucion.** Ataca la causa: el analista razona en el horizonte que dice tener. Toca
+        `cycle.py` y la relacion entre `bar_interval` y lo que se le pasa al analista, y deja la
+        tabla de F6.5 valida tal como esta. Es la que arregla tambien F9.15.
+      - **(b) Quedarse en `1h` y recalibrar `stop_atr_multiple` por intervalo** (×4 aprox.), o
+        sea meter el intervalo en la derivacion de [src/risk_presets.py](src/risk_presets.py).
+        Mas barata, pero deja al modelo razonando sobre un lienzo de 10 horas.
+      - **(c) No tocar nada y dejarlo escrito.** Es una opcion legitima si se decide que el
+        experimento es de horizonte horario, pero entonces hay que corregir el prompt, que dice
+        «a dias o semanas de horizonte», y `horizon_days` del perfil, que vale 10.
+
+      **Depende de F9.15**, que es la medicion que decide entre (a) y (b). Cerrarla es elegir
+      una, aplicarla y apuntar la consecuencia junto a la del `SMA200`, en la decision nº 2 de
+      la seccion 5 y en [EXPERIMENT.md](EXPERIMENT.md) §4, que es donde se explica lo que ve el
+      modelo.
+
+- [ ] **F9.15** **Medir cuanto de los objetivos cortos es el intervalo y cuanto es el modelo,
+      con los mismos snapshots y una sola variable cambiada.** Pedido el 2026-08-11.
+
+      **Lo que ya se sabe, medido sobre las 170 decisiones del experimento** (82 compras, 68
+      hold de entrada, 19 hold de salida, 1 venta):
+      - El objetivo propuesto va del **1,46 % al 8,99 %** sobre el precio, mediana 3,23 %, media
+        3,55 %. **La uniformidad que se veia en la pantalla de Posiciones no esta en las
+        propuestas: esta en los supervivientes** — de 82 se aprobaron 6, y lo que estrecho la
+        banda fue el camino de aprobacion (R/R ≥ 1,0 neto, `suggested_weight`, caja).
+      - **El objetivo escala con el `atr_pct` que se le da, no con el horizonte:** mediana
+        **5,6×** el ATR horario, media 6,15×, rango 1,85–14,1×. El multiplicador es estable; lo
+        que esta mal es la unidad que recibe. Con el ATR diario, ese mismo 5,6× daria objetivos
+        del orden del 13 %.
+      - **`horizon_days` toma exactamente dos valores en 82 propuestas: 7 y 14.** Nunca el 10
+        que tiene configurado el perfil. Eso si es plantilla del modelo —igual que el 70 de
+        conviccion de F9.13— y no del intervalo.
+
+      **La medicion que falta, y es barata:** reejecutar el analista sobre los **mismos**
+      snapshots con indicadores diarios y comparar la distribucion de objetivos. `bar_cache` ya
+      tiene barras `1d` cacheadas, asi que no hay descarga nueva. Una sola variable cambia, y
+      eso es lo que la convierte en una medicion y no en un argumento. Offline, sin tocar el
+      sistema en marcha.
+
+      **La segunda parte, que no necesita esperar a que cierren operaciones:** expresar stop y
+      objetivo en sigmas diarias sobre `horizon_days` y ver si los dos caen por debajo de 0,5.
+      Con **1 sola operacion cerrada** la tasa de acierto no dice nada todavia, y la grafica de
+      calibracion de F5.7 tampoco; el chequeo analitico si se puede hacer hoy. Si el resultado
+      es que ambos estan bajo 0,5 sigma, `min_reward_risk` no basta como filtro y hace falta
+      complementarlo con algo que tenga escala.
+
+      **Lo que decide:** entre (a) y (b) de F9.14. Si con indicadores diarios los objetivos se
+      abren y las tesis siguen siendo coherentes, (a); si el modelo se pierde con las series
+      largas, (b) y a vigilar el lienzo.
+
 ---
 
 ## 3. Orden de ejecución
@@ -3300,6 +3393,13 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
    200 días. El indicador deja de significar lo mismo y las tesis del modelo lo notarán.
    `lookback_days=200` no hace falta tocarlo: con intervalo horario son 200 días naturales de
    barras, ~1.200, muy por encima de las 200 que pide el SMA200.
+
+   ⚠️ **Faltaba la otra consecuencia, y se encontro el 2026-08-11: el ATR.** `stop_atr_multiple`
+   es la otra columna de la tabla de F6.5 y tambien se calibro con barras diarias, asi que con
+   `1h` el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria — entre
+   −0,46 % y −1,04 % con el perfil agresivo. Medido y con las tres salidas escritas en **F9.14**;
+   la medicion que decide entre ellas es **F9.15**. Al cerrarlas, la consecuencia elegida se
+   apunta aqui, junto a la del `SMA200`.
 3. ~~**Tamaño del universo a seguir minuto a minuto**: 50 es el punto de partida.~~
    **Resuelto para Europa: 89** (EURO STOXX 50 + IBEX 35, D8). Para el perfil americano
    sigue abierto y ahora se elige explícitamente con `--watch`. Condiciona R2 y R4, que ya
