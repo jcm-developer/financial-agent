@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto)
+Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`)
 
 ---
 
@@ -2601,6 +2601,51 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
 
       **716 tests de Python en verde, 86 del frontend (8 nuevos), typecheck limpio, y
       verificado contra la base real: 6 ciclos de dos jornadas y 141 decisiones.**
+
+- [x] **F10.10** **Órdenes y Riesgo se agrupan igual que Decisiones, y la estructura se
+      extrae antes de escribirla por tercera vez.** Las tres tablas las escribe un ciclo y
+      todo ciclo pertenece a una sesión, así que las tres eran listas planas de cincuenta
+      filas sin nada que marcara dónde acababa una tanda del agente.
+
+      **`<GroupedRows>`** ([app/src/components/GroupedRows.tsx](app/src/components/GroupedRows.tsx))
+      es el componente que las tres comparten, y se extrae por lo mismo que existe
+      `pieces.tsx`: lo único que cambiaba entre las tres copias era la fila y el sustantivo
+      con el que se cuenta, y lo que habría ido divergiendo —el estado del plegado, qué
+      grupo abre por defecto, la redacción de las cabeceras— solo se ve mirando dos
+      pantallas a la vez. `lib/decisions.ts` pasa a ser
+      [app/src/lib/grouping.ts](app/src/lib/grouping.ts) con `groupByDayAndCycle<T>`
+      genérica: **el nombre de un fichero es lo que exporta**, y ya no exportaba nada de
+      Decisiones. La columna de fecha se le pasa como función (`created_at` en decisiones y
+      eventos, `submitted_at` en órdenes) en vez de adivinarla, que es lo que un test fija.
+
+      ⚠️ **Ninguna de las dos lleva el árbol perezoso de F10.9, y es por el backend, no por
+      pereza:** `/api/orders` y `/api/risk-events` **no aceptan `cycle_id`**, así que no hay
+      consulta por ciclo con la que ser perezoso, y las cabeceras solo pueden contar la
+      página. Lo dicen —«7 órdenes en esta página»— en vez de imprimir un total que sería
+      falso en cada borde de página. Tampoco hacía falta: son 7 órdenes y 83 eventos, no las
+      160–360 filas por jornada que tiene Decisiones. Añadir el filtro a los dos endpoints
+      queda como trabajo posible el día que el volumen lo pida.
+
+      **La prosa se pliega en las dos, y en las dos estaba el fallo exacto de F10.7:** el
+      `error` de una orden con `max-w-sm` y el `reason` de un evento con `max-w-md`, y **una
+      `<table>` con layout `auto` ignora un `max-width` sobre un `<td>`**. En Riesgo es donde
+      más pesaba, porque `reason` no es opcional: el Risk Manager escribe una frase entera en
+      **todos** los eventos, así que *todas* las filas medían dos o tres líneas y el recuento
+      por regla —que es para lo que sirve la pantalla— quedaba sobre algo que había que
+      recorrer para comparar. La regla se queda en columna como `<code>`, igual que en
+      cerradas: una regla es un identificador y se compara bajando; una frase no.
+
+      **Las dos pierden la columna de fecha**, que ahora la llevan las cabeceras: la jornada
+      arriba y la hora del ciclo justo encima de la fila. La marca exacta sigue en el `title`
+      del símbolo y dentro del pliegue, porque el `submitted_at` de una orden no es el
+      arranque de su ciclo — un ciclo manda sus órdenes minutos después de empezar.
+
+      **Un caso que Decisiones no tenía:** `OrderRow.cycle_id` es nulable, así que una orden
+      escrita fuera de un ciclo es una forma real. Van todas juntas bajo una cabecera que
+      dice «sin ciclo» en vez de caerse de la tabla en silencio o abrir una cabecera vacía
+      por fila, y hay test.
+
+      **716 tests de Python en verde, 88 del frontend (2 nuevos), typecheck limpio.**
 
 ### F9 — Futuro (no bloquea)
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { CycleRow, DecisionRow } from "@/api/types";
-import { dayKey, groupCyclesByDay, groupDecisionsByDay } from "@/lib/decisions";
+import type { CycleRow, DecisionRow, OrderRow } from "@/api/types";
+import { dayKey, groupByDayAndCycle, groupCyclesByDay } from "@/lib/grouping";
 
 /**
  * Tests of the grouping, which is the only part of the Decisions screen that can
@@ -99,9 +99,18 @@ describe("groupCyclesByDay", () => {
   });
 });
 
-describe("groupDecisionsByDay", () => {
+/** The three screens call it with their own timestamp column; this is theirs. */
+function groupDecisions(rows: DecisionRow[]) {
+  return groupByDayAndCycle(
+    rows,
+    (row) => row.created_at,
+    (row) => row.cycle_id,
+  );
+}
+
+describe("groupByDayAndCycle", () => {
   it("parte cada jornada en los ciclos de los que vinieron las filas", () => {
-    const days = groupDecisionsByDay([
+    const days = groupDecisions([
       decision("d4", "c2", "2026-08-11T15:20:10Z"),
       decision("d3", "c2", "2026-08-11T15:20:05Z"),
       decision("d2", "c1", "2026-08-11T14:20:05Z"),
@@ -123,7 +132,7 @@ describe("groupDecisionsByDay", () => {
     // this pins that the grouping does not depend on it, because a run of rows
     // interleaved by anything would otherwise open a second group with the same
     // id and the same header.
-    const days = groupDecisionsByDay([
+    const days = groupDecisions([
       decision("d1", "c1", "2026-08-11T15:20:10Z"),
       decision("d2", "c2", "2026-08-11T15:20:05Z"),
       decision("d3", "c1", "2026-08-11T15:20:01Z"),
@@ -134,7 +143,47 @@ describe("groupDecisionsByDay", () => {
     expect(days[0]?.rows).toBe(3);
   });
 
+  it("junta bajo un solo grupo las filas que no traen ciclo", () => {
+    // `OrderRow.cycle_id` is nullable, so an order written outside a cycle is a
+    // real shape. Dropping those rows would lose them without a trace, and one
+    // group per row would put a bare header over each of them.
+    const order = (id: string, cycleId: string | null): OrderRow => ({
+      id,
+      cycle_id: cycleId,
+      submitted_at: "2026-08-11T15:20:00Z",
+      updated_at: "2026-08-11T15:20:00Z",
+      symbol: "SAN.MC",
+      side: "buy",
+      qty: 10,
+      order_type: "market",
+      status: "filled",
+    });
+
+    const days = groupByDayAndCycle(
+      [order("o1", null), order("o2", "c1"), order("o3", null)],
+      (row) => row.submitted_at,
+      (row) => row.cycle_id,
+    );
+
+    expect(days).toHaveLength(1);
+    expect(days[0]?.cycles.map((group) => group.id)).toEqual(["", "c1"]);
+    expect(days[0]?.cycles[0]?.rows.map((row) => row.id)).toEqual(["o1", "o3"]);
+    expect(days[0]?.rows).toBe(3);
+  });
+
+  it("usa la columna de fecha que se le pasa y no una fija", () => {
+    // Orders are stamped `submitted_at` and decisions `created_at`; reading the
+    // wrong one would silently group everything under today.
+    const days = groupByDayAndCycle(
+      [{ when: "2026-08-11T15:20:00Z", cycle: "c1" }],
+      (row) => row.when,
+      (row) => row.cycle,
+    );
+
+    expect(days[0]?.key).toBe(dayKey("2026-08-11T15:20:00Z"));
+  });
+
   it("devuelve la lista vacía sin grupos", () => {
-    expect(groupDecisionsByDay([])).toEqual([]);
+    expect(groupDecisions([])).toEqual([]);
   });
 });

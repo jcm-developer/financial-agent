@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 
 import { useCycles, useDecisions } from "@/api/hooks";
 import type { DecisionRow } from "@/api/types";
+import { GroupedRows } from "@/components/GroupedRows";
 import { Input, LinkButton, Loading, Tag, PageTitle } from "@/components/pieces";
 import { Select } from "@/components/Select";
 import { Section, ErrorAlert } from "@/components/Section";
@@ -17,7 +18,7 @@ import {
   Th,
   Empty,
 } from "@/components/Table";
-import { groupCyclesByDay, groupDecisionsByDay } from "@/lib/decisions";
+import { groupByDayAndCycle, groupCyclesByDay } from "@/lib/grouping";
 import { money, dateTime, time, longDate, sentence } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useActiveProfile } from "@/profile/useActiveProfile";
@@ -444,14 +445,11 @@ function CycleDecisions({
 /**
  * The filtering half: the matching rows, still grouped, but read off the rows.
  *
- * The headers here carry **the date and the time and no totals**, and that is
- * the honest version rather than a lesser one: what this half knows is what came
- * back in the page, so a count next to a cycle would be the count of its rows on
- * this side of the page boundary. `Pagination` already says how many matched in
- * total, which is the number that means something under a filter.
- *
- * Everything opens, because filtering is already the act of asking to see the
- * matches.
+ * It is `<GroupedRows>` and therefore the same component Órdenes and Riesgo use,
+ * which is the point: those two have no per-cycle endpoint either, so all three
+ * count the page rather than the cycle and none of them prints a total that
+ * would be wrong at a page boundary. What `Pagination` says is the number that
+ * means something under a filter.
  *
  * @param props - Filtering props.
  * @param props.profile - Profile name. Undefined leaves the query disabled.
@@ -475,7 +473,6 @@ function Filtered({
   onOffset: (next: number) => void;
 }) {
   const query = useDecisions(profile, { ...filters, limit: LIMIT, offset });
-  const { isOpen, toggle } = useFolds();
 
   return (
     <Section query={query}>
@@ -486,41 +483,18 @@ function Filtered({
           ) : (
             <Table title="Decisiones que cumplen los filtros, agrupadas por jornada y por ciclo">
               <DecisionsHead />
-              {groupDecisionsByDay(page.items).map((day) => {
-                const dayOpen = isOpen(day.key, true);
-
-                return (
-                  <tbody key={day.key}>
-                    <GroupRow
-                      columns={COLUMNS}
-                      level="day"
-                      open={dayOpen}
-                      onToggle={() => toggle(day.key, true)}
-                      title={dayOpen ? "Plegar la jornada" : "Ver la jornada"}
-                    >
-                      <span>{sentence(longDate(day.at))}</span>
-                      <span className="ml-auto text-caption font-normal text-text-secondary">
-                        {day.rows} en esta página
-                      </span>
-                    </GroupRow>
-
-                    {dayOpen &&
-                      day.cycles.map((cycle) => {
-                        const cycleOpen = isOpen(`${day.key}/${cycle.id}`, true);
-
-                        return (
-                          <FilteredCycle
-                            key={cycle.id}
-                            cycle={cycle}
-                            open={cycleOpen}
-                            onToggle={() => toggle(`${day.key}/${cycle.id}`, true)}
-                            symbol={symbol}
-                          />
-                        );
-                      })}
-                  </tbody>
-                );
-              })}
+              <GroupedRows
+                days={groupByDayAndCycle(
+                  page.items,
+                  (row) => row.created_at,
+                  (row) => row.cycle_id,
+                )}
+                columns={COLUMNS}
+                noun={["decisión", "decisiones"]}
+                openAll
+              >
+                {(row) => <DecisionTableRow key={row.id} row={row} symbol={symbol} />}
+              </GroupedRows>
             </Table>
           )}
           <Pagination
@@ -532,48 +506,6 @@ function Filtered({
         </>
       )}
     </Section>
-  );
-}
-
-/**
- * One cycle's matching rows under a filter, already in hand.
- *
- * @param props - Cycle props.
- * @param props.cycle - The cycle and the rows of it that survived the filter.
- * @param props.open - Whether the cycle is unfolded.
- * @param props.onToggle - Called when the header is pressed.
- * @param props.symbol - Currency symbol of the profile's market, never assumed.
- * @return The header row, plus its rows when unfolded.
- */
-function FilteredCycle({
-  cycle,
-  open,
-  onToggle,
-  symbol,
-}: {
-  cycle: { id: string; at: string; rows: DecisionRow[] };
-  open: boolean;
-  onToggle: () => void;
-  symbol: string;
-}) {
-  return (
-    <>
-      <GroupRow
-        columns={COLUMNS}
-        level="cycle"
-        open={open}
-        onToggle={onToggle}
-        title={open ? "Plegar el ciclo" : `Ver el ciclo de las ${time(cycle.at)}`}
-      >
-        <span className="tabular font-medium text-foreground">{time(cycle.at)}</span>
-        <span>{cycle.rows.length} {cycle.rows.length === 1 ? "decisión" : "decisiones"}</span>
-      </GroupRow>
-
-      {open &&
-        cycle.rows.map((row) => (
-          <DecisionTableRow key={row.id} row={row} symbol={symbol} />
-        ))}
-    </>
   );
 }
 
