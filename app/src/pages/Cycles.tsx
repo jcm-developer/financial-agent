@@ -31,6 +31,15 @@ import { useTitle } from "@/layout/useTitle";
 const LIMIT = 30;
 
 /**
+ * How far from the end of the log still counts as "at the end", in pixels.
+ *
+ * It is about one line at `text-code`: enough to absorb the sub-pixel rounding
+ * of `scrollHeight`, and little enough that one notch of the wheel is already a
+ * decision to stop being carried along.
+ */
+const LOG_BOTTOM_SLACK = 24;
+
+/**
  * Cycles that have run, with the log of the one running (F4.7).
  *
  * This screen does not request the log: it arrives over the stream the Layout
@@ -300,32 +309,58 @@ function Control({
  * whoever scrolls up stays where they wanted and whoever is at the end keeps
  * seeing the latest.
  *
+ * ⚠️ **Whether you were at the bottom has to be remembered, not measured after
+ * the fact**, and the first version measured it after the fact: it read the
+ * distance to the end inside the effect, when the new text was already in the
+ * DOM and had already pushed the end away. One poll brings several lines and
+ * each of them wraps into two or three at this width, so the distance was
+ * comfortably past any sane threshold and the log let go on the first refresh —
+ * which is the same as never scrolling on its own at all. Now `stick` is
+ * written by the scroll handler, that is, by the reader, and the effect only
+ * obeys it. Setting `scrollTop` fires a scroll of its own that puts `stick`
+ * back to true, which is exactly right.
+ *
  * @param props - Log props.
  * @param props.lines - Lines emitted so far, in order.
  * @return The rendered log.
  */
 function Log({ lines }: { lines: string[] }) {
   const box = useRef<HTMLPreElement>(null);
+  /** Whether the reader is parked at the end and wants to be carried along. */
+  const stick = useRef(true);
   const [open, setOpen] = useState(true);
 
   useEffect(() => {
     const element = box.current;
-    if (!element) return;
-    const atBottom =
-      element.scrollHeight - element.scrollTop - element.clientHeight < 40;
-    if (atBottom) element.scrollTop = element.scrollHeight;
-  }, [lines]);
+    if (!element || !stick.current) return;
+    element.scrollTop = element.scrollHeight;
+  }, [lines, open]);
 
   if (!lines.length) return null;
 
   return (
     <div className="mt-3">
-      <LinkButton onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+      <LinkButton
+        onClick={() => {
+          // Reopening the log means wanting to see it, and the box comes back
+          // scrolled to the top because it was unmounted: without this it opens
+          // showing the beginning of a cycle that is halfway through.
+          if (!open) stick.current = true;
+          setOpen((value) => !value);
+        }}
+        aria-expanded={open}
+      >
         {open ? "Ocultar" : "Ver"} el log ({lines.length} líneas)
       </LinkButton>
       {open && (
         <Block
           ref={box}
+          onScroll={(event) => {
+            const element = event.currentTarget;
+            stick.current =
+              element.scrollHeight - element.scrollTop - element.clientHeight <
+              LOG_BOTTOM_SLACK;
+          }}
           // `aria-live` polite and not assertive: there are hundreds of lines and
           // a screen reader would announce them all.
           aria-live="polite"

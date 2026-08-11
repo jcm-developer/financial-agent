@@ -191,6 +191,8 @@ def command_check(settings: Settings) -> int:
         from src.db import Database
         from src.sim_broker import SimBroker
 
+        money = market_calendar.get_market(settings.market).currency_symbol
+
         with Database(path=settings.db_path) as database:
             portfolio_id = database.ensure_portfolio(
                 name=settings.portfolio_name,
@@ -203,6 +205,7 @@ def command_check(settings: Settings) -> int:
                 initial_cash=settings.initial_budget,
                 slippage_bps=settings.sim_slippage_bps,
                 extra_commission=settings.sim_commission,
+                currency_symbol=money,
             )
             account = broker.get_account_state()
             fills = database.query(
@@ -211,7 +214,6 @@ def command_check(settings: Settings) -> int:
             )[0]["n"]
 
         print(f"  OK  sin cuenta de broker: la contabilidad es local")
-        money = market_calendar.get_market(settings.market).currency_symbol
         print(f"      efectivo={money}{account.cash:,.2f}  "
               f"equity={money}{account.equity:,.2f}")
         print(f"      posiciones={len(account.positions)}  ejecuciones registradas={fills}")
@@ -321,8 +323,12 @@ def command_status(settings: Settings) -> int:
     be valued: the simulator has no data source of its own, it uses the same
     prices the analyst sees.
     """
+    from src import market_calendar
     from src.db import Database
     from src.sim_broker import Quote, SimBroker
+
+    market = market_calendar.get_market(settings.market)
+    money = market.currency_symbol
 
     with Database(path=settings.db_path) as database:
         portfolio_id = database.ensure_portfolio(
@@ -337,6 +343,7 @@ def command_status(settings: Settings) -> int:
             initial_cash=settings.initial_budget,
             slippage_bps=settings.sim_slippage_bps,
             extra_commission=settings.sim_commission,
+            currency_symbol=money,
         )
         held = broker.held_symbols()
         if held:
@@ -358,11 +365,6 @@ def command_status(settings: Settings) -> int:
                 for symbol, snapshot in snapshots.items()
             })
         account = broker.get_account_state()
-
-    from src import market_calendar
-
-    market = market_calendar.get_market(settings.market)
-    money = market.currency_symbol
 
     _print_header(
         f"Cuenta ({settings.portfolio_name}, {settings.mode}, {market.currency})"

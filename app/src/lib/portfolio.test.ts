@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { PositionRow } from "@/api/types";
-import { summarizeOpen } from "@/lib/portfolio";
+import { splitExitReason, summarizeOpen } from "@/lib/portfolio";
 
 /**
  * The totals of the open book, which are checked here because they are exactly
@@ -158,5 +158,38 @@ describe("summarizeOpen", () => {
     ]);
 
     expect(summary.invested).toBe(0.3);
+  });
+});
+
+describe("splitExitReason", () => {
+  it("takes the rule out of the brackets and leaves the prose behind", () => {
+    const { rule, detail } = splitExitReason(
+      "[llm_exit] La accion ha roto la zona de soporte tecnico.",
+    );
+
+    expect(rule).toBe("llm_exit");
+    expect(detail).toBe("La accion ha roto la zona de soporte tecnico.");
+  });
+
+  it("leaves the rule null when nothing declares one", () => {
+    // What `Database.close_position` writes when reconciling against the broker:
+    // plain text, no brackets. Reading a rule out of it would invent one.
+    const { rule, detail } = splitExitReason(
+      "reconciliacion: la posicion no existe en el broker",
+    );
+
+    expect(rule).toBeNull();
+    expect(detail).toBe("reconciliacion: la posicion no existe en el broker");
+  });
+
+  it("gives an empty detail when the reason is only the rule", () => {
+    // No detail means no toggle on the row: nothing invites a click that would
+    // unfold nothing.
+    expect(splitExitReason("[stop_loss]")).toEqual({ rule: "stop_loss", detail: "" });
+  });
+
+  it("survives a position that was closed without a reason", () => {
+    expect(splitExitReason(null)).toEqual({ rule: null, detail: "" });
+    expect(splitExitReason("   ")).toEqual({ rule: null, detail: "" });
   });
 });

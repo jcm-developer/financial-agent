@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-10 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo)
+Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo)
 
 ---
 
@@ -2468,6 +2468,71 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       preocupante.
 
       **665 tests de Python en verde, 50 del frontend, typecheck limpio.**
+
+- [x] **F10.7** **El tercer relapso de FE.8, y la mitad de Posiciones que F10.6 dejó atrás.**
+      Los dos salieron de mirar la misma pantalla: el log del ciclo escribía «P&L -37.03 USD»
+      en un perfil europeo, y la tabla de cerradas seguía volcando la prosa del analista
+      dentro de una celda.
+
+      ⚠️ **La divisa se le escapó a FE.8 dos veces y a FE.14 otra, y siempre por el mismo
+      mecanismo:** el símbolo se derivaba en el sitio donde se usaba, así que cada sitio
+      nuevo nacía sin él. FE.8 arregló `Settings.describe()` y los cuatro comandos, FE.14 el
+      veredicto de riesgo y el resumen del ciclo, y quedaban dos líneas de log —la de VENTA
+      en [src/cycle.py](src/cycle.py) y la de creación de cuenta en
+      [src/sim_broker.py](src/sim_broker.py)—, que además son texto de pantalla porque el log
+      del ciclo se enseña tal cual en Ciclos. **El arreglo es dejar de derivarlo:**
+      `TradingCycle` resuelve `currency_symbol` una vez en `__init__` y las cuatro cifras
+      salen de ahí; `SimBroker` lo recibe como parámetro. Se le da **por defecto la cadena
+      vacía y no `"$"`**, y es la decisión que importa: una cifra sin unidad está incompleta,
+      pero una con la unidad equivocada es mentira, y es justo la mentira que ya ha habido
+      que venir a arreglar tres veces. El «capital final» del cierre de experimento se
+      aprovecha para llevarlo también.
+
+      **La tabla de cerradas se quedó en la decisión de F4.7 cuando F10.6 movió la de
+      abiertas.** El `exit_reason` de un `llm_exit` es el párrafo entero del analista, así
+      que una sola posición cerrada convertía la fila de 48 px en uno de siete líneas —el
+      destrozo que F10.6 describe, en la otra mitad de la misma pantalla—. Y el `max-w-sm`
+      que había en la celda no lo estaba conteniendo: **una `<table>` con el layout `auto`
+      por defecto ignora un `max-width` sobre un `<td>`**, de modo que la columna se llevaba
+      lo que el párrafo pidiera. Ahora la fila se pliega igual que la tesis, con el mismo
+      `aria-expanded` sobre el símbolo y el mismo `<DetailRow>`.
+
+      **La columna que queda se llama «Regla» y no «Motivo»**, porque lo que enseña es el
+      identificador (`llm_exit`, `stop_loss`) y en Riesgo ese mismo identificador ya tiene
+      esa cabecera y ese `<code>`. Una regla es una etiqueta y se compara bajando por la
+      columna; un párrafo no. Se descartó truncar la prosa a una línea con `line-clamp`: deja
+      las dos tablas leyendo prosa de dos maneras distintas, que es exactamente lo que había.
+
+      El troceo vive en `splitExitReason` ([app/src/lib/portfolio.ts](app/src/lib/portfolio.ts))
+      y no en la página, para poder fijarlo con tests. **No toda razón lleva regla:** una
+      posición cerrada por reconciliación se guarda como texto plano sin corchetes
+      ([src/db.py](src/db.py)), así que `rule` vuelve nulo y el texto entero se pliega.
+      Inventarle una regla sería ponerle a la base palabras que no dijo.
+
+      **716 tests de Python en verde, 78 del frontend (4 nuevos), typecheck limpio.**
+
+- [x] **F10.8** **El log en vivo no bajaba solo, y llevaba sin hacerlo desde F4.7.** La regla
+      —«solo baja solo si ya estabas abajo», para que subir a leer una línea no te devuelva
+      al final— es la correcta y se mantiene entera. Lo que estaba mal era **cómo se
+      averiguaba si estabas abajo**: se medía la distancia al final *dentro del efecto*, o
+      sea cuando el texto nuevo ya estaba en el DOM y ya había alejado el final. Un sondeo
+      trae varias líneas de golpe y cada una se parte en dos o tres al ajustarse al ancho, de
+      modo que la distancia superaba cualquier umbral razonable y el enganche se soltaba en
+      el primer refresco. Con el umbral en 40 px o en 400 daba igual: el error no era el
+      número.
+
+      **Ahora el enganche lo escribe quien lee, no el efecto.** Un `onScroll` sobre el
+      bloque apunta en un ref si el lector está al final, y el efecto se limita a obedecerlo.
+      Que `scrollTop` dispare a su vez un scroll y vuelva a poner el ref a `true` no es un
+      efecto secundario que haya que evitar: es justo lo que se quiere decir. El umbral baja
+      a 24 px —una línea de `text-code`— porque ya no tiene que absorber el texto entrante,
+      solo el redondeo de `scrollHeight`, y así una muesca de rueda basta para soltarse.
+
+      **Al reabrirlo se engancha otra vez**, porque el bloque se desmonta al ocultarlo y
+      vuelve con `scrollTop` a cero: sin eso, abrir el log de un ciclo que va por la mitad lo
+      enseñaba por el principio.
+
+      **78 tests del frontend en verde, typecheck limpio.**
 
 ### F9 — Futuro (no bloquea)
 

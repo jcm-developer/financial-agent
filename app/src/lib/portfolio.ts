@@ -131,6 +131,40 @@ export function summarizeOpen(rows: readonly PositionRow[]): OpenSummary {
   };
 }
 
+/** An `exit_reason` taken apart: the rule that fired and the prose explaining it. */
+export interface ExitReason {
+  /** The rule, `stop_loss` or `llm_exit`, or null when the text declares none. */
+  rule: string | null;
+  /** The rest of the text, which is a paragraph when the analyst wrote it. */
+  detail: string;
+}
+
+/**
+ * Splits `[stop_loss] La accion ha perdido el soporte…` into its two halves.
+ *
+ * The reason travels as one string because that is what fits in the
+ * `positions.exit_reason` column, and [src/cycle.py](src/cycle.py) writes it as
+ * the rule in brackets followed by the analyst's paragraph. On screen they are
+ * two different things: a rule is a label and reads down a column, prose is not
+ * and does not.
+ *
+ * **Not every reason carries a rule.** A position closed by reconciliation is
+ * saved as plain text with no bracket ([src/db.py](src/db.py)), so `rule` comes
+ * back null and the whole string is detail. Inventing a rule for it would put a
+ * word in the database's mouth.
+ *
+ * @param text - The stored `exit_reason`, or null when there is none.
+ * @return The rule if the string declares one, and the rest as detail.
+ */
+export function splitExitReason(text: string | null | undefined): ExitReason {
+  const value = text?.trim() ?? "";
+  const match = /^\[([^\]]+)\]\s*([\s\S]*)$/.exec(value);
+  if (!match) return { rule: null, detail: value };
+  // The groups are not optional in the pattern, but `noUncheckedIndexedAccess`
+  // cannot know that and it is right not to trust a regex to stay as written.
+  return { rule: (match[1] ?? "").trim(), detail: (match[2] ?? "").trim() };
+}
+
 /**
  * Two decimals, which is where the API rounds too.
  *

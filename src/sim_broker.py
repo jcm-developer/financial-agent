@@ -65,6 +65,7 @@ class SimBroker:
         initial_cash: float,
         slippage_bps: float = 5.0,
         extra_commission: float = 0.0,
+        currency_symbol: str = "",
     ) -> None:
         self.db = database
         self.account_id = portfolio_id
@@ -72,6 +73,11 @@ class SimBroker:
         #: Surcharge on top of the bank's tariff, from `agent_settings`. Zero --
         #: the default -- means the standard and nothing else.
         self.extra_commission = extra_commission
+        #: The profile's currency, for the one log line that prints an amount.
+        #: The default is empty and not "$" on purpose (FE.8): a figure with no
+        #: unit is incomplete, but one with the wrong unit is a lie, and this is
+        #: the mistake FE.14 had already had to come back and fix twice.
+        self.currency_symbol = currency_symbol
         self.paper = True
         self._quotes: dict[str, Quote] = {}
         self._ensure_account(initial_cash)
@@ -100,7 +106,8 @@ class SimBroker:
              timestamp, timestamp),
         )
         log.info(
-            "Cuenta simulada creada con %.2f USD de efectivo inicial.", initial_cash
+            "Cuenta simulada creada con %.2f %s de efectivo inicial.",
+            initial_cash, self.currency_symbol,
         )
 
     def _account_row(self) -> dict:

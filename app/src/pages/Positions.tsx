@@ -24,7 +24,7 @@ import {
   dateTime,
   percent,
 } from "@/lib/format";
-import { summarizeOpen, type OpenSummary } from "@/lib/portfolio";
+import { splitExitReason, summarizeOpen, type OpenSummary } from "@/lib/portfolio";
 import { cn } from "@/lib/utils";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 import { useTitle } from "@/layout/useTitle";
@@ -33,6 +33,9 @@ const LIMIT = 50;
 
 /** Columns of the open table, so the unfolded thesis spans all of them. */
 const OPEN_COLUMNS = 8;
+
+/** Same, for the closed table and its unfolded exit reason. */
+const CLOSED_COLUMNS = 7;
 
 /**
  * Open and closed positions (F4.7).
@@ -115,7 +118,7 @@ export function Positions() {
                   <Th numeric>Entrada</Th>
                   <Th numeric>Salida</Th>
                   <Th numeric>P&L</Th>
-                  <Th>Motivo</Th>
+                  <Th>Regla</Th>
                 </TableHead>
                 <tbody>
                   {page.items.map((row) => (
@@ -332,30 +335,78 @@ function OpenPositionTableRow({ row, symbol }: { row: PositionRow; symbol: strin
 }
 
 /**
- * One row of the closed-positions table, which shows exit price and reason
+ * One row of the closed-positions table, which shows exit price and rule
  * instead of the stop.
+ *
+ * **The reason folds away, for the same reason the thesis does** (F10.6): an
+ * `llm_exit` carries the analyst's whole paragraph, so one closed position was
+ * turning a 48 px row into a seven-line one and pushing the figures —the exit
+ * price, the realised P&L— off the first screenful. F10.6 fixed that above and
+ * left this table on the old F4.7 decision, so the two halves of the same
+ * screen were reading prose in two different ways.
+ *
+ * The `max-w-sm` that used to sit on the cell was not holding it back either:
+ * a `<table>` with the default `auto` layout ignores a max-width on a `<td>`,
+ * so the column took whatever the paragraph asked for.
+ *
+ * What stays in the column is the rule, and it is called **Regla** and not
+ * «Motivo» to match Riesgo, where the same identifier already has that header.
+ * A rule is a label and reads down the column; the paragraph is prose and does
+ * not.
  *
  * @param props - Row props.
  * @param props.row - The position.
  * @param props.symbol - Currency symbol of the profile's market, never assumed.
- * @return The rendered row.
+ * @return The rendered row, plus its detail row when unfolded.
  */
 function ClosedPositionTableRow({ row, symbol }: { row: PositionRow; symbol: string }) {
+  const [open, setOpen] = useState(false);
+  const { rule, detail } = splitExitReason(row.exit_reason);
+
   return (
-    <Row>
-      <Td>
-        <span className="font-medium">{row.symbol}</span>
-      </Td>
-      <Td className="whitespace-nowrap" title={row.closed_at ?? undefined}>
-        {dateTime(row.closed_at)}
-      </Td>
-      <Td numeric>{quantity(row.qty)}</Td>
-      <Td numeric>{money(row.entry_price, symbol)}</Td>
-      <Td numeric>{money(row.exit_price, symbol)}</Td>
-      <Td numeric className={signClass(row.realized_pnl)}>
-        {signedMoney(row.realized_pnl, symbol)}
-      </Td>
-      <Td className="max-w-sm text-caption text-text-secondary">{row.exit_reason ?? "—"}</Td>
-    </Row>
+    <>
+      <Row expanded={Boolean(detail) && open}>
+        <Td>
+          {detail ? (
+            <LinkButton
+              variant="subtle"
+              className="inline-flex items-center gap-1 font-medium"
+              aria-expanded={open}
+              title={open ? "Ocultar el motivo del cierre" : "Ver el motivo del cierre"}
+              onClick={() => setOpen((value) => !value)}
+            >
+              <ChevronRight
+                aria-hidden
+                className={cn(
+                  "size-3.5 shrink-0 transition-transform duration-150",
+                  open && "rotate-90",
+                )}
+              />
+              {row.symbol}
+            </LinkButton>
+          ) : (
+            <span className="font-medium">{row.symbol}</span>
+          )}
+        </Td>
+        <Td className="whitespace-nowrap" title={row.closed_at ?? undefined}>
+          {dateTime(row.closed_at)}
+        </Td>
+        <Td numeric>{quantity(row.qty)}</Td>
+        <Td numeric>{money(row.entry_price, symbol)}</Td>
+        <Td numeric>{money(row.exit_price, symbol)}</Td>
+        <Td numeric className={signClass(row.realized_pnl)}>
+          {signedMoney(row.realized_pnl, symbol)}
+        </Td>
+        <Td>
+          <code className="text-caption">{rule ?? "—"}</code>
+        </Td>
+      </Row>
+
+      {detail && open && (
+        <DetailRow columns={CLOSED_COLUMNS}>
+          <p className="text-caption leading-snug text-text-secondary">{detail}</p>
+        </DetailRow>
+      )}
+    </>
   );
 }

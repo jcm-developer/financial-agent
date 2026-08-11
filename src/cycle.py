@@ -151,6 +151,10 @@ class TradingCycle:
         self.analyst = analyst
         self.risk = risk_manager
         self.portfolio_id = portfolio_id
+        #: Resolved once and kept here instead of asking the calendar at each
+        #: use: it was being derived in three places and forgotten in a fourth,
+        #: which is how the sell line ended up printing "USD" in a European book.
+        self.currency_symbol = market_calendar.get_market(settings.market).currency_symbol
 
     # ------------------------------------------------------------------
 
@@ -174,6 +178,7 @@ class TradingCycle:
             initial_cash=settings.initial_budget,
             slippage_bps=settings.sim_slippage_bps,
             extra_commission=settings.sim_commission,
+            currency_symbol=market_calendar.get_market(settings.market).currency_symbol,
         )
 
         return cls(
@@ -214,9 +219,7 @@ class TradingCycle:
 
     def run(self) -> CycleReport:
         settings = self.settings
-        report = CycleReport(
-            currency_symbol=market_calendar.get_market(settings.market).currency_symbol,
-        )
+        report = CycleReport(currency_symbol=self.currency_symbol)
 
         # The calendar is consulted before spending anything: with no new bars,
         # analysing would mean repeating the previous cycle's decisions while
@@ -384,9 +387,7 @@ class TradingCycle:
         is what it is— and can be told apart by its `experiment_closed` rule.
         """
         settings = self.settings
-        report = CycleReport(
-            currency_symbol=market_calendar.get_market(settings.market).currency_symbol,
-        )
+        report = CycleReport(currency_symbol=self.currency_symbol)
 
         portfolio_id = self.portfolio_id or self.db.ensure_portfolio(
             name=settings.portfolio_name,
@@ -514,8 +515,8 @@ class TradingCycle:
             log.error("No se pudo marcar el cierre como finalizado: %s", exc)
 
         log.info(
-            "Experimento cerrado: %d posiciones liquidadas, capital final %.2f.",
-            report.exits_forced, report.equity_end,
+            "Experimento cerrado: %d posiciones liquidadas, capital final %.2f %s.",
+            report.exits_forced, report.equity_end, self.currency_symbol,
         )
         return report
 
@@ -962,8 +963,9 @@ class TradingCycle:
                           symbol, exc)
                 report.errors.append(f"Cierre de {symbol} sin registrar: {exc}")
             log.info(
-                "VENTA %s: %g acciones a ~%.2f, P&L %+.2f USD [%s]",
-                symbol, signal.qty, exit_price, realized, signal.rule,
+                "VENTA %s: %g acciones a ~%.2f, P&L %+.2f %s [%s]",
+                symbol, signal.qty, exit_price, realized,
+                self.currency_symbol, signal.rule,
             )
         return True
 
