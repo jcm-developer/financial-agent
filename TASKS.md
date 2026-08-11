@@ -3607,6 +3607,19 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       de nada, que es el dato interesante: **no es un prompt que falte escribir, es un modelo que no
       discrimina**. `meta/llama-3.3-70b-instruct` a temperatura 0,2.
 
+      **Y en el primer ciclo con el prompt nuevo (F9.17) no mejoró, cambió de constante.** De
+      11 propuestas: `horizon_days` 45 en 11 de 11 —eso es obediencia al prompt, no
+      discriminación—, convicción 60 en 9 con un 70 y un 50 sueltos, y
+      **`suggested_weight_pct` = 8,0 en las 11**. Lo único que sí varía sigue siendo el par
+      stop/objetivo, que va con la volatilidad de cada activo.
+
+      ⚠️ **El peso constante tiene una consecuencia medible sobre el mes, y no es pequeña:**
+      con 8 % pedido y siete posiciones, la cartera se queda en **~56 % invertida** y 44 % del
+      capital pasa el mes en caja. El tope del perfil es 14 % y no ata, porque el modelo pide
+      menos; subirlo no cambiaría nada. Y el factor de convicción de F9.10 tampoco entra,
+      porque F9.13 los hizo excluyentes y aquí siempre llega un peso. O sea que **quién decide
+      cuánto se invierte es un número que el modelo repite**, no una decisión de cartera.
+
       **Lo que esto rompe aguas arriba, y por eso importa más de lo que parece:**
       - `min_conviction` no es un filtro sino un interruptor: a 50 pasa todo, a 65 no pasa nada.
       - El factor de convicción de F9.10 no modula nada, porque la convicción es constante (y hoy
