@@ -5,9 +5,10 @@ en qué orden, con qué datos y en qué momento. Es la referencia sobre la que s
 construye lo que venga después.
 
 Está escrito el 2026-08-10, con el primer experimento (`eu-05-muy-agresivo`)
-arrancando ese mismo día. Cuando algo aquí deje de ser cierto, se corrige aquí
-—no en un comentario suelto—, porque es el sitio donde se mira antes de tocar el
-ciclo.
+arrancando ese mismo día, y revisado el **2026-08-11** al separar el reloj del
+precio del de los indicadores (F9.14, sección 6). Cuando algo aquí deje de ser
+cierto, se corrige aquí —no en un comentario suelto—, porque es el sitio donde se
+mira antes de tocar el ciclo.
 
 ---
 
@@ -53,8 +54,15 @@ nada.
   ingestor  ──cada minuto──►  quotes_live + bars_1m  ──►  PANTALLA
                                                      └──►  histórico para backtesting (F9.2)
 
-  ciclo  ──a su hora──►  descarga propia de Yahoo  ──►  bar_cache (1h o 1d)  ──►  ANALISTA
+  ciclo  ──a su hora──►  descarga propia de Yahoo  ──►  bar_cache  ──┬─► 1h: PRECIO y EJECUCION
+                                                                     └─► 1d: INDICADORES
 ```
+
+⚠️ **Y dentro del ciclo hay un tercer reloj desde F9.14, que es el que se
+confunde con este.** El de arriba separa *quién descarga*: el ingestor para la
+pantalla, el ciclo para el agente. El de F9.14 separa, ya dentro del ciclo, *para
+qué sirve cada barra*: `bar_interval` es el reloj del **precio y la ejecución**, y
+los **indicadores se calculan siempre en diario**. Está en la sección 6.
 
 **El agente no lee `bars_1m` ni `quotes_live`.** Ni `cycle.py`, ni
 `universe_data.py`, ni `market_data.py` los tocan. La ingesta de cada minuto
@@ -63,8 +71,9 @@ antigüedad del dato— y construye el histórico de minuto que hoy no usa nadie
 que existe porque Yahoo solo sirve ~30 días hacia atrás: si no se guarda ahora, no
 se recupera.
 
-Los datos del analista los descarga **el propio ciclo**, en su `bar_interval`,
-incrementalmente sobre lo que ya tuviera `bar_cache`.
+Los datos del analista los descarga **el propio ciclo**, incrementalmente sobre lo
+que ya tuviera `bar_cache`: las diarias de todo el universo —que el cribado
+necesita igualmente— y las de `bar_interval` solo para los seleccionados.
 
 **Consecuencias prácticas:**
 
@@ -87,6 +96,7 @@ modelo.
 3. Reconciliación  broker ↔ base: lo que el broker dice que hay manda
 4. Snapshot        copia de los 41 parámetros → cycles.settings_json
 5. Screener        89 símbolos → 20 candidatos       DETERMINISTA, sin LLM, segundos
+                   (criba con barras DIARIAS, que son también las de los indicadores)
 6. Salidas obligatorias  stop y objetivo de cada posición abierta   SIN LLM
 7. Revisión de salidas   1 llamada por posición abierta      sell | hold
 8. Entradas             1 llamada por candidato              buy  | hold
@@ -156,9 +166,12 @@ Es la parte más sutil y la que evita engañarse solo.
 
 | Precio | Qué es | Para qué |
 |---|---|---|
-| `price` | **Cierre de la última barra COMPLETA** | Lo único que ven el analista y el risk manager. Sobre esto se dimensiona |
+| `price` | **Cierre de la última barra COMPLETA de `bar_interval`** | Lo único que ven el analista y el risk manager como precio. Sobre esto se dimensiona |
 | `fill_price` | **Apertura de la barra siguiente** | Donde se ejecuta, más deslizamiento en contra y la comisión del banco |
 | `mark_price` | Último precio conocido | Solo para valorar la cartera |
+
+Los tres salen del reloj de `bar_interval`. **Los indicadores no** (sección 6): van
+siempre en diario, y el bundle lleva su propio cierre de referencia.
 
 **La última barra nunca se usa para decidir**, porque puede estar a medias si el
 mercado sigue abierto. Decidir y ejecutar con el mismo cierre regalaría el hueco
@@ -200,18 +213,56 @@ Esa regla es lo que hace **interpretable** el experimento: hoy, si el modelo cit
 un catalizador, es una alucinación y se ve en la pantalla de Decisiones. Añadir
 noticias obligaría a rediseñar esa garantía (ver **F9.7**).
 
-⚠️ **Las ventanas están en BARRAS, no en días, y varios nombres lo contradicen.**
-`return_60d_pct` son 60 barras (~7 sesiones con barras horarias);
-`pct_from_52w_high` son 252 barras (~30 sesiones), no 52 semanas. Los nombres
-vienen del diseño con barras diarias, donde sí eran ciertos.
+### Los indicadores son diarios, el precio no (F9.14)
 
-**Resuelto el 2026-08-10 sin renombrar las claves**: cuando el intervalo no es
-diario, el prompt lleva una nota que dice exactamente cuántas barras es cada
-ventana. Las claves no se tocan porque se serializan en
-`market_snapshots.indicators` y se consultan luego por SQL; la nota cuesta cuatro
-líneas y no engaña a nadie. Decir solo «calculados sobre barras horarias» no
-bastaba: el nombre de la clave invita a leerlo al revés, y la tesis se apoya justo
-en esas cifras.
+⚠️ **Es la distinción que hay que tener clara antes de leer cualquier indicador
+del histórico**, y es nueva del 2026-08-11:
+
+| | Reloj | Quién lo decide |
+|---|---|---|
+| **Precio de referencia**, de ejecución y de valoración | `bar_interval` (hoy `1h`) | el perfil |
+| **Los ~30 indicadores y las 10 barras** que ve el modelo | **siempre diario** | el código (`market_data.INDICATOR_INTERVAL`) |
+
+**Por qué.** Hasta el 2026-08-11 eran la misma serie, así que con `bar_interval=1h`
+el `atr_14` del prompt medía 14 **horas**: medido sobre 174 decisiones, **4,08
+veces** más pequeño que el diario (0,51 % del precio contra 2,14 %). Y el ATR es
+la vara con la que `risk.py` sitúa el stop —`1,2× ATR` en el perfil agresivo—, así
+que el stop caía en **−0,61 %** para un horizonte que el propio analista declara de
+7 a 14 días. `volatility_20d_pct` estaba mal por otro **4,19×**, porque
+`annualized_volatility` multiplica por √252 sea cual sea el intervalo: anualizaba
+20 horas como si fueran 20 días.
+
+**Qué se gana y qué no se pierde.** El reloj horario sigue entero para lo que
+sirve: precio, ejecución y **comprobar stops y objetivos ocho veces al día, gratis**
+(sección 4). Lo único que pasó a diario es *el contexto con el que se juzga*. Como
+el precio de referencia sigue moviéndose cada hora, los ocho ciclos del día siguen
+proponiendo cosas distintas: no se convierte en un ciclo diario disfrazado.
+
+⚠️ **El bundle lleva su propio `price`, y son dos números distintos a propósito.**
+`indicators["price"]` es el último cierre diario —el que todas las bandas, medias y
+distancias del bundle usan como referencia— y `snapshot.price` es el precio actual.
+Sobrescribir uno con el otro haría que las cifras del bundle no cuadraran entre
+ellas. El prompt **precalcula la diferencia** («el precio actual está un +1,00 %
+respecto de ese cierre»), que es la misma regla que siguen las señales booleanas:
+la aritmética es donde este modelo falla más.
+
+Queda una incoherencia menor y apuntada: `atr_pct`, `above_sma_50` y
+`golden_cross` se calculan contra el cierre diario, no contra el precio de
+referencia. Mismo día, diferencia pequeña, pero es real.
+
+### Lo que esto arregló de los nombres de las ventanas
+
+⚠️ **Las ventanas están en BARRAS, no en días, y varios nombres lo contradicen.**
+`return_60d_pct` son 60 barras; `pct_from_52w_high` son 252 barras, no 52 semanas.
+Los nombres vienen del diseño con barras diarias, donde sí eran ciertos.
+
+**Con los indicadores en diario vuelven a ser ciertos**, que es la tercera cosa
+que F9.14 arregló de una vez. La solución del 2026-08-10 —una nota en el prompt
+diciendo cuántas barras es cada ventana cuando el intervalo no era diario— sigue en
+el código (`analyst.WINDOW_UNITS_NOTE`) y **hoy no se imprime nunca**. No se borra:
+es lo que mantiene el prompt honesto si el intervalo de los indicadores se vuelve a
+mover. Las claves tampoco se tocan, porque se serializan en
+`market_snapshots.indicators_json` y se consultan luego por SQL.
 
 **Y la divisa se pasa, nunca se asume** (FE.8). El prompt escribía `USD` en los
 cuatro precios que enseña, así que un experimento europeo le contaba al modelo que
@@ -341,9 +392,12 @@ Para no volver a preguntárselo:
 3. El **planificador** lanza un ciclo a cada hora configurada del perfil.
 4. Cada ciclo: screener determinista criba 89 → 20; el modelo opina sobre esos 20
    y sobre cada posición abierta; el risk manager decide; el broker ejecuta.
-5. Se decide con la **última barra completa** y se ejecuta en la **apertura de la
-   siguiente**, con deslizamiento en contra y la comisión del banco por cada lado
-   (4,11 € en españolas, 3,00 € en el resto de Europa).
-6. Todo queda registrado, incluidos los parámetros de ese ciclo.
-7. Pausar detiene los ciclos pero **no cierra nada**: el resultado es no realizado
+5. Se decide con la **última barra completa** de `bar_interval` y se ejecuta en la
+   **apertura de la siguiente**, con deslizamiento en contra y la comisión del banco
+   por cada lado (4,11 € en españolas, 3,00 € en el resto de Europa).
+6. **Los indicadores van siempre en diario**, aunque el precio vaya en horario: el
+   reloj rápido es para el precio, la ejecución y vigilar stops; el lento, para
+   juzgar (F9.14, sección 6).
+7. Todo queda registrado, incluidos los parámetros de ese ciclo.
+8. Pausar detiene los ciclos pero **no cierra nada**: el resultado es no realizado
    hasta que exista **F5.8**.

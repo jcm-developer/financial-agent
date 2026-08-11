@@ -20,7 +20,7 @@ from src.db import Database
 from src.indicators import Bar
 from src.llm import LLMResponse
 from src.market_calendar import get_market
-from src.market_data import build_snapshot
+from src.market_data import INDICATOR_INTERVAL, build_snapshot
 from src.risk import RiskManager
 from src.sim_broker import SimBroker
 
@@ -122,7 +122,17 @@ def make_cycle(
     )
     return TradingCycle(
         settings=settings, broker=broker, market_data=market_data,
-        database=db, analyst=Analyst(llm, interval=settings.bar_interval),
+        database=db,
+        # Wired like `TradingCycle.build`, with the two clocks of F9.14. The
+        # helper's `bar_interval` is `1d`, so here both are the same and the
+        # snapshots `StubMarketData` builds carry one series: what the cycle's
+        # tests are about is the cycle, not the interval split, which has its own
+        # tests in `test_market_data.py`.
+        analyst=Analyst(
+            llm,
+            price_interval=settings.bar_interval,
+            indicator_interval=INDICATOR_INTERVAL,
+        ),
         # Wired like `TradingCycle.build`: the risk manager gets the profile's
         # currency, because its verdict text is stored and shown as it is.
         risk_manager=RiskManager(

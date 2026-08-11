@@ -130,6 +130,13 @@ INTERVAL_LABELS = {
     "1h": ("barras horarias", "HORAS DE COTIZACION"),
 }
 
+#: Singular of each bar label, for the line that names the reference price. Same
+#: reason as `SINGULAR_WINDOW`: the model reads it.
+SINGULAR_BAR = {
+    "barras diarias": "sesion",
+    "barras horarias": "hora de cotizacion",
+}
+
 #: Singular of each window label. It used to be `window_label.rstrip("S")`, which
 #: gave "SESIONE" and "HORAS DE COTIZACION" — the model reads that line, and a
 #: prompt that writes badly is a prompt that is being read carelessly.
@@ -157,6 +164,20 @@ Aqui, con {bar_label}: `return_20d_pct` y `volatility_20d_pct` son 20 barras,
 `return_60d_pct` son 60, `sma_200` son 200, y `high_52w`, `low_52w` y
 `pct_from_52w_high` son 252 barras. NO son dias ni semanas."""
 
+#: Note handed to the model when the price clock is faster than the indicators
+#: (F9.14), which is the normal case now: `bar_interval=1h` with daily indicators.
+#:
+#: It exists because the bundle carries its own `price` —the daily close every
+#: band and distance in it refers to— while the reference price is the current
+#: intraday one. Two figures called price and no explanation would be the model's
+#: problem to reconcile, and it would reconcile it by guessing. So the gap is
+#: **precomputed**, which is the same rule the derived boolean signals follow:
+#: arithmetic is where this model goes wrong most often.
+PRICE_CONTEXT_NOTE = """CONTEXTO: los indicadores estan calculados sobre {bar_label} y se refieren al
+ultimo cierre diario completo, {context_price:.2f} {currency}. El precio de arriba
+es el actual, {gap:+.2f}% respecto de ese cierre: usa los indicadores para juzgar
+la situacion tecnica y el precio actual para situar stop y objetivo."""
+
 
 class Analyst:
     """One analyst per cycle: the counters belong to that run, not to the process.
@@ -171,13 +192,28 @@ class Analyst:
         self,
         llm: LLMClient,
         *,
-        interval: str = "1d",
+        price_interval: str = "1d",
+        indicator_interval: str = "1d",
         currency: str = "USD",
         commission_for: Callable[[str], float] | None = None,
         max_position_pct: float | None = None,
     ) -> None:
+        """Two intervals and not one, since F9.14.
+
+        `price_interval` is the profile's `bar_interval` and names the reference
+        price; `indicator_interval` is what the technical bundle was computed on
+        and is `market_data.INDICATOR_INTERVAL` — daily — for everything the cycle
+        builds today.
+
+        **The parameter is kept rather than hardcoded** because the units note
+        below is only correct while it is told the truth: the day someone reasons
+        on another interval again, the prompt says so instead of the code saying
+        one thing and the constant another. It is also what makes `WINDOW_UNITS_NOTE`
+        live code rather than a comment about the past.
+        """
         self.llm = llm
-        self.interval = interval
+        self.price_interval = price_interval
+        self.indicator_interval = indicator_interval
         #: What one leg costs, so the prompt can state it (F9.9). Injected for the
         #: same reason as in `RiskManager`: `cycle.py` passes the broker's own,
         #: which adds the profile's surcharge. Default is the bank's tariff and
@@ -199,7 +235,10 @@ class Analyst:
         #: same invariant the interface obeys, and it was being broken in the one
         #: place where nobody would see it — inside the prompt.
         self.currency = currency
-        self.labels = INTERVAL_LABELS.get(interval, INTERVAL_LABELS["1d"])
+        self.price_labels = INTERVAL_LABELS.get(price_interval, INTERVAL_LABELS["1d"])
+        self.labels = INTERVAL_LABELS.get(
+            indicator_interval, INTERVAL_LABELS["1d"]
+        )
         #: Times the model has been asked, including the calls that failed.
         self.calls = 0
         #: Of those, how many got no usable answer.
@@ -215,6 +254,7 @@ class Analyst:
         user_prompt = _render_entry_prompt(
             snapshot, account, self.labels, self.currency,
             self._commission_for(snapshot.symbol), self.max_position_pct,
+            self.price_labels,
         )
         self.calls += 1
         try:
@@ -266,6 +306,7 @@ class Analyst:
         user_prompt = _render_exit_prompt(
             position, snapshot, entry_thesis, stop_price, target_price,
             self.labels, self.currency, self._commission_for(position.symbol),
+            self.price_labels,
         )
         self.calls += 1
         try:
@@ -308,9 +349,12 @@ def _render_entry_prompt(
     currency: str = "USD",
     commission: float = 0.0,
     max_position_pct: float | None = None,
+    price_labels: tuple[str, str] | None = None,
 ) -> str:
     bar_label, window_label = labels
+    _, price_window_label = price_labels or labels
     units = _window_units_note(bar_label)
+    context = _price_context_note(snapshot, bar_label, price_labels, currency)
     techo = (
         f"- Peso maximo permitido por posicion: {max_position_pct:.0f}% del capital. "
         f"Es un TOPE, no un objetivo."
@@ -323,11 +367,11 @@ def _render_entry_prompt(
     return f"""\
 FECHA DE ANALISIS: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}
 ACTIVO: {snapshot.symbol}
-PRECIO DE CIERRE DE LA ULTIMA {SINGULAR_WINDOW.get(window_label, window_label)} COMPLETA: {snapshot.price:.2f} {currency}
+PRECIO DE CIERRE DE LA ULTIMA {SINGULAR_WINDOW.get(price_window_label, price_window_label)} COMPLETA: {snapshot.price:.2f} {currency}
 
 INDICADORES TECNICOS (calculados sobre {bar_label}; null = no disponible):
 {_format_indicators(snapshot.indicators)}
-{units}
+{units}{context}
 ULTIMAS 10 {window_label} (fecha, apertura, maximo, minimo, cierre, volumen):
 {_format_bars(snapshot.recent_bars)}
 
@@ -355,9 +399,11 @@ def _render_exit_prompt(
     labels: tuple[str, str],
     currency: str = "USD",
     commission: float = 0.0,
+    price_labels: tuple[str, str] | None = None,
 ) -> str:
     bar_label, window_label = labels
     units = _window_units_note(bar_label)
+    context = _price_context_note(snapshot, bar_label, price_labels, currency)
     return f"""\
 FECHA DE REVISION: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}
 POSICION ABIERTA: {position.symbol}
@@ -375,7 +421,7 @@ TESIS ORIGINAL DE LA ENTRADA:
 
 INDICADORES TECNICOS ACTUALES (sobre {bar_label}):
 {_format_indicators(snapshot.indicators)}
-{units}
+{units}{context}
 ULTIMAS 10 {window_label} (fecha, apertura, maximo, minimo, cierre, volumen):
 {_format_bars(snapshot.recent_bars)}
 
@@ -391,10 +437,43 @@ def _window_units_note(bar_label: str) -> str:
 
     It comes back with a leading newline so the caller can drop it in without a
     blank line appearing when there is nothing to say.
+
+    Since F9.14 the indicators are daily, so in practice this returns the empty
+    string — and that is the point of the change, not a reason to delete the
+    function: the note is what keeps the prompt honest if the indicator interval
+    ever moves again.
     """
     if bar_label == INTERVAL_LABELS["1d"][0]:
         return ""
     return "\n" + WINDOW_UNITS_NOTE.format(bar_label=bar_label) + "\n"
+
+
+def _price_context_note(
+    snapshot: MarketSnapshot,
+    bar_label: str,
+    price_labels: tuple[str, str] | None,
+    currency: str,
+) -> str:
+    """The gap between the reference price and the close the indicators refer to.
+
+    Only when the two clocks differ (F9.14). With one interval for both there is
+    no gap to explain and the note would be a line saying that 0,00 % is zero.
+
+    It is also skipped when the bundle carries no price of its own, which happens
+    with an empty snapshot: there would be nothing to compare against, and writing
+    a gap from a missing figure is worse than writing nothing.
+    """
+    if price_labels is None or price_labels[0] == bar_label:
+        return ""
+    context_price = snapshot.indicators.get("price")
+    if not isinstance(context_price, (int, float)) or context_price <= 0:
+        return ""
+    return "\n" + PRICE_CONTEXT_NOTE.format(
+        bar_label=bar_label,
+        context_price=context_price,
+        currency=currency,
+        gap=(snapshot.price / context_price - 1.0) * 100.0,
+    ) + "\n"
 
 
 def _format_indicators(indicators: dict[str, Any]) -> str:

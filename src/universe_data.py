@@ -5,10 +5,17 @@ the screener: `YahooMarketData` stays a stateless object that only talks to the
 network.
 
 **The two intervals are kept apart, and that is the key to this being viable.**
-The screener always sifts with DAILY bars; the analysis uses the configured
-interval. With `BAR_INTERVAL=1h`, downloading hourly bars for 503 assets would be
-some 2.5 million rows and several hundred MB, when all that is needed are those
-of the twenty that will reach the model.
+The screener always sifts with DAILY bars; the price and the execution use the
+configured interval. With `BAR_INTERVAL=1h`, downloading hourly bars for 503
+assets would be some 2.5 million rows and several hundred MB, when all that is
+needed are those of the twenty that will reach the model.
+
+**Since F9.14 the daily cache does double duty, and that is why this file got
+shorter rather than longer.** The indicators the analyst reads are always daily
+(`market_data.INDICATOR_INTERVAL`), and the daily bars of the whole universe were
+already here for the screener — so the change costs no download at all. What the
+intraday cache is for now is narrower and better named: the price to decide on and
+the bar to execute against.
 
 Cost measured with 503 assets and daily bars:
 
@@ -31,7 +38,7 @@ import logging
 from .bar_cache import BarCache
 from .config import ScreenerSettings
 from .db import Database
-from .market_data import MarketDataError, build_snapshot
+from .market_data import INDICATOR_INTERVAL, MarketDataError, build_snapshot
 from .models import MarketSnapshot
 from .screener import ScreenerLimits, ScreenerReport, load_universe, screen
 
@@ -53,9 +60,19 @@ class UniverseMarketData:
         self.lookback_days = lookback_days
         # Sifting always runs on daily bars: they are the only thing downloaded
         # for the whole universe. See the note in the header.
-        self.screen_cache = BarCache(database, interval="1d")
-        self.analysis_cache = (
-            self.screen_cache if interval == "1d" else BarCache(database, interval=interval)
+        #
+        # And since F9.14 the same cache is what the indicators are computed on,
+        # so the two names are two roles of one object rather than a duplicate:
+        # `screen_cache` is what the screener scores, `indicator_cache` is what the
+        # analyst reads. They are the same bars by construction —both daily— and
+        # keeping the alias says which of the two a line is talking about.
+        self.screen_cache = BarCache(database, interval=INDICATOR_INTERVAL)
+        self.indicator_cache = self.screen_cache
+        # The intraday cache, downloaded only for the selected symbols, is now for
+        # the price to decide on and the bar to execute against — nothing else.
+        self.price_cache = (
+            self.screen_cache if interval == INDICATOR_INTERVAL
+            else BarCache(database, interval=interval)
         )
         self.limits = ScreenerLimits(
             top_n=screener.top_n,
@@ -114,41 +131,56 @@ class UniverseMarketData:
         selected = [c.symbol for c in report.candidates]
         to_analyze = sorted(set(selected) | set(required))
 
-        # 4. If the analysis runs on another interval, only now is it downloaded
+        # 4. If the price runs on another interval, only now is it downloaded
         #    —and only for the selected ones. That is the difference between 20
         #    symbols and 503.
-        analysis_bars = screen_bars
-        if self.analysis_cache is not self.screen_cache:
+        price_bars = screen_bars
+        if self.price_cache is not self.screen_cache:
             log.info(
                 "Bajando barras de %s para los %d activos seleccionados.",
                 self.interval, len(to_analyze),
             )
-            self.analysis_cache.refresh(to_analyze, lookback_days=self.lookback_days)
-            analysis_bars = {
+            self.price_cache.refresh(to_analyze, lookback_days=self.lookback_days)
+            price_bars = {
                 symbol: bars
                 for symbol in to_analyze
-                if (bars := self.analysis_cache.get_bars(symbol, limit=bars_needed))
+                if (bars := self.price_cache.get_bars(symbol, limit=bars_needed))
             }
 
-        # 5. Snapshots only for what was selected.
+        # 5. Snapshots only for what was selected: the price in the profile's
+        #    interval, the indicators always daily (F9.14). `screen_bars` is
+        #    already the daily series, so the second one costs no download.
         snapshots: dict[str, MarketSnapshot] = {}
         for symbol in to_analyze:
-            bars = analysis_bars.get(symbol)
+            bars = price_bars.get(symbol)
             if not bars:
                 log.warning(
                     "%s no tiene barras de %s en la cache; se omite.",
                     symbol, self.interval,
                 )
                 continue
-            snapshot = build_snapshot(symbol, bars)
+            # Explicit and not `screen_bars.get(symbol)` inline: `None` means "use
+            # the price series" to `build_snapshot`, so a symbol with intraday bars
+            # and no daily ones would come back with hourly indicators and no
+            # warning — the one silent case this whole change exists to remove. A
+            # skip here lands in the cycle's SIN PRECIO path, which already leaves
+            # a `no_price` risk event.
+            context = screen_bars.get(symbol)
+            if not context:
+                log.warning(
+                    "%s no tiene barras diarias en la cache; se omite, porque los "
+                    "indicadores se calculan siempre en diario.", symbol,
+                )
+                continue
+            snapshot = build_snapshot(symbol, bars, indicator_bars=context)
             if snapshot is not None:
                 snapshots[symbol] = snapshot
 
         log.info(
             "Embudo: %d del universo -> %d candidatos + %d posiciones = %d analisis "
-            "en barras de %s.",
+            "(precio en %s, indicadores en %s).",
             len(universe_bars), len(selected), len(required), len(snapshots),
-            self.interval,
+            self.interval, INDICATOR_INTERVAL,
         )
         return snapshots
 

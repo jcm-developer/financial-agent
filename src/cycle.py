@@ -26,7 +26,7 @@ from .broker import Broker, BrokerError
 from .config import Settings
 from .db import Database, DatabaseError
 from .llm import LLMClient
-from .market_data import MarketDataError, build_market_data
+from .market_data import INDICATOR_INTERVAL, MarketDataError, build_market_data
 from .models import AccountState, ExitSignal, MarketSnapshot, Proposal
 from .risk import RiskManager
 from .sim_broker import Quote, SimBroker
@@ -188,7 +188,11 @@ class TradingCycle:
             database=database,
             analyst=Analyst(
                 llm,
-                interval=settings.bar_interval,
+                # Dos relojes, y no es un detalle de formato (F9.14): el precio va
+                # en el intervalo del perfil y los indicadores siempre en diario,
+                # asi que el prompt tiene que nombrar los dos o miente en uno.
+                price_interval=settings.bar_interval,
+                indicator_interval=INDICATOR_INTERVAL,
                 # La divisa se pasa, nunca se asume (FE.8): el prompt decia
                 # "USD" para todo, asi que un experimento europeo le contaba al
                 # modelo que SAN.MC cotiza en dolares.

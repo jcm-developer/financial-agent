@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`; F9.8.2: Resumen ya dice que sus tres primeras cifras van a precio del ultimo ciclo y la tabla de abajo a precio vivo, con `equity_as_of` nuevo en la API porque la hora del ultimo ciclo no es la de la valoracion; F9.14 y F9.15 abiertas: la tabla de riesgo de F6.5 se calibro con barras diarias y el perfil corre en `1h`, asi que el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria y `llm_wider` es hoy la pieza que lo tapa, y hace falta medir con los mismos snapshots cuanto de los objetivos cortos es el intervalo y cuanto es el modelo)
+Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`; F9.8.2: Resumen ya dice que sus tres primeras cifras van a precio del ultimo ciclo y la tabla de abajo a precio vivo, con `equity_as_of` nuevo en la API porque la hora del ultimo ciclo no es la de la valoracion; F9.14 y F9.15 abiertas: la tabla de riesgo de F6.5 se calibro con barras diarias y el perfil corre en `1h`, asi que el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria y `llm_wider` es hoy la pieza que lo tapa, y hace falta medir con los mismos snapshots cuanto de los objetivos cortos es el intervalo y cuanto es el modelo; F9.15: `tools/replay_analyst.py` mide el intervalo con la base congelada y sin tocar Yahoo, y de paso encuentra que `volatility_20d_pct` tambien estaba 4,19x baja y que un tercio de las propuestas tienen stop y objetivo los dos bajo 0,5 sigma; F9.14 cerrada con la salida (a): los indicadores del analista pasan a ser **siempre diarios** y `bar_interval` queda como reloj del precio y de la ejecucion, con `lookback_days` a 400 y el experimento reseteado; R8 corregida —lo que la capa gratuita limita son peticiones simultaneas, no por minuto—; F9.16 abierta: `min_reward_risk` es adimensional y aprueba operaciones cuyos dos niveles caben en el ruido)
 
 ---
 
@@ -3078,7 +3078,7 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
 
       Ya no hay «no lo sé»: hay tres decisiones escritas y dos huecos con nombre.
 
-- [ ] **F9.14** **La tabla de riesgo de F6.5 se calibro con barras diarias, y el perfil corre en
+- [x] **F9.14** **La tabla de riesgo de F6.5 se calibro con barras diarias, y el perfil corre en
       `1h`: el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria.**
       Encontrado el 2026-08-11 midiendo por que el analista propone objetivos tan cortos.
 
@@ -3137,6 +3137,102 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       la seccion 5 y en [EXPERIMENT.md](EXPERIMENT.md) §4, que es donde se explica lo que ve el
       modelo.
 
+      ---
+
+      **Hecha la (a), el 2026-08-11.** Los indicadores del analista pasan a calcularse **siempre
+      sobre barras diarias** (`market_data.INDICATOR_INTERVAL`) y `bar_interval` deja de ser «las
+      barras que ve el modelo» para ser **el reloj del precio y de la ejecución**.
+
+      **Por qué (a) y no (b), con el número de F9.15 delante.** El argumento decisivo no es el
+      4,08× del ATR —que (b) sabría corregir— sino que **hay dos indicadores mal escalados y (b)
+      solo arregla uno**: `volatility_20d_pct` estaba 4,19 veces baja porque
+      `annualized_volatility` anualiza por √252 cualquier intervalo, y una recalibración de
+      `stop_atr_multiple` deja al analista razonando con esa cifra. Tres razones más, por orden:
+
+      - **(b) rompe la tabla de F6.5, que es la que define los cinco perfiles.** La columna «Stop»
+        de la decisión nº 5 (3,0× / 2,5× / 2,0× / 1,52× / 1,2×) dejaría de poder leerse tal cual:
+        un 1,2× significaría una cosa en `1h` y otra en `1d`. Los cinco perfiles se diferencian
+        **solo** en el nivel de riesgo, y esa tabla es lo que lo hace atribuible.
+      - **(a) no toca lo que compran los ocho ciclos.** El reloj horario se queda entero para lo
+        que sirve: precio, ejecución y **comprobar stops y objetivos ocho veces al día, gratis**.
+        Lo único que pasa a diario es el contexto con el que se juzga. Y como el precio de
+        referencia sigue moviéndose cada hora, los ocho ciclos siguen proponiendo cosas distintas:
+        no se convierte en un ciclo diario disfrazado.
+      - **(a) arregla de paso los nombres de las ventanas.** Con indicadores diarios,
+        `return_60d_pct` vuelve a ser 60 días y `pct_from_52w_high` vuelve a ser 52 semanas. La
+        nota del prompt del 2026-08-10 (`WINDOW_UNITS_NOTE`) **se queda en el código y hoy no se
+        imprime nunca**: es lo que mantiene el prompt honesto si el intervalo de los indicadores se
+        vuelve a mover, y por eso `Analyst` recibe los dos intervalos como parámetros en vez de
+        llevar el diario incrustado.
+
+      **(c) se descartó** porque es coherente pero es otro experimento: habría que cambiar el
+      prompt («a dias o semanas»), `horizon_days` y el 7/14 que responde el modelo.
+
+      **Cómo queda repartido, que es la parte que se confunde:**
+
+      | | Reloj | Quién lo decide |
+      |---|---|---|
+      | `price`, `fill_price`, `mark_price`, `as_of` | `bar_interval` (hoy `1h`) | el perfil |
+      | los ~30 indicadores y las 10 barras del prompt | **siempre `1d`** | el código |
+
+      `build_snapshot` toma las dos series (`indicator_bars=None` significa «un solo reloj», que es
+      lo que reciben un perfil diario y el proveedor sin universo). **En el embudo no cuesta ni una
+      descarga**: las diarias de todo el universo ya estaban ahí para el cribado, así que
+      [src/universe_data.py](src/universe_data.py) salió más corto y con los nombres arreglados
+      —`analysis_cache` era el intervalo del análisis y ahora es `price_cache`, porque es lo único
+      que hace—.
+
+      **`YahooMarketData` también baja dos series** cuando su intervalo no es diario, y es una
+      decisión, no simetría gratuita: ningún perfil en marcha usa ese camino, pero un proveedor que
+      razona en horario mientras el otro razona en diario es exactamente la segunda conducta que se
+      encuentra meses después, en un resultado que ya no se puede comparar con nada. Por lo mismo,
+      un símbolo con barras intradía y sin diarias **se omite con aviso** en vez de caer al `None`
+      que significaría «usa la serie de precio»: cae en el camino de `SIN PRECIO`, que ya deja su
+      `risk_event`.
+
+      **El prompt lleva ahora dos unidades y no puede mentir en ninguna.** `Analyst` recibe
+      `price_interval` e `indicator_interval`, así que la línea del precio dice «ULTIMA HORA DE
+      COTIZACION COMPLETA» y la de los indicadores «calculados sobre barras diarias».
+
+      ⚠️ **Y hay dos precios en el prompt a propósito.** El bundle lleva su propio `price` —el
+      último cierre diario, al que se refieren todas las bandas, medias y distancias— y
+      `snapshot.price` es el actual. Sobrescribir uno con el otro haría que las cifras del bundle
+      no cuadraran **entre ellas**, que es peor que no cuadrar con la referencia. Así que se dejan
+      los dos y el prompt **precalcula la diferencia** («el precio actual está un +1,00 % respecto
+      de ese cierre»), que es la misma regla que siguen las señales booleanas: la aritmética es
+      donde este modelo falla más. Con un solo reloj esa nota no se imprime — una línea diciendo
+      que 0,00 % es cero es ruido en un prompt que ya es largo.
+
+      **Lo que hubo que hacer además del código:**
+
+      - **`lookback_days` de 200 a 400.** Con 200 **días naturales** la caché diaria tiene 140
+        sesiones y `sma_200`, `above_sma_200` y `golden_cross` salían nulos en 174 de 174 (F9.15).
+      - **Rellenar la caché diaria con `force_full`**, porque el refresco incremental pide desde
+        `last_ts` y **nunca rellena hacia atrás**: subir `lookback_days` por sí solo no habría
+        traído ni una barra vieja, y el síntoma sería que los tres indicadores siguen nulos sin que
+        nada avise.
+
+      **Consecuencias que se asumen:**
+
+      - ⚠️ **El histórico queda partido en dos mitades no comparables**, igual que con F9.9 y
+        F9.10: las 174 decisiones anteriores se tomaron con un ATR que ya no es el mismo dato.
+        **Decidido resetear** (`tools/reset_experiment.py`), que es lo que se hizo el 2026-08-10 por
+        el mismo motivo. Se pierden dos días de experimento y la única operación cerrada; a cambio,
+        cualquier lectura agregada —la calibración de F5.7, la distribución de objetivos, el R/R
+        medio— vuelve a medir una sola regla. La entrada de F9.15 se hizo **antes** del reseteo y
+        su base congelada sigue en `data/`, así que la medición no se pierde.
+      - **Queda una incoherencia menor, y apuntada:** `atr_pct`, `above_sma_50` y `golden_cross` se
+        calculan contra el cierre diario y no contra el precio de referencia. Mismo día, diferencia
+        pequeña, pero es real.
+      - **El stop determinista pasa a ser el que la tabla quería** —de −0,61 % a −2,57 % de
+        mediana— así que `llm_wider` deja de saltar siempre y **el suelo de `risk.py` empieza a
+        mandar de verdad**. Eso es lo que se buscaba, y también significa que el aviso de arriba
+        sobre lo latente deja de ser latente: hay que mirar `stop_source` en los primeros ciclos
+        del experimento nuevo.
+
+      Falta lo que F9.15 destapó y no arregla el intervalo: **`min_reward_risk` es adimensional** y
+      aprueba pares de niveles que están los dos dentro del ruido (32 de 94). Va en **F9.16**.
+
 - [ ] **F9.15** **Medir cuanto de los objetivos cortos es el intervalo y cuanto es el modelo,
       con los mismos snapshots y una sola variable cambiada.** Pedido el 2026-08-11.
 
@@ -3170,6 +3266,129 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       **Lo que decide:** entre (a) y (b) de F9.14. Si con indicadores diarios los objetivos se
       abren y las tesis siguen siendo coherentes, (a); si el modelo se pierde con las series
       largas, (b) y a vigilar el lienzo.
+
+      ---
+
+      **Hecha la herramienta y la mitad determinista, el 2026-08-11.** Sigue abierta porque el
+      brazo con modelo se quedó a medias, y por qué está más abajo.
+
+      [tools/replay_analyst.py](tools/replay_analyst.py), 24 tests
+      ([tests/test_replay_analyst.py](tests/test_replay_analyst.py)). Abre la base con
+      `read_only=True` —garantía de SQLite, no promesa sobre el SQL— y no baja nada de Yahoo:
+      reconstruye las dos series desde `bar_cache`, que ya tiene las diarias de todo el universo
+      porque el cribado las necesita igualmente.
+
+      **Se autovalida antes de concluir nada, y eso se ganó el sitio en la primera ejecución.**
+      Rehace el bundle **horario** y lo compara con lo que se guardó en `market_snapshots`: si no
+      coincide, lo que mide el informe es un fallo del fichero y no del intervalo. La primera
+      pasada dio 174 de 174 fuera de tolerancia, con el RSI desviado hasta un **54 %**, y la causa
+      era un off-by-one mío: **`market_snapshots.as_of` nombra la barra de DECISIÓN, y la caché en
+      ese instante ya tenía una barra más** —la que `build_snapshot` reserva para el precio de
+      ejecución—. Corregido (`cache_moment`, con su test de regresión), la reconstrucción sale
+      **exacta: 0,0000 % en 174 de 174**, incluido `bars_available`.
+
+      De ahí salió también un ajuste que parecía cosmético y no lo era: la herramienta leía 400
+      barras y el embudo lee `max(lookback_days, 260)`. Todos los indicadores convergen —el
+      arranque de la EMA del MACD vale (11/13)^140, o sea nada—, pero **`bars_available` va en el
+      bundle**, así que el brazo horario le habría dicho al modelo que tenía 399 barras donde el
+      ciclo le dijo 259. Medido: es la única diferencia que hacen las barras de más.
+
+      **Los números, sobre las 174 decisiones de entrada de los 7 ciclos:**
+
+      | mediana | horario | diario | ratio |
+      |---|---|---|---|
+      | `atr_pct` | 0,51 % | 2,14 % | **4,08×** (p25 3,63× – p75 4,45×) |
+      | stop de `risk.py` a 1,2× ATR | **−0,61 %** | −2,57 % | |
+      | `volatility_20d_pct` | 5,94 % | 24,89 % | **4,19×** |
+
+      ⚠️ **Y el hallazgo que no estaba en el diagnóstico: el ATR no es la única unidad rota.**
+      `annualized_volatility` multiplica por √252 **sea cual sea el intervalo**
+      ([src/indicators.py](src/indicators.py)), así que sobre barras horarias anualiza **20 horas
+      como si fueran 20 días**. El modelo leía que ITX.MC tiene un 5,9 % de volatilidad anualizada
+      cuando tiene un 24,9 %. Importa porque **es lo que descarta (b)**: recalibrar
+      `stop_atr_multiple` por intervalo arregla el stop y deja al analista razonando con una
+      volatilidad 4,2 veces menor que la real. El descarte duro del screener
+      (`max_volatility_pct` a 120 %) **no** estaba afectado: el cribado siempre fue diario.
+
+      **La segunda parte, las sigmas: hecha, y confirma la sospecha.** Sobre las 94 compras
+      propuestas, con σ diaria sacada de `volatility_20d_pct` **del bundle diario** —el horario no
+      vale justamente por lo de arriba— y escalada por √`horizon_days`:
+
+      - objetivo: mediana **0,55σ** (p25 0,44 – p75 0,74; rango 0,25–1,22)
+      - stop: mediana **0,47σ** (p25 0,36 – p75 0,63)
+      - **32 de 94 propuestas tienen los dos por debajo de 0,5σ**
+
+      O sea: un tercio de lo que el modelo propone son pares de niveles que **los dos** están
+      dentro del ruido del horizonte, y `min_reward_risk` los aprueba porque compara un cociente
+      adimensional: dos números encogidos por el mismo factor dan el mismo ratio. **Conclusión que
+      se lleva a una tarea nueva:** el filtro de R/R no basta y hace falta complementarlo con algo
+      que tenga escala —un mínimo en sigmas, o en múltiplos de ATR diario—. Sin eso, arreglar el
+      intervalo abre los niveles pero no pone suelo a la esperanza.
+
+      **Un dato duro que sale de aquí y que condiciona F9.14(a):** con barras diarias, `sma_200`,
+      `above_sma_200` y `golden_cross` salen **nulos en 174 de 174**, porque la caché diaria solo
+      tiene 136–140 sesiones (`lookback_days=200` son días **naturales**, no sesiones). Aplicar
+      (a) obliga a subir `lookback_days` y a rellenar la caché con `force_full`, porque el refresco
+      incremental pide desde `last_ts` y **nunca rellena hacia atrás**.
+
+      **Lo que falta: el brazo con modelo**, y no falló el diseño sino la cuota. Ver la corrección
+      de **R8**: la capa gratuita limita peticiones **simultáneas**, no por minuto, y el intento
+      con cuatro hilos dejó la clave devolviendo 429 unos veinte minutos —al planificador
+      también—. En serie tampoco cundió: con el mercado abierto y un ciclo por hora, la mayoría de
+      llamadas necesitaban 2–8 reintentos y 80 llamadas no caben entre dos ciclos.
+
+      Así que **no se pierde: se congela la entrada**. Copia consistente de la base con la API de
+      `backup` de SQLite —no un `cp`, que con WAL y el ingestor escribiendo puede salir partido— en
+      `data/trading-2026-08-11-pre-F9.14.db`, 174 decisiones y 200 snapshots dentro. La medición
+      deja de depender de que el histórico sobreviva al reseteo y se puede correr con el mercado
+      cerrado y sin competir con nada:
+
+      ```
+      python tools/replay_analyst.py --db ./data/trading-2026-08-11-pre-F9.14.db --limit 40 --out replay.json
+      ```
+
+      ⚠️ **Y hay que decir qué deja de decidir ese brazo.** La tarea lo puso como árbitro entre (a)
+      y (b) de F9.14, y ya no lo es: el 4,19 % de la volatilidad es un segundo indicador mal
+      escalado que (b) no toca, así que (a) se sostiene sin él. Lo que el brazo sigue aportando es
+      **cuánto** mejora —si los objetivos se abren hacia el 13 % que predice el 5,6× sobre ATR
+      diario, y si las tesis siguen siendo coherentes con series largas—, que es información para
+      calibrar, no para decidir.
+
+- [ ] **F9.16** **`min_reward_risk` es adimensional, así que aprueba operaciones cuyos dos niveles
+      están dentro del ruido.** Sale medido de F9.15 el 2026-08-11, y **F9.14 no lo arregla**:
+      corregir el intervalo abre los niveles, pero no pone suelo a la esperanza.
+
+      El filtro compara `(objetivo − precio)` contra `(precio − stop)`. Es un **cociente**, así que
+      dos números encogidos por el mismo factor dan el mismo ratio: un objetivo de +3,3 % con un
+      stop de −2,8 % da 1,15 y pasa, exactamente igual que uno de +13 % con −11 %. Lo que el
+      cociente no puede ver es si esas distancias son grandes **para el horizonte declarado**.
+
+      **Medido sobre las 94 compras propuestas** (σ diaria del bundle diario, escalada por
+      √`horizon_days`): objetivo mediana **0,55σ**, stop mediana **0,47σ**, y **32 de 94 con los dos
+      por debajo de 0,5σ**. Por debajo de 0,5σ el nivel se alcanza por azar y no por la tesis, así
+      que el acierto tiende a la moneda al aire — con la comisión fija en medio, que en una orden de
+      100 € de mínimo es un 6–8 % de fricción. Es esperanza negativa que pasa el filtro con nota.
+
+      **Lo que hay que decidir es la unidad del suelo**, y son alternativas:
+      - **En sigmas**, que es lo que se ha medido: rechazar si el objetivo no llega a *k* σ sobre
+        `horizon_days`. Es la magnitud correcta, y depende de `volatility_20d_pct`, que ya viaja en
+        el bundle.
+      - **En múltiplos de ATR diario**, que es la vara que el resto del sistema ya usa
+        (`stop_atr_multiple`) y no obliga a introducir una segunda medida de volatilidad.
+      - **Sobre la comisión**, que es el suelo que de verdad hace falta cubrir y el único que no
+        depende de ninguna estimación: exigir que el recorrido esperado supere el ida y vuelta por
+        un margen. Es lo que F9.9 dejó a medias — metió la comisión en el ratio, pero el mínimo del
+        ratio sigue siendo 1,00.
+
+      El nivel del suelo es un parámetro del perfil, así que probablemente sea una columna más y una
+      fila más en la derivación de [src/risk_presets.py](src/risk_presets.py), con su ancla por
+      nivel de riesgo. **Ojo con dónde se pone:** el sitio natural es junto al `min_reward_risk` de
+      [src/risk.py](src/risk.py), que corre **después** del dimensionado (F9.9), y eso está bien —el
+      suelo en sigmas no depende de la cantidad, pero el de comisión sí—.
+
+      ⚠️ **Y volvería a partir el histórico**, porque cambia la regla con la que se aprueba una
+      compra. Conviene decidirlo **antes** de que el experimento nuevo acumule días, o se paga otro
+      reseteo.
 
 ---
 
@@ -3311,6 +3530,21 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
   exponencial respetando `Retry-After`. Lo que no hay es un muro que corte el experimento a
   mitad. Y ver **F6.9**: mientras un fallo del analista se registre como "0 propuestas", una
   tanda de 429 se leería como una sesión sin oportunidades.
+
+  ⚠️ **Corregido el 2026-08-11, y la corrección es del límite, no del margen: lo que la capa
+  gratuita limita son peticiones SIMULTÁNEAS, no por minuto.** Al lanzar la medición de F9.15
+  con cuatro hilos —dando por bueno el margen de arriba, «pedimos 1–2 de 40»— NIM contestó
+  `503 ResourceExhausted: Worker local total request limit reached (23/16)` y después un muro
+  de 429 que **duró unos veinte minutos y afectó también al planificador**, porque comparten
+  clave: una sola llamada trivial seguía fallando. El 16 es de un worker compartido con otros
+  clientes, así que ni es nuestro ni es estable.
+
+  Lo que sigue siendo cierto es el párrafo de arriba, y por el motivo que ahí se da: el ciclo
+  llama **en serie**. La conclusión que hay que cambiar no es «cabe» sino «hay margen para
+  paralelizar»: no lo hay, y de paso eso es un techo real para la idea de paralelizar el
+  analista que aparece en la decisión nº 2. Escrito donde se puede tropezar otra vez:
+  `--workers` de [tools/replay_analyst.py](tools/replay_analyst.py) vale **1** por defecto, con
+  la medición en el docstring.
 - **R7 — Calidad del modelo gratuito.** Llama 3.3 70B puede no dar señal útil, y entonces el
   experimento mide el modelo, no la estrategia. Por eso F5.7 (perfil de control aleatorio):
   sin algo contra lo que comparar, no se sabe distinguir un caso del otro.
@@ -3400,6 +3634,25 @@ cartel de «pendiente» en la interfaz**: `Pending.tsx` se borró al cerrar F6.8
    −0,46 % y −1,04 % con el perfil agresivo. Medido y con las tres salidas escritas en **F9.14**;
    la medicion que decide entre ellas es **F9.15**. Al cerrarlas, la consecuencia elegida se
    apunta aqui, junto a la del `SMA200`.
+
+   ✅ **Resuelto el 2026-08-11 con la salida (a) de F9.14, y la consecuencia sustituye a la del
+   `SMA200` en lugar de acompañarla.** Los indicadores del analista se calculan **siempre en
+   diario**, así que `bar_interval` ya no significa «las barras que ve el modelo» sino **el reloj
+   del precio y de la ejecución**. Lo que esto cambia de lo escrito arriba:
+
+   - **La consecuencia del `SMA200` desaparece**: vuelve a ser 200 sesiones, y con ella
+     `return_60d_pct` vuelve a ser 60 días y `pct_from_52w_high`, 52 semanas.
+   - **Lo que los ocho ciclos compran no cambia**, y es justo el argumento de este apartado: su
+     valor nunca fue preguntarle ocho veces al modelo sino **mirar los stops ocho veces**, y eso
+     sigue igual porque el precio y las salidas obligatorias siguen en el reloj horario.
+   - **`lookback_days` sube de 200 a 400.** Aquí se escribió que «con intervalo horario son 200
+     días naturales de barras, ~1.200, muy por encima de las 200 que pide el SMA200». Era cierto
+     de las horarias y **falso de las diarias**: 200 días naturales son ~140 sesiones, así que el
+     `SMA200` diario salía nulo en 174 de 174 casos (F9.15). Y subirlo no basta —el refresco
+     incremental nunca rellena hacia atrás—: hubo que forzar un `force_full` una vez.
+   - ⚠️ **Lo de paralelizar el analista, que este apartado da por «trabajo, no un parámetro»,
+     tiene además un techo que no se sabía:** la capa gratuita limita peticiones **simultáneas**
+     y no por minuto. Ver la corrección de **R8**.
 3. ~~**Tamaño del universo a seguir minuto a minuto**: 50 es el punto de partida.~~
    **Resuelto para Europa: 89** (EURO STOXX 50 + IBEX 35, D8). Para el perfil americano
    sigue abierto y ahora se elige explícitamente con `--watch`. Condiciona R2 y R4, que ya

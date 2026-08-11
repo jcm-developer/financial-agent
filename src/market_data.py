@@ -14,6 +14,16 @@ The separation of prices (decision / execution / valuation) is explained in
 `MarketSnapshot`. The rule, here and in the cache: **the last bar is never used to
 decide**, because it may be half-formed if the market is still open; its open is
 used as the execution price.
+
+⚠️ **There is a second separation since F9.14, and it is the one that is easy to
+miss: the price clock is not the indicator clock.** The profile's `bar_interval`
+decides how often there is a new price to decide and execute on; the indicators
+the analyst reads are **always daily** (`INDICATOR_INTERVAL`). They used to be the
+same series, and with `bar_interval=1h` that meant `atr_14` measured 14 *hours* —
+four times smaller than the 14 days the risk table of F6.5 was calibrated on, so
+the stop landed at −0,6 % for a horizon the analyst itself declared as 7 to 14
+days. Measured in F9.15: ratio 4,08x median, and `volatility_20d_pct` was out by
+another 4,19x for the same reason.
 """
 
 from __future__ import annotations
@@ -31,6 +41,20 @@ log = logging.getLogger(__name__)
 # still analyse, but the snapshot will carry null keys.
 MIN_BARS = 60
 
+#: Interval the analyst's indicators are always computed on (F9.14).
+#:
+#: **It is a constant and not a profile column on purpose.** The indicators carry
+#: their unit in the name —`return_60d_pct`, `high_52w`, `volatility_20d_pct`— and
+#: the whole risk table of F6.5 is calibrated in days, so an indicator interval
+#: that could be anything else is an invitation to recalibrate five things at once
+#: and forget one. Making it a parameter was option (b) of F9.14 and was
+#: discarded: it fixes the stop and leaves the volatility lying by 4,19x.
+#:
+#: What stays configurable is `bar_interval`, which is now the **price and
+#: execution** clock: eight hourly cycles a day still check every stop and target
+#: eight times, which is what they were for.
+INDICATOR_INTERVAL = "1d"
+
 
 class MarketDataError(RuntimeError):
     pass
@@ -47,35 +71,64 @@ class MarketDataProvider(Protocol):
 # Construccion del snapshot, comun a los dos proveedores
 # ----------------------------------------------------------------------
 
-def build_snapshot(symbol: str, bars: list[Bar]) -> MarketSnapshot | None:
-    """Assembles the snapshot, separating the decision bar from the execution one.
+def build_snapshot(
+    symbol: str,
+    bars: list[Bar],
+    *,
+    indicator_bars: list[Bar] | None = None,
+) -> MarketSnapshot | None:
+    """Assembles the snapshot from its two series, both oldest to newest.
 
-    `bars` must arrive ordered oldest to newest. The last bar is reserved for the
-    execution price; the indicators are computed over everything before it.
+    @param bars: The **price** series, in the profile's `bar_interval`. Its last
+        bar is reserved for the execution price and the one before it is what the
+        decision is taken at.
+    @param indicator_bars: The **daily** series the indicators are computed on
+        (`INDICATOR_INTERVAL`). Its last bar is reserved too —the session in
+        progress is half-formed— and the ten shown to the model come from here.
+        `None` means "the same series as the price", which is what the daily
+        profiles and the no-universe provider get.
+
+    ⚠️ **`indicators["price"]` is then the last daily close and `snapshot.price` is
+    the current one, and they are deliberately both kept.** The bundle is
+    internally consistent —every band, mean and distance in it refers to that
+    daily close— so overwriting its price with the intraday one would make the
+    numbers disagree with each other instead of with the reference. What the model
+    gets is a daily chart plus where the price stands against it right now, and the
+    prompt spells the gap out (`analyst.py`) rather than leaving two figures called
+    "price" for it to reconcile.
+
+    The 60-bar floor applies to the indicator series, which is what it was always
+    about: the long indicators are what stop meaning anything. The price series
+    only needs the two bars that make a decision and an execution.
     """
     if len(bars) < 2:
-        log.warning("%s: hacen falta al menos 2 barras; se omite.", symbol)
+        log.warning("%s: hacen falta al menos 2 barras de precio; se omite.", symbol)
         return None
 
-    decision_bars = bars[:-1]
+    decision_bar = bars[-2]
     execution_bar = bars[-1]
 
-    if len(decision_bars) < MIN_BARS:
+    context = bars if indicator_bars is None else indicator_bars
+    if len(context) < 2:
         log.warning(
-            "%s tiene %d barras utilizables (minimo %d); se omite del analisis.",
-            symbol, len(decision_bars), MIN_BARS,
+            "%s: hacen falta al menos 2 barras de indicadores; se omite.", symbol
         )
         return None
 
-    indicators = compute_snapshot(decision_bars)
-    decision_bar = decision_bars[-1]
+    context_bars = context[:-1]
+    if len(context_bars) < MIN_BARS:
+        log.warning(
+            "%s tiene %d barras utilizables (minimo %d); se omite del analisis.",
+            symbol, len(context_bars), MIN_BARS,
+        )
+        return None
 
     return MarketSnapshot(
         symbol=symbol,
         as_of=decision_bar.timestamp,
         price=decision_bar.close,
-        indicators=indicators,
-        recent_bars=[_bar_to_dict(b) for b in decision_bars[-10:]],
+        indicators=compute_snapshot(context_bars),
+        recent_bars=[_bar_to_dict(b) for b in context_bars[-10:]],
         fill_price=execution_bar.open,
         mark_price=execution_bar.close,
         fill_basis="next_open",
@@ -102,7 +155,18 @@ def _bar_to_dict(bar: Bar) -> dict[str, object]:
 # ----------------------------------------------------------------------
 
 class YahooMarketData:
-    """Daily bars from Yahoo, with no account and no key.
+    """Bars from Yahoo for a plain watchlist, with no account and no key.
+
+    Used only by a profile with **no universe file**, so it has no bar cache and
+    no screener: it downloads the watchlist as it is on every cycle.
+
+    With an intraday `interval` it makes **two** downloads, and that is F9.14's
+    rule showing up here too: one for the price series and one for the daily series
+    the indicators are computed on. It could have been left reading a single
+    interval —no profile in flight uses this path— but a provider that quietly
+    reasons on hourly indicators while the other one reasons on daily is exactly
+    the kind of second behaviour that gets found months later, in a result that
+    cannot be compared with anything.
 
     Honest warnings about this source:
 
@@ -140,17 +204,50 @@ class YahooMarketData:
         if not symbols:
             return {}
 
-        import yfinance as yf
+        price_frame = self._download(symbols, self.interval)
+        indicator_frame = (
+            price_frame if self.interval == INDICATOR_INTERVAL
+            else self._download(symbols, INDICATOR_INTERVAL)
+        )
 
-        lookback_days = self.lookback_days
+        snapshots: dict[str, MarketSnapshot] = {}
+        single = len(symbols) == 1
+        for symbol in symbols:
+            bars = self._extract_bars(price_frame, symbol, single=single)
+            if not bars:
+                log.warning("%s: Yahoo no devolvio datos utilizables; se omite.", symbol)
+                continue
+            context = (
+                bars if indicator_frame is price_frame
+                else self._extract_bars(indicator_frame, symbol, single=single)
+            )
+            if not context:
+                log.warning(
+                    "%s: Yahoo no devolvio barras diarias; se omite (los indicadores "
+                    "se calculan siempre en diario).", symbol,
+                )
+                continue
+            snapshot = build_snapshot(symbol, bars, indicator_bars=context)
+            if snapshot is not None:
+                snapshots[symbol] = snapshot
+
+        log.info(
+            "Datos de Yahoo listos para %d/%d simbolos (precio en %s, indicadores en %s).",
+            len(snapshots), len(symbols), self.interval, INDICATOR_INTERVAL,
+        )
+        return snapshots
+
+    def _download(self, symbols: list[str], interval: str) -> Any:
         # Margen amplio: `lookback_days` son sesiones, no dias naturales.
-        period_days = int(lookback_days * 1.8) + 40
+        period_days = int(self.lookback_days * 1.8) + 40
+
+        import yfinance as yf
 
         try:
             frame = yf.download(
                 tickers=symbols,
                 start=(datetime.now(timezone.utc) - timedelta(days=period_days)).date(),
-                interval=self.interval,
+                interval=interval,
                 auto_adjust=False,
                 progress=False,
                 group_by="ticker",
@@ -158,28 +255,16 @@ class YahooMarketData:
                 actions=False,
             )
         except Exception as exc:  # noqa: BLE001 - yfinance lanza tipos variados
-            raise MarketDataError(f"No se pudieron descargar las barras de Yahoo: {exc}") from exc
+            raise MarketDataError(
+                f"No se pudieron descargar las barras de {interval} de Yahoo: {exc}"
+            ) from exc
 
         if frame is None or frame.empty:
             raise MarketDataError(
-                "Yahoo no devolvio ninguna barra. Comprueba la conexion y que los "
-                f"simbolos existan: {', '.join(symbols)}"
+                f"Yahoo no devolvio ninguna barra de {interval}. Comprueba la conexion "
+                f"y que los simbolos existan: {', '.join(symbols)}"
             )
-
-        snapshots: dict[str, MarketSnapshot] = {}
-        for symbol in symbols:
-            bars = self._extract_bars(frame, symbol, single=len(symbols) == 1)
-            if not bars:
-                log.warning("%s: Yahoo no devolvio datos utilizables; se omite.", symbol)
-                continue
-            snapshot = build_snapshot(symbol, bars)
-            if snapshot is not None:
-                snapshots[symbol] = snapshot
-
-        log.info(
-            "Datos de Yahoo listos para %d/%d simbolos.", len(snapshots), len(symbols)
-        )
-        return snapshots
+        return frame
 
     @staticmethod
     def _extract_bars(frame: Any, symbol: str, *, single: bool = False) -> list[Bar]:

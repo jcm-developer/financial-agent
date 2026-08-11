@@ -122,7 +122,9 @@ def test_the_analyst_never_tells_the_model_that_trading_is_free(snapshot, accoun
     """
     from src.analyst import Analyst
 
-    analyst = Analyst(llm=None, interval="1h", currency="EUR")  # type: ignore[arg-type]
+    analyst = Analyst(  # type: ignore[arg-type]
+        llm=None, price_interval="1h", indicator_interval="1d", currency="EUR",
+    )
 
     assert analyst._commission_for("SAN.MC") == pytest.approx(4.11)
     assert analyst._commission_for("ALV.DE") == pytest.approx(3.00)
@@ -152,6 +154,88 @@ def test_there_is_no_warning_with_daily_bars(snapshot, account):
     prompt = _render_entry_prompt(snapshot, account, INTERVAL_LABELS["1d"], "EUR")
 
     assert "ATENCION A LAS UNIDADES" not in prompt
+
+
+# -- Los dos relojes: precio horario, indicadores diarios (F9.14) ------------
+
+@pytest.fixture
+def mixed_snapshot():
+    """A snapshot as the cycle builds one now: the price on the hourly clock, the
+    indicators on the daily one, so the bundle carries a price of its own."""
+    return MarketSnapshot(
+        symbol="AIR.PA",
+        as_of=datetime(2026, 8, 10, 11, 0, tzinfo=timezone.utc),
+        price=216.40,
+        indicators={"price": 214.25, "rsi_14": 52.1, "atr_14": 4.84,
+                    "atr_pct": 2.26},
+        recent_bars=[],
+        fill_price=216.50,
+        mark_price=216.60,
+    )
+
+
+def test_the_prompt_names_the_price_clock_and_the_indicator_clock(
+    mixed_snapshot, account
+):
+    """Two intervals in one prompt, and neither may be misnamed: the reference
+    price is an hour of trading, the indicators are daily bars."""
+    prompt = _render_entry_prompt(
+        mixed_snapshot, account, INTERVAL_LABELS["1d"], "EUR",
+        price_labels=INTERVAL_LABELS["1h"],
+    )
+
+    assert "ULTIMA HORA DE COTIZACION COMPLETA: 216.40 EUR" in prompt
+    assert "calculados sobre barras diarias" in prompt
+    assert "ULTIMAS 10 SESIONES" in prompt
+
+
+def test_the_prompt_precomputes_the_gap_between_the_two_prices(
+    mixed_snapshot, account
+):
+    """The bundle carries its own `price` —the daily close every band in it refers
+    to— and the reference price is the current one. Two figures called price and
+    no explanation is arithmetic left to the model, which is where it goes wrong
+    most often."""
+    prompt = _render_entry_prompt(
+        mixed_snapshot, account, INTERVAL_LABELS["1d"], "EUR",
+        price_labels=INTERVAL_LABELS["1h"],
+    )
+
+    assert "ultimo cierre diario completo, 214.25 EUR" in prompt
+    # 216,40 / 214,25 - 1 = +1,00 %
+    assert "+1.00% respecto de ese cierre" in prompt
+
+
+def test_there_is_no_gap_note_when_both_clocks_are_the_same(mixed_snapshot, account):
+    """With one interval for both there is no gap to explain, and a line saying
+    that 0,00 % is zero is noise in a prompt that is already long."""
+    prompt = _render_entry_prompt(
+        mixed_snapshot, account, INTERVAL_LABELS["1d"], "EUR",
+        price_labels=INTERVAL_LABELS["1d"],
+    )
+
+    assert "CONTEXTO:" not in prompt
+
+
+def test_the_gap_note_is_skipped_when_the_bundle_has_no_price(snapshot, account):
+    """Writing a gap from a missing figure is worse than writing nothing."""
+    prompt = _render_entry_prompt(
+        snapshot, account, INTERVAL_LABELS["1d"], "EUR",
+        price_labels=INTERVAL_LABELS["1h"],
+    )
+
+    assert "CONTEXTO:" not in prompt
+
+
+def test_the_exit_prompt_carries_the_gap_too(mixed_snapshot, position):
+    """The exit review reads the same bundle, so it has the same two prices."""
+    prompt = _render_exit_prompt(
+        position, mixed_snapshot, "Tendencia intacta.", 4.2, 5.4,
+        INTERVAL_LABELS["1d"], "EUR", 3.00,
+        price_labels=INTERVAL_LABELS["1h"],
+    )
+
+    assert "ultimo cierre diario completo, 214.25 EUR" in prompt
 
 
 def test_the_exit_prompt_warns_as_well(snapshot, position):

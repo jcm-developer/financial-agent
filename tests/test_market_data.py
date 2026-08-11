@@ -16,9 +16,15 @@ from src.indicators import Bar
 from src.market_data import MIN_BARS, build_snapshot
 
 
-def make_bars(count: int, *, start_price: float = 100.0, step: float = 0.5):
+def make_bars(count: int, *, start_price: float = 100.0, step: float = 0.5,
+              spread: float = 2.0):
     """An ascending series with the open below the previous close, so the open
-    and the close never coincide and the tests can tell them apart."""
+    and the close never coincide and the tests can tell them apart.
+
+    `spread` is each bar's high-to-low range, and it is a parameter because it is
+    what the ATR measures: the two clocks of F9.14 differ in exactly this, and a
+    fixed range would give the hourly and the daily series the same ATR.
+    """
     start = datetime(2026, 1, 1, tzinfo=timezone.utc)
     bars = []
     for index in range(count):
@@ -26,9 +32,9 @@ def make_bars(count: int, *, start_price: float = 100.0, step: float = 0.5):
         bars.append(
             Bar(
                 timestamp=start + timedelta(days=index),
-                open=close - 1.0,
-                high=close + 0.5,
-                low=close - 1.5,
+                open=close - spread / 2,
+                high=close + spread / 4,
+                low=close - spread * 3 / 4,
                 close=close,
                 volume=1_000_000.0,
             )
@@ -107,6 +113,81 @@ def test_recent_bars_end_at_the_decision_bar():
 
     assert len(snapshot.recent_bars) == 10
     assert snapshot.recent_bars[-1]["close"] == pytest.approx(bars[-2].close)
+
+
+# -- Los dos relojes: precio contra indicadores (F9.14) -----------------------
+
+def test_the_price_comes_from_the_price_series_and_the_indicators_from_the_other():
+    """The change of F9.14, and the one thing that must never drift back.
+
+    With `bar_interval=1h` the indicators used to be computed on the same hourly
+    series, so `atr_14` measured 14 hours: four times smaller than the 14 days the
+    risk table of F6.5 is calibrated on.
+    """
+    hourly = make_bars(80, start_price=200.0, step=0.05, spread=0.5)
+    daily = make_bars(80, start_price=100.0, step=1.0, spread=2.0)
+
+    snapshot = build_snapshot("AIR.PA", hourly, indicator_bars=daily)
+
+    assert snapshot.price == pytest.approx(hourly[-2].close)
+    assert snapshot.fill_price == pytest.approx(hourly[-1].open)
+    assert snapshot.as_of == hourly[-2].timestamp
+    assert snapshot.indicators["price"] == pytest.approx(daily[-2].close)
+    assert snapshot.recent_bars[-1]["close"] == pytest.approx(daily[-2].close)
+
+
+def test_the_atr_comes_from_the_daily_series():
+    """It is the figure the whole thing was about: `risk.py` places the stop at
+    `price - atr * stop_atr_multiple`, and it reads the ATR from here."""
+    # The measured ratio of F9.15 is 4,08x in median, so the fixture reproduces
+    # it: an hourly range of 0,5 and a daily one of 2,0 over the same price.
+    hourly = make_bars(80, start_price=100.0, step=0.05, spread=0.5)
+    daily = make_bars(80, start_price=100.0, step=1.0, spread=2.0)
+
+    mixed = build_snapshot("AIR.PA", hourly, indicator_bars=daily)
+    only_hourly = build_snapshot("AIR.PA", hourly)
+
+    assert mixed.indicators["atr_14"] == pytest.approx(
+        only_hourly.indicators["atr_14"] * 4, rel=0.05
+    )
+
+
+def test_the_execution_bar_of_the_daily_series_is_reserved_too():
+    """The session in progress is half-formed on both clocks."""
+    daily = make_bars(80)
+
+    snapshot = build_snapshot("AIR.PA", make_bars(80), indicator_bars=daily)
+
+    assert snapshot.indicators["bars_available"] == len(daily) - 1
+
+
+def test_without_a_second_series_nothing_changes():
+    """`None` means "one clock", which is what a daily profile and the
+    no-universe provider get. The old behaviour has to be preserved exactly."""
+    bars = make_bars(80)
+
+    assert build_snapshot("AAPL", bars) == build_snapshot(
+        "AAPL", bars, indicator_bars=bars
+    )
+
+
+def test_the_sixty_bar_floor_applies_to_the_indicator_series():
+    """The floor was always about the long indicators, so it follows the series
+    they are computed on. The price series only needs a decision and an
+    execution bar."""
+    assert build_snapshot(
+        "AIR.PA", make_bars(2), indicator_bars=make_bars(MIN_BARS + 1)
+    ) is not None
+    assert build_snapshot(
+        "AIR.PA", make_bars(80), indicator_bars=make_bars(MIN_BARS)
+    ) is None
+
+
+def test_a_price_series_of_one_bar_yields_none():
+    """There is no execution bar, so there is nothing to buy at."""
+    assert build_snapshot(
+        "AIR.PA", make_bars(1), indicator_bars=make_bars(80)
+    ) is None
 
 
 # -- Datos insuficientes -----------------------------------------------------
