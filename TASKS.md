@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo)
+Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto)
 
 ---
 
@@ -2533,6 +2533,74 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       enseñaba por el principio.
 
       **78 tests del frontend en verde, typecheck limpio.**
+
+- [x] **F10.9** **Decisiones deja de ser una lista plana y pasa a ser el árbol que los datos
+      ya eran: jornada → ciclo → decisión.** Y con ello se cierra el plegado de prosa que
+      F10.6 empezó en Posiciones y F10.7 continuó en cerradas: esta era la tercera y última
+      pantalla que seguía volcando párrafos dentro de una celda.
+
+      **El número que obliga al cambio.** Con `bar_interval=1h` y los ocho ciclos de la
+      decisión nº 2, un ciclo registra 20–45 decisiones —una por candidato del screener más
+      una por posición revisada—, así que **una jornada son 160–360 filas**. La lista de 50
+      que había nunca fue una sesión: era una ventana arbitraria a caballo entre dos o tres,
+      sin nada que marcara dónde acababa una tanda del analista y empezaba la siguiente. En
+      el experimento activo, 141 decisiones en 6 ciclos eran tres páginas indistinguibles.
+
+      **Las cabeceras de jornada y de ciclo salen de `/api/cycles`, y por eso no se tocó el
+      backend.** `CycleRow` ya traía `decisions`, `approved` y `rejected`, que son recuentos
+      **de la base** y no de lo cargado: una cabecera puede decir «30 decisiones» sobre un
+      ciclo que nadie ha desplegado. Construirlas desde las propias decisiones era la
+      alternativa y se descartó justo por eso —habrían contado solo lo que hubiera en
+      pantalla y habrían ido subiendo según se desplegaba—. Las decisiones de un ciclo se
+      piden **al desplegarlo**, montando el componente que las consulta, así que abrir la
+      pantalla cuesta la lista de ciclos más el ciclo más reciente, y no las trescientas
+      filas de una sesión.
+
+      ⚠️ **Con un filtro puesto, el árbol cambia de fuente, y no es un modo por capricho:**
+      una fila de `cycles` sabe cuántas decisiones tiene pero no si alguna menciona SAN.MC,
+      de modo que el árbol de siempre ofrecería ocho ciclos de los que siete se despliegan a
+      nada. Filtrando, se piden antes las filas y los grupos se leen de ellas. **La
+      consecuencia asumida es que ahí las cabeceras cuentan la página y no el ciclo**, así
+      que renuncian al total en vez de imprimir uno que sería falso en cada borde de página;
+      quien da el número que importa bajo un filtro es la paginación, que ya dice «41–80 de
+      480».
+
+      **Abre la jornada más reciente y, dentro, el ciclo más reciente.** El estado guarda
+      **solo lo que se ha plegado a mano** y el defecto se pasa en cada consulta
+      (`toggled[key] ?? byDefault`): guardarlo como estado exigiría un efecto que escribiera
+      el defecto al llegar los datos, y ese efecto pelearía con el primer clic en una
+      petición lenta.
+
+      **La fila vuelve a una línea.** Se queda en columnas lo que se compara bajando —acción,
+      convicción, veredicto, nocional aprobado y qué hizo la orden— y se pliega lo que se lee
+      una vez: tesis, riesgos y la razón del Risk Manager. **La hora deja de ser columna**
+      porque la cabecera del ciclo ya la lleva, y el mismo reloj repetido en cuarenta filas
+      es cuarenta veces el mismo dato; la marca completa sigue en el `title` del símbolo.
+      Esto **invierte lo que esta pantalla defendía por escrito** —que la tesis tenía que
+      estar en la fila porque el texto que hay que ir a buscar no se lee—, y el docstring lo
+      dice: aquello se escribió antes de que F10.1 bajara la densidad a cuerpo de 16 px y
+      filas de 48, y después de eso seis decisiones llenaban la pantalla.
+
+      `<GroupRow>` es nuevo en [app/src/components/Table.tsx](app/src/components/Table.tsx) y
+      es un `<button>` que llena la celda, no un rótulo con un galón al lado: el ancho entero
+      es zona de clic y el teclado se lleva el plegado gratis. **Los dos niveles se
+      distinguen con los tokens de superficie que ya existen** —jornada sobre el fondo de
+      página, ciclo sobre el blanco de la tarjeta, y cada uno oscurece un paso al pasar por
+      encima—. Se descartó pintar la banda de jornada en slate-200: Verdana no tiene ese
+      valor como superficie, solo como `--color-border`, y tomar prestado un token de línea
+      para pintar un fondo es como un sistema de diseño acaba teniendo una segunda paleta.
+
+      La agrupación vive en [app/src/lib/decisions.ts](app/src/lib/decisions.ts) y no en la
+      página, por lo mismo que `splitExitReason`: es lo único que se puede fijar con tests
+      sin montar React, y **es donde un fallo no se ve**. Una cabecera con la fecha
+      equivocada sobre las filas correctas da una pantalla perfectamente creíble. ⚠️ **El día
+      es el día local y ahí está la sutileza**: `created_at` es ISO en UTC y las filas se
+      imprimen en local, así que agrupar por los diez primeros caracteres de la marca metería
+      una decisión de las 23:30 bajo una cabecera que su propia hora contradice —en agosto en
+      Madrid, dos horas de cada día bajo el rótulo de la víspera—.
+
+      **716 tests de Python en verde, 86 del frontend (8 nuevos), typecheck limpio, y
+      verificado contra la base real: 6 ciclos de dos jornadas y 141 decisiones.**
 
 ### F9 — Futuro (no bloquea)
 

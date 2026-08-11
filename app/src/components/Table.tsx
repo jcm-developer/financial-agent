@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 
 import { Button, Card } from "@/components/pieces";
 import { cn } from "@/lib/utils";
@@ -211,6 +212,81 @@ export function DetailRow({
     <tr className="border-b border-surface-sunken transition-colors duration-150 last:border-0 hover:bg-background">
       <td colSpan={columns} className="px-4 pt-0 pb-3">
         {children}
+      </td>
+    </tr>
+  );
+}
+
+/**
+ * The heading of a group of rows, and the control that folds it.
+ *
+ * A history that arrives in batches —eight cycles a session, twenty to
+ * forty-five decisions each— read as one flat list of fifty rows with nothing
+ * saying where one batch ended and the next began. This is the row that says it,
+ * and it is a `<button>` filling the cell rather than a caption with a chevron
+ * beside it: the whole width is the hit area, and the keyboard gets the fold for
+ * free.
+ *
+ * **The two levels are told apart with the surface tokens that already exist,
+ * never with a colour of their own**: `day` rests on the page ground and `cycle`
+ * on the card's white, and each darkens one step on hover. Verdana has no token
+ * for slate-200 as a surface —the value is `--color-border`, a line— and
+ * borrowing it to paint a band is how a design system acquires a second palette.
+ *
+ * @param props - Group row props.
+ * @param props.columns - Columns of the table, so the header spans all of them.
+ * @param props.level - Which of the two levels this heads.
+ * @param props.open - Whether the group is unfolded, announced as `aria-expanded`.
+ * @param props.onToggle - Called when the header is pressed.
+ * @param props.title - The whole sentence, since the chevron alone says nothing.
+ * @param props.children - The heading's content, laid out in the cell.
+ * @return The rendered `<tr>`.
+ */
+export function GroupRow({
+  columns,
+  level = "day",
+  open,
+  onToggle,
+  title,
+  children,
+}: {
+  columns: number;
+  level?: "day" | "cycle";
+  open: boolean;
+  onToggle: () => void;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <tr
+      className={cn(
+        "border-b last:border-0",
+        level === "day" ? "border-border" : "border-surface-sunken",
+      )}
+    >
+      <td colSpan={columns} className="p-0">
+        <button
+          type="button"
+          aria-expanded={open}
+          title={title}
+          onClick={onToggle}
+          className={cn(
+            "flex w-full items-center gap-2 px-4 text-left",
+            "transition-colors duration-150 ease-calm",
+            level === "day"
+              ? "h-12 bg-background text-body-sm font-semibold text-foreground hover:bg-surface-sunken"
+              : "h-10 pl-10 text-caption text-text-secondary hover:bg-background",
+          )}
+        >
+          <ChevronRight
+            aria-hidden
+            className={cn(
+              "size-3.5 shrink-0 transition-transform duration-150",
+              open && "rotate-90",
+            )}
+          />
+          {children}
+        </button>
       </td>
     </tr>
   );

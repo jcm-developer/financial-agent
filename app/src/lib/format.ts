@@ -162,6 +162,32 @@ export function time(iso: string | null | undefined): string {
 }
 
 /**
+ * The date written out, for the header of a group of rows: `lunes, 11 de agosto`.
+ *
+ * It carries **no year and no time**, which is the point of it: it heads a
+ * session in a ten-day experiment, where the year is the same on every line and
+ * the hour belongs to the cycles underneath. The full mark stays in the header's
+ * `title`, as everywhere else.
+ *
+ * Lower case is correct Spanish for the weekday and the month; the screen puts a
+ * capital on it with {@link sentence} because there it starts a line.
+ *
+ * @param iso - ISO-8601 UTC timestamp as returned by the API.
+ * @return The weekday, day and month in local time; the input unchanged when it
+ *     is not a parsable date, or `—` when it is empty.
+ */
+export function longDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleDateString("es-ES", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
+/**
  * Formats an elapsed time as `2 min 14 s`.
  *
  * @param seconds - Elapsed seconds. Null or undefined renders as an em dash.
