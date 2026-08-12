@@ -427,7 +427,9 @@ class Settings:
             model_api_key=_require("NVIDIA_API_KEY"),
             model_base_url=(os.getenv("NVIDIA_BASE_URL")
                             or "https://integrate.api.nvidia.com/v1").rstrip("/"),
-            llm_model=(os.getenv("LLM_MODEL") or "meta/llama-3.3-70b-instruct").strip(),
+            # El porque de la version anterior y no la ultima esta en schema.sql,
+            # que lleva el mismo valor por defecto (F9.22).
+            llm_model=(os.getenv("LLM_MODEL") or "meta/llama-3.1-70b-instruct").strip(),
             llm_temperature=_get_float("LLM_TEMPERATURE", 0.2, minimum=0.0, maximum=2.0),
             llm_timeout_seconds=_get_float("LLM_TIMEOUT_SECONDS", 120.0, minimum=5.0),
             llm_max_retries=_get_int("LLM_MAX_RETRIES", 3, minimum=1, maximum=10),

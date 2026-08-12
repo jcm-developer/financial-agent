@@ -366,7 +366,10 @@ create table if not exists agent_settings (
     -- Modelo
     llm_provider           text not null default 'nvidia'
                            check (llm_provider in ('nvidia', 'anthropic', 'openai')),
-    llm_model              text not null default 'meta/llama-3.3-70b-instruct',
+    -- 3.1 y no 3.3, que es la anterior y no la ultima, porque el 2026-08-12 el
+    -- endpoint de llama-3.3-70b se quedo aceptando peticiones sin contestarlas
+    -- (F9.22). Un perfil nuevo no puede nacer apuntando a un modelo colgado.
+    llm_model              text not null default 'meta/llama-3.1-70b-instruct',
     llm_api_key            text,
     llm_temperature        real not null default 0.2
                            check (llm_temperature between 0 and 2),

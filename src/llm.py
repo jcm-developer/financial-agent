@@ -13,13 +13,34 @@ its documentation asks you to use the official SDK rather than speak HTTP by
 hand. That is a new dependency and a genuine second implementation, not a row in
 a table; it is left for F9.1, when there is a reason to pay for a premium model.
 
+**The response is read as a stream, and it is worth being clear about what that
+does and does not buy** (F9.22), because it was adopted chasing a failure it
+turned out not to fix. The «Server disconnected without sending a response» of
+the 2026-08-12 was NVIDIA's `llama-3.3-70b` endpoint taking requests and never
+dispatching them —measured: 61 s to the drop with 16 tokens and with 1.600,
+streaming and not, while `llama-3.1-70b` answered in 4,7 s on the same key— so
+no client could have saved it.
+
+What streaming is kept for is the other half. With `stream: false` the whole
+call has to fit in the timeout, and the sample of the 2026-08-11 has 8 of 54
+generations over 60 s with a ceiling of 120. Reading the answer as it is
+produced turns the timeout into something better shaped:
+
+⚠️ it stops being «how long the whole call may take» and becomes «how long the
+server may stay silent». A slow generation no longer trips it; a hung one still
+does, which is what it was for.
+
+The chunks are reassembled here and the rest of the module does not know the
+difference.
+
 The module assumes the worst of the model and tolerates it:
 
   * Reasoning models (deepseek-r1, nemotron) write their chain of thought in
     `<think>...</think>` before the JSON.
   * Almost any model wraps the JSON in ```json ... ``` at some point.
-  * `response_format` is not supported by every model, so it is attempted and
-    switched off for the rest of the session if the server rejects it.
+  * `response_format` and `stream_options` are extras that not every
+    OpenAI-compatible deployment takes, so they are attempted and switched off
+    for the rest of the session if the server rejects them.
   * The free tier returns 429 often: retries with exponential backoff, honouring
     `Retry-After` when it comes.
 """
@@ -30,6 +51,7 @@ import json
 import logging
 import re
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -119,6 +141,7 @@ class LLMClient:
         self.temperature = temperature
         self.max_retries = max_retries
         self._supports_json_mode = True
+        self._supports_usage_in_stream = True
         if not api_key:
             raise LLMError(
                 f"Falta la clave de API de {self.provider.label}. "
@@ -175,19 +198,47 @@ class LLMClient:
             ],
             "temperature": self.temperature,
             "max_tokens": max_tokens,
-            "stream": False,
+            "stream": True,
         }
 
         last_error: Exception | None = None
-        for attempt in range(1, self.max_retries + 1):
+        # The counter is advanced by hand because negotiating the optional
+        # fields —see `_disable_rejected_option`— resends at once and must NOT
+        # spend an attempt: with two negotiable extras it could otherwise eat
+        # two of the three tries before the model is even asked anything.
+        attempt = 0
+        while attempt < self.max_retries:
             body = dict(payload)
             if self._supports_json_mode:
                 body["response_format"] = {"type": "json_object"}
+            if self._supports_usage_in_stream:
+                # Without this the final chunk brings no `usage` and the tokens
+                # of every decision would be written as zero.
+                body["stream_options"] = {"include_usage": True}
 
             started = time.monotonic()
+            status = 0
+            error_body = ""
+            retry_after: float | None = None
+            stream = _Stream()
             try:
-                http_response = self._client.post("/chat/completions", json=body)
+                with self._client.stream(
+                    "POST", "/chat/completions", json=body
+                ) as http_response:
+                    if http_response.status_code >= 400:
+                        # An error is not sent as SSE: it is a whole JSON body,
+                        # and with `stream()` it has to be read before it can be
+                        # looked at.
+                        http_response.read()
+                        status = http_response.status_code
+                        error_body = http_response.text
+                        retry_after = _parse_retry_after(
+                            http_response.headers.get("Retry-After")
+                        )
+                    else:
+                        stream = _read_sse(http_response.iter_lines())
             except httpx.HTTPError as exc:
+                attempt += 1
                 last_error = exc
                 log.warning("Error de red hablando con %s (intento %d/%d): %s",
                             self.provider.label, attempt, self.max_retries, exc)
@@ -196,60 +247,88 @@ class LLMClient:
 
             latency_ms = int((time.monotonic() - started) * 1000)
 
-            if http_response.status_code in (400, 422) and self._supports_json_mode:
-                # The model probably does not accept response_format: it is
-                # dropped and retried at once without spending an attempt.
-                log.info(
-                    "El modelo %s rechazo response_format (%d); se desactiva el modo JSON.",
-                    self.model, http_response.status_code,
-                )
-                self._supports_json_mode = False
-                continue
+            if status in (400, 422):
+                disabled = self._disable_rejected_option(error_body)
+                if disabled is not None:
+                    log.info(
+                        "El modelo %s rechazo %s (%d); se desactiva y se reintenta al momento.",
+                        self.model, disabled, status,
+                    )
+                    continue
 
-            if http_response.status_code == 429 or http_response.status_code >= 500:
-                last_error = LLMError(
-                    f"{self.provider.label} devolvio {http_response.status_code}: "
-                    f"{http_response.text[:200]}"
-                )
-                retry_after = _parse_retry_after(http_response.headers.get("Retry-After"))
-                log.warning(
-                    "%s devolvio %d (intento %d/%d).",
-                    self.provider.label, http_response.status_code,
-                    attempt, self.max_retries,
-                )
-                self._sleep_backoff(attempt, override=retry_after)
-                continue
+            if status:
+                if status == 429 or status >= 500:
+                    attempt += 1
+                    last_error = LLMError(
+                        f"{self.provider.label} devolvio {status}: {error_body[:200]}"
+                    )
+                    log.warning(
+                        "%s devolvio %d (intento %d/%d).",
+                        self.provider.label, status, attempt, self.max_retries,
+                    )
+                    self._sleep_backoff(attempt, override=retry_after)
+                    continue
 
-            if http_response.status_code >= 400:
                 # 401/403/404 no se arreglan reintentando.
                 raise LLMError(
-                    f"{self.provider.label} devolvio {http_response.status_code}: "
-                    f"{http_response.text[:400]}"
+                    f"{self.provider.label} devolvio {status}: {error_body[:400]}"
                 )
 
-            try:
-                data = http_response.json()
-            except ValueError as exc:
-                raise LLMError(
-                    f"{self.provider.label} devolvio una respuesta no-JSON: {exc}"
-                ) from exc
+            # A stream that breaks halfway —an `error` event, or a 200 that
+            # carries nothing— is a transport failure, not an answer, so it is
+            # retried instead of being handed upstairs as an empty response.
+            if stream.error or not stream.text:
+                attempt += 1
+                last_error = LLMError(
+                    f"{self.provider.label} corto la respuesta a media generacion: "
+                    f"{stream.error or 'no llego ningun fragmento'}"
+                )
+                log.warning(
+                    "%s corto el stream tras %d ms (intento %d/%d): %s",
+                    self.provider.label, latency_ms, attempt, self.max_retries,
+                    stream.error or "sin fragmentos",
+                )
+                self._sleep_backoff(attempt)
+                continue
 
-            content = _extract_message_content(data)
-            usage = data.get("usage") or {}
             return LLMResponse(
-                content=content,
-                parsed=extract_json_object(content),
-                model=data.get("model") or self.model,
+                content=stream.text,
+                parsed=extract_json_object(stream.text),
+                model=stream.model or self.model,
                 latency_ms=latency_ms,
-                prompt_tokens=int(usage.get("prompt_tokens") or 0),
-                completion_tokens=int(usage.get("completion_tokens") or 0),
-                raw=data,
+                prompt_tokens=int(stream.usage.get("prompt_tokens") or 0),
+                completion_tokens=int(stream.usage.get("completion_tokens") or 0),
+                # There is no single server payload to keep any more: what goes
+                # here is what was reassembled, which is what one would want to
+                # look at while debugging.
+                raw={"model": stream.model, "usage": stream.usage},
             )
 
         raise LLMError(
             f"No se pudo completar la llamada a {self.provider.label} tras "
             f"{self.max_retries} intentos: {last_error}"
         )
+
+    def _disable_rejected_option(self, error_body: str) -> str | None:
+        """Switches off, for the rest of the session, the optional field the
+        server has just rejected. Returns its name, or None if there is nothing
+        left to turn off —and then the 400 is a real error, not a negotiation.
+
+        `response_format` and `stream_options` are extras on top of
+        `/chat/completions` and not every deployment takes them. The error body
+        usually names the offending one; when it does not, they are dropped in
+        order, which costs a round trip and no attempt.
+        """
+        lowered = error_body.lower()
+        named = [n for n in ("response_format", "stream_options") if n in lowered]
+        for name in named or ["response_format", "stream_options"]:
+            if name == "response_format" and self._supports_json_mode:
+                self._supports_json_mode = False
+                return name
+            if name == "stream_options" and self._supports_usage_in_stream:
+                self._supports_usage_in_stream = False
+                return name
+        return None
 
     def _sleep_backoff(self, attempt: int, *, override: float | None = None) -> None:
         delay = override if override is not None else min(2.0 ** attempt, 30.0)
@@ -258,27 +337,90 @@ class LLMClient:
 
 
 # ----------------------------------------------------------------------
-# Parseo defensivo
+# Lectura del stream
 # ----------------------------------------------------------------------
 
-def _extract_message_content(data: dict[str, Any]) -> str:
-    choices = data.get("choices") or []
-    if not choices:
-        return ""
-    message = choices[0].get("message") or {}
-    content = message.get("content")
-    if isinstance(content, str):
-        return content
-    # Algunos modelos devuelven una lista de bloques tipo {"type":"text",...}.
-    if isinstance(content, list):
-        parts = [
+@dataclass
+class _Stream:
+    """An SSE response, already reassembled. `error` empty = it arrived whole."""
+
+    content: str = ""
+    reasoning: str = ""
+    model: str = ""
+    usage: dict[str, Any] = field(default_factory=dict)
+    error: str = ""
+
+    @property
+    def text(self) -> str:
+        # Reasoning models sometimes fill only `reasoning_content`, and then
+        # that is the whole answer, JSON included.
+        return self.content or self.reasoning
+
+
+def _read_sse(lines: Iterable[str]) -> _Stream:
+    """Reassembles the `data:` events of a `/chat/completions` in streaming.
+
+    Tolerant on purpose, because this runs against a free tier: a malformed
+    chunk is skipped rather than losing the response that was already
+    accumulated, and the ending is not required to be the canonical `[DONE]` —
+    the stream running out is ending enough.
+    """
+    stream = _Stream()
+    for line in lines:
+        line = line.strip()
+        if not line or not line.startswith("data:"):
+            # Comments (`: keep-alive`) and the blank lines separating events.
+            continue
+        data = line[len("data:"):].strip()
+        if data == "[DONE]":
+            break
+        try:
+            chunk = json.loads(data)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(chunk, dict):
+            continue
+
+        error = chunk.get("error")
+        if error:
+            # Some servers report an overload mid-generation instead of at the
+            # start. Whatever was accumulated is kept: the caller decides.
+            stream.error = str(error)[:200]
+            break
+
+        stream.model = stream.model or str(chunk.get("model") or "")
+        usage = chunk.get("usage")
+        if isinstance(usage, dict) and usage:
+            # It comes in the last chunk, the one with an empty `choices`.
+            stream.usage = usage
+
+        for choice in chunk.get("choices") or []:
+            if not isinstance(choice, dict):
+                continue
+            delta = choice.get("delta") or choice.get("message") or {}
+            if not isinstance(delta, dict):
+                continue
+            stream.content += _delta_text(delta.get("content"))
+            stream.reasoning += _delta_text(delta.get("reasoning_content"))
+    return stream
+
+
+def _delta_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    # Algunos modelos mandan una lista de bloques tipo {"type":"text",...}.
+    if isinstance(value, list):
+        return "".join(
             block.get("text", "")
-            for block in content
+            for block in value
             if isinstance(block, dict) and block.get("type") in (None, "text")
-        ]
-        return "".join(parts)
-    # Last resort: reasoning models sometimes only fill reasoning_content.
-    return str(message.get("reasoning_content") or "")
+        )
+    return ""
+
+
+# ----------------------------------------------------------------------
+# Parseo defensivo
+# ----------------------------------------------------------------------
 
 
 def strip_reasoning(text: str) -> str:

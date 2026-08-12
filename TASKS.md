@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-11 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`; F9.8.2: Resumen ya dice que sus tres primeras cifras van a precio del ultimo ciclo y la tabla de abajo a precio vivo, con `equity_as_of` nuevo en la API porque la hora del ultimo ciclo no es la de la valoracion; F9.14 y F9.15 abiertas: la tabla de riesgo de F6.5 se calibro con barras diarias y el perfil corre en `1h`, asi que el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria y `llm_wider` es hoy la pieza que lo tapa, y hace falta medir con los mismos snapshots cuanto de los objetivos cortos es el intervalo y cuanto es el modelo; F9.15: `tools/replay_analyst.py` mide el intervalo con la base congelada y sin tocar Yahoo, y de paso encuentra que `volatility_20d_pct` tambien estaba 4,19x baja y que un tercio de las propuestas tienen stop y objetivo los dos bajo 0,5 sigma; F9.14 cerrada con la salida (a): los indicadores del analista pasan a ser **siempre diarios** y `bar_interval` queda como reloj del precio y de la ejecucion, con `lookback_days` a 400 y el experimento reseteado; R8 corregida —lo que la capa gratuita limita son peticiones simultaneas, no por minuto—; F9.16 cerrada: el objetivo tiene ahora un suelo absoluto en sigmas del horizonte, y el minimo por orden sube de 100 a 500 EUR porque cubrir la comision es un problema de tamaño de orden y no de tamaño de recorrido; F9.17: `horizon_days` era una columna muerta y era la causa de los objetivos del 6 % —una sigma a 14 dias son 6,8 % del precio—, asi que ahora viaja al prompt con la sigma ya calculada y al motor de riesgo; F9.18: el capital se repartia por orden alfabetico porque dos `sorted()` tiraban el ranking del screener justo antes de gastarlo, y un ciclo ya no puede abrir mas de `max_new_positions_per_cycle` posiciones; decision nº 9: el experimento de un mes con horizonte de 45 dias, objetivos del 12 % y siete posiciones del 14 %, con el historico reseteado antes de arrancar; F9.19 y F9.20 abiertas: el reparto en dos pasadas y el modelo que contesta con plantilla —24 de 24 `buy`, conviccion 60 en las 24—; F9.21: el tamaño de posicion pasa a ser una banda `min_position_pct`-`max_position_pct`, porque el techo solo no evitaba que la cartera se quedara a medio invertir —el modelo pedia 8 % en 11 de 11 propuestas y con siete plazas eso deja el 44 % del capital en caja, o sea un +12 % por operacion convertido en un +6,7 % de cartera—; F10.11: la tarjeta «Con estos ajustes» enseñaba los limites de los deslizadores encima de un perfil que corria con otros, y cuatro campos de la pantalla —benchmark, reserva de caja, sectores excluidos y permitir cortos— se guardan y no los lee nadie, asi que ahora lo dicen)
+Última actualización: 2026-08-12 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`; F9.8.2: Resumen ya dice que sus tres primeras cifras van a precio del ultimo ciclo y la tabla de abajo a precio vivo, con `equity_as_of` nuevo en la API porque la hora del ultimo ciclo no es la de la valoracion; F9.14 y F9.15 abiertas: la tabla de riesgo de F6.5 se calibro con barras diarias y el perfil corre en `1h`, asi que el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria y `llm_wider` es hoy la pieza que lo tapa, y hace falta medir con los mismos snapshots cuanto de los objetivos cortos es el intervalo y cuanto es el modelo; F9.15: `tools/replay_analyst.py` mide el intervalo con la base congelada y sin tocar Yahoo, y de paso encuentra que `volatility_20d_pct` tambien estaba 4,19x baja y que un tercio de las propuestas tienen stop y objetivo los dos bajo 0,5 sigma; F9.14 cerrada con la salida (a): los indicadores del analista pasan a ser **siempre diarios** y `bar_interval` queda como reloj del precio y de la ejecucion, con `lookback_days` a 400 y el experimento reseteado; R8 corregida —lo que la capa gratuita limita son peticiones simultaneas, no por minuto—; F9.16 cerrada: el objetivo tiene ahora un suelo absoluto en sigmas del horizonte, y el minimo por orden sube de 100 a 500 EUR porque cubrir la comision es un problema de tamaño de orden y no de tamaño de recorrido; F9.17: `horizon_days` era una columna muerta y era la causa de los objetivos del 6 % —una sigma a 14 dias son 6,8 % del precio—, asi que ahora viaja al prompt con la sigma ya calculada y al motor de riesgo; F9.18: el capital se repartia por orden alfabetico porque dos `sorted()` tiraban el ranking del screener justo antes de gastarlo, y un ciclo ya no puede abrir mas de `max_new_positions_per_cycle` posiciones; decision nº 9: el experimento de un mes con horizonte de 45 dias, objetivos del 12 % y siete posiciones del 14 %, con el historico reseteado antes de arrancar; F9.19 y F9.20 abiertas: el reparto en dos pasadas y el modelo que contesta con plantilla —24 de 24 `buy`, conviccion 60 en las 24—; F9.21: el tamaño de posicion pasa a ser una banda `min_position_pct`-`max_position_pct`, porque el techo solo no evitaba que la cartera se quedara a medio invertir —el modelo pedia 8 % en 11 de 11 propuestas y con siete plazas eso deja el 44 % del capital en caja, o sea un +12 % por operacion convertido en un +6,7 % de cartera—; F10.11: la tarjeta «Con estos ajustes» enseñaba los limites de los deslizadores encima de un perfil que corria con otros, y cuatro campos de la pantalla —benchmark, reserva de caja, sectores excluidos y permitir cortos— se guardan y no los lee nadie, asi que ahora lo dicen; F9.22: el endpoint de `llama-3.3-70b` se quedo colgado en NIM —acepta la peticion y no la despacha, 61 s hasta el corte con 16 tokens igual que con 1.600—, asi que los cinco perfiles pasan a `meta/llama-3.1-70b-instruct`, que es la unica de la gama grande que responde, y el historico queda partido como en F9.16; el cliente lee la respuesta en streaming, que se implemento persiguiendo un diagnostico falso y se conserva porque el timeout pasa a significar cuanto puede callar el servidor en vez de cuanto puede durar la llamada)
 
 ---
 
@@ -202,10 +202,15 @@ normal, y el navegador reconecta solo. Reserva si da guerra: sondeo cada 5 s.
 
 ### D7 — Modelo: NVIDIA NIM, capa gratuita ✅
 
-Se mantiene `meta/llama-3.3-70b-instruct` vía [src/llm.py](src/llm.py). Aun así, el cliente
+Se mantiene `meta/llama-3.1-70b-instruct` vía [src/llm.py](src/llm.py). Aun así, el cliente
 se hace **multi-proveedor desde el principio** (F6.6): cuando el experimento dé señales
 interesantes, pasar a un modelo premium debe ser cambiar un parámetro del perfil, no
 reescribir el analista.
+
+⚠️ **Era `llama-3.3-70b` hasta el 2026-08-12**, cuando su endpoint se quedó colgado en NIM
+(F9.22). El cambio de versión no es una preferencia: es la única de la gama grande que
+respondía. Y es el primer coste real de la capa gratuita que se paga en decisiones
+perdidas, no en latencia.
 
 **Alcance real tras F6.6:** NIM y **OpenAI**, que comparten el formato
 `/chat/completions` y por tanto salen gratis en dependencias. **Anthropic no**: su API tiene
@@ -3668,6 +3673,70 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       columna—, y el sesgo va **en contra** del resultado y no a favor: las cuatro pequeñas son
       las primeras del ranking del screener, así que si el filtro aporta algo, las mejores ideas
       se llevaron las posiciones más chicas.
+
+- [x] **F9.22** **El endpoint del modelo se quedó colgado en NIM, y el diagnóstico obvio era el
+      equivocado.** Abierta y cerrada el 2026-08-12, a partir de un log del ciclo de la mañana:
+      `Server disconnected without sending a response`, tres intentos, y el agente sin decidir
+      nada desde las 08:25.
+
+      **El diagnóstico que parecía y no era.** Los tres intentos morían a los ~61 s clavados
+      —63 s y 65 s entre líneas del log, menos los 2 s y 4 s de backoff— con un timeout propio
+      de 120 s. Y las llamadas del experimento son largas de verdad: 54 decisiones el 2026-08-11
+      con media de 36,5 s, máximo 92,4 s y 10 por encima de 50 s. De ahí salía una explicación
+      redonda: con `stream: false` no viaja nada por el socket entre la petición y la respuesta
+      completa, así que una generación larga es una conexión callada y algo del camino la siega
+      al minuto. **Era falsa**, y lo que la tumbó fue medir en vez de seguir razonando:
+
+      | Prueba | Resultado |
+      |---|---|
+      | `GET /v1/models` con la misma clave | 200 en 1,1 s |
+      | `POST chat`, 16 tokens, `stream:false` | cae a los 60,9 s |
+      | lo mismo con `stream:true` | cae a los 60,9 s |
+      | `llama-3.3-70b`, tres veces seguidas | 3 de 3 colgadas |
+      | **`meta/llama-3.1-70b-instruct`** | **200 en 4,7 s** |
+      | `nemotron-3-super-120b`, `gpt-oss-120b` | también colgados |
+
+      Dieciséis tokens tardan lo mismo en morir que mil seiscientos, así que la longitud no
+      pintaba nada: el endpoint aceptaba la petición y no la despachaba nunca. **Es un fallo de
+      NVIDIA, y afecta a varios modelos grandes a la vez.**
+
+      ⚠️ **Que un modelo salga en `GET /v1/models` no significa que esté servido.** De los 15
+      modelos grandes del catálogo, 7 devuelven 404 al llamarlos y algunos de los que no,
+      cuelgan. La lista es un catálogo, no un estado.
+
+      **Lo que se hizo: `meta/llama-3.1-70b-instruct`** en los cinco perfiles, en el `default`
+      de `schema.sql`, en el de `config.py` y en el que propone la pantalla de perfil nuevo. La
+      versión anterior y no la última, que no es una preferencia: es la única de la gama grande
+      que respondía.
+
+      **Esto parte el histórico, como F9.16 y a diferencia de F9.21**, y por el motivo fuerte:
+      el modelo *es* la variable del experimento, así que las decisiones de antes y las de
+      después no son la misma pregunta hecha dos veces. `cycles.settings_json` guarda cuál corrió
+      cada ciclo, que para esto es justo para lo que existe.
+
+      **Y el streaming se queda, con la justificación cambiada.** Se implementó persiguiendo el
+      diagnóstico falso, así que lo honesto sería revertirlo; se conserva porque la mitad que sí
+      era cierta sigue en pie: con `stream: false` la llamada **entera** tiene que caber en el
+      timeout, y había 8 de 54 generaciones por encima de 60 s contra un techo de 120. Leer la
+      respuesta según se produce le cambia el significado al parámetro —de «cuánto puede durar la
+      llamada» a «cuánto puede callar el servidor»—, que es la forma correcta de ese límite.
+      Verificado contra NIM real: JSON correcto en 3,6 s y los tokens siguen llegando (61/14),
+      así que NIM acepta `stream_options`.
+
+      Tres cosas que trajo el cambio y no estaban planeadas:
+      - **La negociación de campos opcionales ya no gasta intento.** Con dos extras negociables
+        —`response_format` y `stream_options`— el bucle podía comerse dos de los tres intentos
+        antes de preguntarle nada al modelo. El contador se lleva a mano y el reenvío inmediato
+        no cuenta.
+      - **Un stream vacío o cortado a la mitad se reintenta**, en vez de subir como respuesta sin
+        JSON. Es transporte roto, no una contestación del modelo.
+      - **`raw` deja de ser lo que mandó el servidor** y pasa a ser lo reensamblado, porque en
+        streaming no hay un único payload. No lo lee nadie.
+
+      ⚠️ **Queda roto y sin arreglar: `tools/replay_analyst.py`** llama a `Analyst(interval=…)` y
+      ese parámetro se partió en `price_interval`/`indicator_interval`. Se descubrió intentando
+      verificar el modelo nuevo con el prompt real sin escribir en el histórico, que es
+      exactamente para lo que sirve esa herramienta. Es anterior a F9.22 y no se toca aquí.
 
 - [ ] **F9.20** **El modelo contesta con plantilla, y tres de sus cuatro campos son constantes.**
       Abierta el 2026-08-11 con id propio, porque venía mezclada con F9.16 y no es lo mismo.

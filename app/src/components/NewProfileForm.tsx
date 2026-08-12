@@ -48,9 +48,16 @@ const PROVIDERS = [
   ["openai", "OpenAI"],
 ] as const;
 
-/** What each provider's model field should say when nobody has typed one. */
+/**
+ * What each provider's model field should say when nobody has typed one.
+ *
+ * NVIDIA's is 3.1 and not 3.3 —the previous version, not the latest— because on
+ * 2026-08-12 the `llama-3.3-70b` endpoint went on taking requests without
+ * answering them (F9.22). It is the same default as `schema.sql`, and the two
+ * are meant to move together.
+ */
 const DEFAULT_MODEL: Record<string, string> = {
-  nvidia: "meta/llama-3.3-70b-instruct",
+  nvidia: "meta/llama-3.1-70b-instruct",
   openai: "gpt-4o-mini",
 };
 

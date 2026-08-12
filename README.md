@@ -204,8 +204,9 @@ notepad .env
 ```
 
 Solo `NVIDIA_API_KEY`. La consigues en [build.nvidia.com](https://build.nvidia.com)
-→ busca `llama-3.3-70b-instruct` → **Get API Key**. Empieza por `nvapi-`. Es la
-única clave del proyecto: los datos son de Yahoo y el broker es local.
+→ busca `llama-3.1-70b-instruct` → **Get API Key**. Empieza por `nvapi-`. Es la
+única clave del proyecto: los datos son de Yahoo y el broker es local. La clave
+vale para todo el catálogo, así que da igual desde qué modelo la pidas.
 
 **2. Crea el perfil de experimento.** Los parámetros del agente viven en la base
 de datos, no en el `.env`: el fichero solo lleva infraestructura.
@@ -410,10 +411,17 @@ Modelos que funcionan bien con este prompt:
 
 | Modelo | Comentario |
 |---|---|
-| `meta/llama-3.3-70b-instruct` | Equilibrado, rápido, buen JSON. **Empieza por aquí.** |
+| `meta/llama-3.1-70b-instruct` | Equilibrado, rápido, buen JSON. **Empieza por aquí.** |
 | `qwen/qwen2.5-72b-instruct` | Alternativa muy sólida. |
 | `deepseek-ai/deepseek-r1` | Razona mejor, pero lento y emite `<think>` (ya se filtra). |
-| `nvidia/llama-3.3-nemotron-super-49b-v1` | Más ligero, algo peor calibrado. |
+| `nvidia/llama-3.3-nemotron-super-49b-v1` | Más ligero, y razona en el `content` sin marcarlo con `<think>`: necesita más `max_tokens` o se queda sin llegar al JSON. |
+
+⚠️ `meta/llama-3.3-70b-instruct` era el de esta lista hasta el 2026-08-12, cuando su
+endpoint se quedó aceptando peticiones sin contestarlas (F9.22). **Que un modelo salga en
+`GET /v1/models` no significa que esté servido**: de los 15 modelos grandes del catálogo,
+7 devuelven 404 al llamarlos y algunos de los que no, cuelgan. Si el ciclo falla con
+«Server disconnected without sending a response», pruébalo con otro modelo antes de mirar
+la red o la clave.
 
 No hace falta configurar nada de base de datos: se crea sola en `data/trading.db`.
 

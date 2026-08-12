@@ -8,7 +8,110 @@ itself before answering.
 from __future__ import annotations
 
 from src.analyst import _coerce_action, _coerce_conviction, _coerce_price
-from src.llm import extract_json_object, strip_reasoning
+from src.llm import _read_sse, extract_json_object, strip_reasoning
+
+
+def sse(*events: str) -> list[str]:
+    """The lines as httpx hands them over: no newline, and a blank one between
+    events."""
+    lines: list[str] = []
+    for event in events:
+        lines.extend([event, ""])
+    return lines
+
+
+# -- Reensamblado del stream (F9.22) -----------------------------------------
+
+def test_the_fragments_are_joined_in_order():
+    stream = _read_sse(sse(
+        'data: {"choices":[{"delta":{"content":"{\\"act"}}]}',
+        'data: {"choices":[{"delta":{"content":"ion\\": \\"buy\\"}"}}]}',
+        "data: [DONE]",
+    ))
+    assert extract_json_object(stream.text) == {"action": "buy"}
+
+
+def test_data_without_a_space_is_read_too():
+    """NIM does not always put the space after `data:`."""
+    stream = _read_sse(sse('data:{"choices":[{"delta":{"content":"ok"}}]}'))
+    assert stream.text == "ok"
+
+
+def test_keep_alive_comments_are_ignored():
+    stream = _read_sse(sse(": ping", 'data: {"choices":[{"delta":{"content":"ok"}}]}'))
+    assert stream.text == "ok"
+
+
+def test_a_broken_chunk_does_not_lose_what_came_before():
+    """Better a response with a hole —which the JSON parsing will catch— than
+    throwing away everything that did arrive."""
+    stream = _read_sse(sse(
+        'data: {"choices":[{"delta":{"content":"ho"}}]}',
+        "data: {esto no es json",
+        'data: {"choices":[{"delta":{"content":"la"}}]}',
+    ))
+    assert stream.text == "hola"
+
+
+def test_the_stream_running_out_is_an_ending():
+    """`[DONE]` is not demanded: some deployments simply close."""
+    stream = _read_sse(sse('data: {"choices":[{"delta":{"content":"{}"}}]}'))
+    assert stream.text == "{}"
+    assert stream.error == ""
+
+
+def test_the_usage_of_the_last_chunk_is_kept():
+    """It comes in a chunk with an empty `choices`, and it is the only place
+    where the tokens of the decision are."""
+    stream = _read_sse(sse(
+        'data: {"choices":[{"delta":{"content":"x"}}]}',
+        'data: {"choices":[],"usage":{"prompt_tokens":11,"completion_tokens":22}}',
+        "data: [DONE]",
+    ))
+    assert (stream.usage["prompt_tokens"], stream.usage["completion_tokens"]) == (11, 22)
+
+
+def test_the_model_of_the_chunks_is_kept():
+    stream = _read_sse(sse('data: {"model":"meta/llama-3.3-70b-instruct","choices":[]}'))
+    assert stream.model == "meta/llama-3.3-70b-instruct"
+
+
+def test_an_error_event_stops_the_stream():
+    stream = _read_sse(sse(
+        'data: {"choices":[{"delta":{"content":"a medias"}}]}',
+        'data: {"error":{"message":"overloaded"}}',
+        'data: {"choices":[{"delta":{"content":"esto ya no"}}]}',
+    ))
+    assert "overloaded" in stream.error
+    assert stream.text == "a medias"
+
+
+def test_with_no_content_the_reasoning_is_the_answer():
+    """Reasoning models sometimes fill only `reasoning_content`, and then the
+    JSON is in there."""
+    stream = _read_sse(sse(
+        'data: {"choices":[{"delta":{"reasoning_content":"{\\"action\\": \\"hold\\"}"}}]}'
+    ))
+    assert extract_json_object(stream.text) == {"action": "hold"}
+
+
+def test_the_content_wins_over_the_reasoning():
+    stream = _read_sse(sse(
+        'data: {"choices":[{"delta":{"reasoning_content":"pensando","content":"{}"}}]}'
+    ))
+    assert stream.text == "{}"
+
+
+def test_a_delta_in_blocks_is_flattened():
+    stream = _read_sse(sse(
+        'data: {"choices":[{"delta":{"content":[{"type":"text","text":"ok"}]}}]}'
+    ))
+    assert stream.text == "ok"
+
+
+def test_an_empty_stream_brings_no_text():
+    """Which is what tells a broken transport from a bad answer."""
+    assert _read_sse([]).text == ""
 
 
 # -- Extraccion de JSON ------------------------------------------------------

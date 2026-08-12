@@ -13,6 +13,9 @@ that would fail silently or at the most inopportune moment:
 
 from __future__ import annotations
 
+import json
+
+import httpx
 import pytest
 
 from src.config import ConfigError, Infra
@@ -96,6 +99,207 @@ def test_with_no_key_the_client_is_not_built():
 def test_the_error_names_the_provider():
     with pytest.raises(LLMError, match="OpenAI"):
         LLMClient(api_key="", provider="openai", model="m")
+
+
+# -- La llamada, en streaming (F9.22) ----------------------------------------
+#
+# Nothing here reaches the network either: `httpx.MockTransport` answers, which
+# is what lets the responses that used to be impossible to provoke be written
+# down —a stream that stops halfway, a server that refuses an optional field—
+# and which are exactly the ones that were breaking the cycle.
+
+SSE_CONTENT_TYPE = {"content-type": "text/event-stream"}
+
+
+def sse(*events: str) -> bytes:
+    return ("\n\n".join(events) + "\n\n").encode()
+
+
+def ok_stream(text: str = '{"action": "hold"}', **usage: int) -> httpx.Response:
+    events = [
+        '{"model":"m","choices":[{"delta":{"content":%s}}]}' % json.dumps(text)
+    ]
+    if usage:
+        events.append('{"choices":[],"usage":%s}' % json.dumps(usage))
+    events.append("[DONE]")
+    return httpx.Response(
+        200,
+        content=sse(*[f"data: {e}" for e in events]),
+        headers=SSE_CONTENT_TYPE,
+    )
+
+
+@pytest.fixture
+def no_espera(monkeypatch):
+    """The backoff is 2 s at the first retry, and here nothing is being waited
+    for."""
+    monkeypatch.setattr(LLMClient, "_sleep_backoff", lambda *a, **k: None)
+
+
+def stub(*responses: httpx.Response, **kwargs) -> tuple[LLMClient, list[httpx.Request]]:
+    """A client that answers with `responses`, in order, and keeps the requests
+    so the body that was sent can be looked at."""
+    seen: list[httpx.Request] = []
+    queue = list(responses)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return queue.pop(0) if queue else responses[-1]
+
+    client = LLMClient(api_key="k", model="m", **kwargs)
+    client._client = httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="http://stub"
+    )
+    return client, seen
+
+
+def sent_body(request: httpx.Request) -> dict:
+    return json.loads(request.content)
+
+
+def test_the_answer_is_asked_for_as_a_stream():
+    """The reason is in the module's docstring: a request with `stream: false`
+    is a socket saying nothing for 40 s, and something in the middle hangs up."""
+    client, seen = stub(ok_stream())
+
+    client.complete_json(system="s", user="u")
+
+    assert sent_body(seen[0])["stream"] is True
+
+
+def test_the_fragments_come_back_as_one_answer():
+    client, _ = stub(ok_stream('{"action": "sell"}'))
+
+    response = client.complete_json(system="s", user="u")
+
+    assert response.parsed == {"action": "sell"}
+
+
+def test_the_tokens_survive_the_streaming():
+    """`stream_options` is asked for on purpose: without it the last chunk
+    brings no `usage` and every decision would be written with zero tokens."""
+    client, seen = stub(ok_stream(prompt_tokens=120, completion_tokens=34))
+
+    response = client.complete_json(system="s", user="u")
+
+    assert sent_body(seen[0])["stream_options"] == {"include_usage": True}
+    assert (response.prompt_tokens, response.completion_tokens) == (120, 34)
+
+
+def test_a_refused_option_is_dropped_and_spends_no_attempt():
+    """With a single attempt allowed, if the negotiation spent one there would
+    be nothing left to ask the model with."""
+    client, seen = stub(
+        httpx.Response(422, json={"detail": "stream_options is not supported"}),
+        ok_stream(),
+        max_retries=1,
+    )
+
+    response = client.complete_json(system="s", user="u")
+
+    assert response.parsed == {"action": "hold"}
+    assert "stream_options" not in sent_body(seen[1])
+    assert "response_format" in sent_body(seen[1])  # the other one is not touched
+
+
+def test_a_refused_response_format_is_still_dropped():
+    """It is the case that F6.6 already handled, and it must keep working now
+    that there are two negotiable fields."""
+    client, seen = stub(
+        httpx.Response(400, json={"detail": "response_format not supported"}),
+        ok_stream(),
+        max_retries=1,
+    )
+
+    client.complete_json(system="s", user="u")
+
+    assert "response_format" not in sent_body(seen[1])
+    assert "stream_options" in sent_body(seen[1])
+
+
+def test_a_400_that_names_nothing_ends_up_failing():
+    """The negotiation is bounded: once both extras are off, a 400 is a real
+    error and is not retried for ever."""
+    client, seen = stub(httpx.Response(400, json={"detail": "modelo inexistente"}))
+
+    with pytest.raises(LLMError, match="400"):
+        client.complete_json(system="s", user="u")
+
+    assert len(seen) == 3  # two negotiations and the hard failure
+
+
+def test_a_401_is_not_retried():
+    client, seen = stub(httpx.Response(401, text="clave invalida"))
+
+    with pytest.raises(LLMError, match="401"):
+        client.complete_json(system="s", user="u")
+
+    assert len(seen) == 1
+
+
+def test_a_stream_that_brings_nothing_is_retried(no_espera):
+    """A 200 with an empty body is a broken transport, not an answer from the
+    model: it is worth asking again instead of skipping the symbol."""
+    client, seen = stub(
+        httpx.Response(200, content=b"", headers=SSE_CONTENT_TYPE),
+        ok_stream(),
+    )
+
+    response = client.complete_json(system="s", user="u")
+
+    assert response.parsed == {"action": "hold"}
+    assert len(seen) == 2
+
+
+def test_an_error_halfway_through_the_stream_is_retried(no_espera):
+    client, _ = stub(
+        httpx.Response(
+            200,
+            content=sse(
+                'data: {"choices":[{"delta":{"content":"{\\"act"}}]}',
+                'data: {"error":{"message":"overloaded"}}',
+            ),
+            headers=SSE_CONTENT_TYPE,
+        ),
+        ok_stream(),
+    )
+
+    assert client.complete_json(system="s", user="u").parsed == {"action": "hold"}
+
+
+def test_a_dropped_connection_gives_up_saying_how_many_times(no_espera):
+    """The failure of the 2026-08-12: three attempts, all of them with the
+    server hanging up without sending anything."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadError("Server disconnected without sending a response.")
+
+    client = LLMClient(api_key="k", model="m", max_retries=3)
+    client._client = httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="http://stub"
+    )
+
+    with pytest.raises(LLMError, match="tras 3 intentos"):
+        client.complete_json(system="s", user="u")
+
+
+def test_a_429_is_retried_honouring_retry_after(no_espera):
+    client, seen = stub(
+        httpx.Response(429, text="rate limit", headers={"Retry-After": "1"}),
+        ok_stream(),
+    )
+
+    client.complete_json(system="s", user="u")
+
+    assert len(seen) == 2
+
+
+def test_a_stream_without_json_says_what_came_back():
+    """The message carries the beginning of the response because that is the
+    only trace left of what the model answered."""
+    client, _ = stub(ok_stream("No puedo ayudarte con eso."))
+
+    with pytest.raises(LLMError, match="No puedo ayudarte"):
+        client.complete_json(system="s", user="u")
 
 
 # -- Clave por perfil (F6.7) -------------------------------------------------
