@@ -43,6 +43,15 @@ STALE_CYCLE_MINUTES = 90
 #: screen text (and it is what tells this 'halted' from the kill switch's).
 STOP_REASON = "Parada solicitada desde la interfaz."
 
+#: Fraction of the profile's initial stop distance that the trailing stop may
+#: never cross (F9.25). Half, so the ratchet still has somewhere to go —a floor
+#: at 1x would freeze it— while the position keeps a cushion the daily noise
+#: does not clear on its own. It is a fraction and not an absolute number of
+#: ATRs because `stop_atr_multiple` is a profile setting: a conservative profile
+#: with a 3x stop gets a 1,5x floor and an aggressive one with 1,5x gets 0,75x,
+#: which is the same decision in both.
+TRAILING_STOP_FLOOR_FRACTION = 0.5
+
 
 class CycleStopped(Exception):
     """A stop was requested from the interface and honoured at a checkpoint.
@@ -700,7 +709,7 @@ class TradingCycle:
             decision_id = self._save_decision(
                 cycle_id, portfolio_id, proposal, snapshot_ids.get(symbol)
             )
-            self._maybe_raise_stop(row, proposal, position)
+            self._maybe_raise_stop(row, proposal, position, snapshot)
 
             if proposal.action != "sell":
                 continue
@@ -1047,27 +1056,72 @@ class TradingCycle:
                 log.warning("No se pudo asignar stop a %s: %s", symbol, exc)
 
     def _maybe_raise_stop(
-        self, row: dict, proposal: Proposal, position
+        self, row: dict, proposal: Proposal, position, snapshot: MarketSnapshot
     ) -> None:
-        """Lets the LLM raise the stop, never lower it.
+        """Lets the LLM raise the stop, never lower it, and never past the floor.
 
         A model that can move the stop further away can void the protection; being
         able only to bring it closer turns the suggestion into a discretionary
-        trailing stop with no added risk.
+        trailing stop.
+
+        ⚠️ **«Only closer» is not the same as «no added risk», and that was the
+        bug (F9.25).** `risk.py` grants the analyst's stop on an entry *only if it
+        is wider* than the ATR one —see `llm_wider`, "never the other way
+        round"— because the distance to the stop is this system's risk unit. Here
+        the asymmetry ran the other way and unbounded: every suggestion closer to
+        the price was written as it came. Measured on the first cycle with
+        `nemotron-3-super`, six of nine positions moved in one go and the book
+        went from stops at 3x ATR to stops between 0,48x and 1,20x, with one of
+        them **above** the live price. At that distance the position does not exit
+        on a broken thesis, it exits on Tuesday's noise, and with a 45-day horizon
+        and 12 % targets that is the experiment losing its positions before its
+        thesis can be right or wrong.
+
+        So the suggestion is still honoured, but clipped at
+        `TRAILING_STOP_FLOOR_FRACTION` of the profile's own stop distance. The
+        clip is logged with both numbers: a stop that silently ends up somewhere
+        other than where the analyst asked is exactly what took a whole cycle to
+        notice.
         """
         suggested = proposal.suggested_stop
         if suggested is None:
             return
         current = _opt_float(row.get("stop_price"))
-        if suggested >= position.current_price:
+        price = position.current_price
+        if suggested >= price:
             return
         if current is not None and suggested <= current:
             return
+
+        stop = suggested
+        atr = _opt_float(snapshot.indicators.get("atr_14"))
+        if atr:
+            floor_multiple = (
+                self.settings.risk.stop_atr_multiple * TRAILING_STOP_FLOOR_FRACTION
+            )
+            nearest = price - atr * floor_multiple
+            if suggested > nearest:
+                if current is not None and nearest <= current:
+                    log.info(
+                        "%s: el analista pedia el stop en %.2f, a %.2f ATR del precio; "
+                        "se queda en %s porque el suelo de %.2f ATR (%.2f) no lo mejora.",
+                        position.symbol, suggested, (price - suggested) / atr,
+                        _fmt(current), floor_multiple, nearest,
+                    )
+                    return
+                log.info(
+                    "%s: el analista pedia el stop en %.2f, a %.2f ATR del precio; "
+                    "se sube solo a %.2f, el suelo de %.2f ATR.",
+                    position.symbol, suggested, (price - suggested) / atr,
+                    nearest, floor_multiple,
+                )
+                stop = nearest
+
         try:
-            self.db.update_position_levels(str(row["id"]), stop_price=suggested)
+            self.db.update_position_levels(str(row["id"]), stop_price=round(stop, 4))
             log.info(
                 "%s: stop elevado de %s a %.2f por sugerencia del analista.",
-                position.symbol, _fmt(current), suggested,
+                position.symbol, _fmt(current), stop,
             )
         except DatabaseError as exc:
             log.warning("No se pudo actualizar el stop de %s: %s", position.symbol, exc)
