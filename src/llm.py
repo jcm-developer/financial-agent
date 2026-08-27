@@ -19,7 +19,10 @@ turned out not to fix. The «Server disconnected without sending a response» of
 the 2026-08-12 was NVIDIA's `llama-3.3-70b` endpoint taking requests and never
 dispatching them —measured: 61 s to the drop with 16 tokens and with 1.600,
 streaming and not, while `llama-3.1-70b` answered in 4,7 s on the same key— so
-no client could have saved it.
+no client could have saved it. That replacement lasted two weeks: NVIDIA retired
+`llama-3.1-70b` on the 2026-08-26 with a 410, and the model moved out of the
+`meta/llama` range altogether (F9.23). **Nothing here assumes a model**, which is
+why neither failure touched this module.
 
 What streaming is kept for is the other half. With `stream: false` the whole
 call has to fit in the timeout, and the sample of the 2026-08-11 has 8 of 54

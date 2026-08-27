@@ -51,13 +51,17 @@ const PROVIDERS = [
 /**
  * What each provider's model field should say when nobody has typed one.
  *
- * NVIDIA's is 3.1 and not 3.3 —the previous version, not the latest— because on
- * 2026-08-12 the `llama-3.3-70b` endpoint went on taking requests without
- * answering them (F9.22). It is the same default as `schema.sql`, and the two
- * are meant to move together.
+ * NVIDIA's is not from the `meta/llama` range because that range has no served
+ * version left: `llama-3.3-70b` hung on 2026-08-12 (F9.22) and `llama-3.1-70b`
+ * was retired on 2026-08-26 (410 Gone). Nor is it the `minimax-m3` F9.23 picked:
+ * a day later it answered 429 to every call while the same key was served by
+ * other models, so what it lacks is a turn, not a quota. Of what was measured
+ * with the real prompt, `nemotron-3-super` is the one that returned JSON three
+ * times out of three (F9.23.1). It is the same default as `schema.sql`, and the
+ * two are meant to move together.
  */
 const DEFAULT_MODEL: Record<string, string> = {
-  nvidia: "meta/llama-3.1-70b-instruct",
+  nvidia: "nvidia/nemotron-3-super-120b-a12b",
   openai: "gpt-4o-mini",
 };
 

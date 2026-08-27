@@ -366,10 +366,16 @@ create table if not exists agent_settings (
     -- Modelo
     llm_provider           text not null default 'nvidia'
                            check (llm_provider in ('nvidia', 'anthropic', 'openai')),
-    -- 3.1 y no 3.3, que es la anterior y no la ultima, porque el 2026-08-12 el
-    -- endpoint de llama-3.3-70b se quedo aceptando peticiones sin contestarlas
-    -- (F9.22). Un perfil nuevo no puede nacer apuntando a un modelo colgado.
-    llm_model              text not null default 'meta/llama-3.1-70b-instruct',
+    -- No es de la gama meta/llama porque el 2026-08-26 NVIDIA retiro
+    -- llama-3.1-70b (410 Gone, fin de vida a las 09:00 UTC) despues de que
+    -- F9.22 hubiera dejado colgado a llama-3.3-70b: la familia entera se quedo
+    -- sin una version servida. Y no es minimax-m3, que fue el sustituto que
+    -- eligio F9.23, porque al dia siguiente devolvia 429 en todas las llamadas
+    -- —capacidad del modelo, no cuota de la cuenta— mientras la misma clave
+    -- respondia con otros. De lo medido con el prompt real, nemotron-3-super es
+    -- el unico que contesto JSON las tres veces en 14-23 s (F9.23.1). Un perfil
+    -- nuevo no puede nacer apuntando a un modelo retirado ni a uno sin turno.
+    llm_model              text not null default 'nvidia/nemotron-3-super-120b-a12b',
     llm_api_key            text,
     llm_temperature        real not null default 0.2
                            check (llm_temperature between 0 and 2),

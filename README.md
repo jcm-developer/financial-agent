@@ -204,7 +204,7 @@ notepad .env
 ```
 
 Solo `NVIDIA_API_KEY`. La consigues en [build.nvidia.com](https://build.nvidia.com)
-→ busca `llama-3.1-70b-instruct` → **Get API Key**. Empieza por `nvapi-`. Es la
+→ busca `nemotron-3-super` → **Get API Key**. Empieza por `nvapi-`. Es la
 única clave del proyecto: los datos son de Yahoo y el broker es local. La clave
 vale para todo el catálogo, así que da igual desde qué modelo la pidas.
 
@@ -407,21 +407,36 @@ El **modelo** no va aquí: es un parámetro del perfil (`llm_provider` y
 experimento y tiene que quedar registrado junto al resto de la configuración con
 la que corrió cada ciclo.
 
-Modelos que funcionan bien con este prompt:
+Modelos medidos con el prompt real. Cada fila lleva **cuántas llamadas** hay detrás,
+porque una sola miente: los dos veredictos que el 2026-08-26 descartaron la familia
+`nemotron-3` se cayeron al repetirlos al día siguiente. La lista caduca rápido (ver los
+avisos de abajo):
 
-| Modelo | Comentario |
-|---|---|
-| `meta/llama-3.1-70b-instruct` | Equilibrado, rápido, buen JSON. **Empieza por aquí.** |
-| `qwen/qwen2.5-72b-instruct` | Alternativa muy sólida. |
-| `deepseek-ai/deepseek-r1` | Razona mejor, pero lento y emite `<think>` (ya se filtra). |
-| `nvidia/llama-3.3-nemotron-super-49b-v1` | Más ligero, y razona en el `content` sin marcarlo con `<think>`: necesita más `max_tokens` o se queda sin llegar al JSON. |
+| Modelo | Llamadas | Comentario |
+|---|---|---|
+| **`nvidia/nemotron-3-super-120b-a12b`** | 1 + 3 | 14-23 s y JSON en las cuatro, 1.158-1.492 tokens de respuesta. En dos de las tres últimas deja `suggested_stop`, `suggested_target` y `suggested_weight_pct` a null y los deriva el motor de riesgo, que está escrito para eso. **Empieza por aquí.** |
+| `minimaxai/minimax-m3` | 3 + 4 | El 08-26 fue el mejor de los doce: 15-20 s, ~330 tokens, los nueve campos, prosa en español. El 08-27 devolvió **429 en las cuatro**, en 206 ms, sin `Retry-After`: no tiene turno, y no es la cuota de la cuenta (ver el aviso). |
+| `nvidia/nemotron-3-ultra-550b-a55b` | 4 + 3 | El más capaz del catálogo (550B, 1 M de contexto) y aun así no sirve aquí: JSON correcto 2 de 3, pero a 62 y 160 s por llamada —29 símbolos serían 77 min de ciclo, con los ciclos cada dos horas— y la tercera murió con un 503 a media generación. El razonamiento sí lo manda separado en `reasoning_content`. |
+| `openai/gpt-oss-120b` | 5 + 1 | Cuando contesta tarda 49 s; se colgó 4 de 5 el 08-26 y otra vez el 08-27, a los 45 s. |
+| `nvidia/nemotron-3.5-lightning-30b-a3b` | 1 + 1 + 8 | Razona en el `content` sin marcarlo con `<think>` y **agota el techo de 1.600 tokens antes de llegar al JSON**. En un ciclo real fue 1 de 8. |
 
-⚠️ `meta/llama-3.3-70b-instruct` era el de esta lista hasta el 2026-08-12, cuando su
-endpoint se quedó aceptando peticiones sin contestarlas (F9.22). **Que un modelo salga en
-`GET /v1/models` no significa que esté servido**: de los 15 modelos grandes del catálogo,
-7 devuelven 404 al llamarlos y algunos de los que no, cuelgan. Si el ciclo falla con
-«Server disconnected without sending a response», pruébalo con otro modelo antes de mirar
-la red o la clave.
+⚠️ **Un modelo del catálogo no es un modelo servido, y menos aún un modelo que siga
+existiendo la semana que viene.** `meta/llama-3.3-70b-instruct` se colgó el 2026-08-12
+(F9.22) y su sustituto `meta/llama-3.1-70b-instruct` fue **retirado el 2026-08-26** con un
+410 «end of life» a las 09:00 UTC, que dejó la gama entera sin ninguna versión servida
+(F9.23). Además, de los modelos grandes del catálogo, seis devuelven **404** a esta cuenta
+aunque `GET /v1/models` los liste. Si el ciclo falla con «Server disconnected without
+sending a response» o con un 410, es el proveedor: prueba otro modelo antes de mirar la red
+o la clave.
+
+⚠️ **Y un 429 no dice de quién es el límite.** El 2026-08-27, `minimax-m3` devolvía 429 en
+206 ms mientras `nemotron-3.5-lightning` contestaba 200 con la misma clave y en el mismo
+minuto: era capacidad de ese modelo, no cuota de la cuenta. El aviso que estaba aquí escrito
+el 08-26 —«treinta llamadas seguidas agotaron la cuenta»— se dio por bueno sin comprobar
+eso, y lo más probable es que fuera este mismo 429 por modelo. Lo que sí está medido de la
+capa gratuita es el límite de peticiones **simultáneas** (R8): medir con un ciclo en vuelo
+deja sin análisis a los dos. Así que hazlo con el mercado cerrado, y si un modelo devuelve
+429 en frío, prueba otro antes de dar por agotada la cuenta.
 
 No hace falta configurar nada de base de datos: se crea sola en `data/trading.db`.
 

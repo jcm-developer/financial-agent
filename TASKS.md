@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-08-12 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`; F9.8.2: Resumen ya dice que sus tres primeras cifras van a precio del ultimo ciclo y la tabla de abajo a precio vivo, con `equity_as_of` nuevo en la API porque la hora del ultimo ciclo no es la de la valoracion; F9.14 y F9.15 abiertas: la tabla de riesgo de F6.5 se calibro con barras diarias y el perfil corre en `1h`, asi que el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria y `llm_wider` es hoy la pieza que lo tapa, y hace falta medir con los mismos snapshots cuanto de los objetivos cortos es el intervalo y cuanto es el modelo; F9.15: `tools/replay_analyst.py` mide el intervalo con la base congelada y sin tocar Yahoo, y de paso encuentra que `volatility_20d_pct` tambien estaba 4,19x baja y que un tercio de las propuestas tienen stop y objetivo los dos bajo 0,5 sigma; F9.14 cerrada con la salida (a): los indicadores del analista pasan a ser **siempre diarios** y `bar_interval` queda como reloj del precio y de la ejecucion, con `lookback_days` a 400 y el experimento reseteado; R8 corregida —lo que la capa gratuita limita son peticiones simultaneas, no por minuto—; F9.16 cerrada: el objetivo tiene ahora un suelo absoluto en sigmas del horizonte, y el minimo por orden sube de 100 a 500 EUR porque cubrir la comision es un problema de tamaño de orden y no de tamaño de recorrido; F9.17: `horizon_days` era una columna muerta y era la causa de los objetivos del 6 % —una sigma a 14 dias son 6,8 % del precio—, asi que ahora viaja al prompt con la sigma ya calculada y al motor de riesgo; F9.18: el capital se repartia por orden alfabetico porque dos `sorted()` tiraban el ranking del screener justo antes de gastarlo, y un ciclo ya no puede abrir mas de `max_new_positions_per_cycle` posiciones; decision nº 9: el experimento de un mes con horizonte de 45 dias, objetivos del 12 % y siete posiciones del 14 %, con el historico reseteado antes de arrancar; F9.19 y F9.20 abiertas: el reparto en dos pasadas y el modelo que contesta con plantilla —24 de 24 `buy`, conviccion 60 en las 24—; F9.21: el tamaño de posicion pasa a ser una banda `min_position_pct`-`max_position_pct`, porque el techo solo no evitaba que la cartera se quedara a medio invertir —el modelo pedia 8 % en 11 de 11 propuestas y con siete plazas eso deja el 44 % del capital en caja, o sea un +12 % por operacion convertido en un +6,7 % de cartera—; F10.11: la tarjeta «Con estos ajustes» enseñaba los limites de los deslizadores encima de un perfil que corria con otros, y cuatro campos de la pantalla —benchmark, reserva de caja, sectores excluidos y permitir cortos— se guardan y no los lee nadie, asi que ahora lo dicen; F9.22: el endpoint de `llama-3.3-70b` se quedo colgado en NIM —acepta la peticion y no la despacha, 61 s hasta el corte con 16 tokens igual que con 1.600—, asi que los cinco perfiles pasan a `meta/llama-3.1-70b-instruct`, que es la unica de la gama grande que responde, y el historico queda partido como en F9.16; el cliente lee la respuesta en streaming, que se implemento persiguiendo un diagnostico falso y se conserva porque el timeout pasa a significar cuanto puede callar el servidor en vez de cuanto puede durar la llamada)
+Última actualización: 2026-08-27 (F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`; F9.8.2: Resumen ya dice que sus tres primeras cifras van a precio del ultimo ciclo y la tabla de abajo a precio vivo, con `equity_as_of` nuevo en la API porque la hora del ultimo ciclo no es la de la valoracion; F9.14 y F9.15 abiertas: la tabla de riesgo de F6.5 se calibro con barras diarias y el perfil corre en `1h`, asi que el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria y `llm_wider` es hoy la pieza que lo tapa, y hace falta medir con los mismos snapshots cuanto de los objetivos cortos es el intervalo y cuanto es el modelo; F9.15: `tools/replay_analyst.py` mide el intervalo con la base congelada y sin tocar Yahoo, y de paso encuentra que `volatility_20d_pct` tambien estaba 4,19x baja y que un tercio de las propuestas tienen stop y objetivo los dos bajo 0,5 sigma; F9.14 cerrada con la salida (a): los indicadores del analista pasan a ser **siempre diarios** y `bar_interval` queda como reloj del precio y de la ejecucion, con `lookback_days` a 400 y el experimento reseteado; R8 corregida —lo que la capa gratuita limita son peticiones simultaneas, no por minuto—; F9.16 cerrada: el objetivo tiene ahora un suelo absoluto en sigmas del horizonte, y el minimo por orden sube de 100 a 500 EUR porque cubrir la comision es un problema de tamaño de orden y no de tamaño de recorrido; F9.17: `horizon_days` era una columna muerta y era la causa de los objetivos del 6 % —una sigma a 14 dias son 6,8 % del precio—, asi que ahora viaja al prompt con la sigma ya calculada y al motor de riesgo; F9.18: el capital se repartia por orden alfabetico porque dos `sorted()` tiraban el ranking del screener justo antes de gastarlo, y un ciclo ya no puede abrir mas de `max_new_positions_per_cycle` posiciones; decision nº 9: el experimento de un mes con horizonte de 45 dias, objetivos del 12 % y siete posiciones del 14 %, con el historico reseteado antes de arrancar; F9.19 y F9.20 abiertas: el reparto en dos pasadas y el modelo que contesta con plantilla —24 de 24 `buy`, conviccion 60 en las 24—; F9.21: el tamaño de posicion pasa a ser una banda `min_position_pct`-`max_position_pct`, porque el techo solo no evitaba que la cartera se quedara a medio invertir —el modelo pedia 8 % en 11 de 11 propuestas y con siete plazas eso deja el 44 % del capital en caja, o sea un +12 % por operacion convertido en un +6,7 % de cartera—; F10.11: la tarjeta «Con estos ajustes» enseñaba los limites de los deslizadores encima de un perfil que corria con otros, y cuatro campos de la pantalla —benchmark, reserva de caja, sectores excluidos y permitir cortos— se guardan y no los lee nadie, asi que ahora lo dicen; F9.22: el endpoint de `llama-3.3-70b` se quedo colgado en NIM —acepta la peticion y no la despacha, 61 s hasta el corte con 16 tokens igual que con 1.600—, asi que los cinco perfiles pasan a `meta/llama-3.1-70b-instruct`, que es la unica de la gama grande que responde, y el historico queda partido como en F9.16; el cliente lee la respuesta en streaming, que se implemento persiguiendo un diagnostico falso y se conserva porque el timeout pasa a significar cuanto puede callar el servidor en vez de cuanto puede durar la llamada; F9.23: NVIDIA retiro `meta/llama-3.1-70b-instruct` el 2026-08-26 a las 09:00 UTC con un 410 de fin de vida y el ciclo de las 10:20 fallo 29 de 29 llamadas, asi que el modelo sale de la gama `meta/llama` —que se queda sin ninguna version servida— y pasa a `minimaxai/minimax-m3`, el unico de los doce medidos con el prompt real que contesto las tres veces, por delante del mucho mas capaz Nemotron 3 Ultra, que razona en el `content` sin marcarlo y gasta 1.432 de los 1.600 tokens antes del JSON; tercer corte del historico en once dias, y el argumento mas fuerte hasta ahora para F9.1; F9.24 abierta: `extract_json_object` no perdona el `{` doblado que emite la familia `nemotron-3`; F9.23.1: `minimaxai/minimax-m3`, el sustituto que eligio F9.23, devolvio 429 en las 29 llamadas del ciclo siguiente y en 206 ms, y el 429 resulto ser **del modelo y no de la cuenta** —la misma clave era servida por otros en el mismo minuto—, asi que se cae el aviso de F9.23 sobre la cuota agotada; repetir la medicion con tres llamadas por modelo tumba tambien los dos veredictos de F9.23 sobre `nemotron-3`, que eran de una llamada cada uno: super contesta JSON 3 de 3 en 14-23 s y pasa a ser el modelo de los cinco perfiles, y ultra manda el razonamiento separado en `reasoning_content` pero tarda 160 s, o sea 77 min de ciclo; el precio de super son tres campos a null que deriva el motor de riesgo; cuarto corte del historico en doce dias; el techo de 1.600 tokens ya roza —1.492 en la peor de tres— y queda en F9.24 con el numero puesto)
 
 ---
 
@@ -202,15 +202,25 @@ normal, y el navegador reconecta solo. Reserva si da guerra: sondeo cada 5 s.
 
 ### D7 — Modelo: NVIDIA NIM, capa gratuita ✅
 
-Se mantiene `meta/llama-3.1-70b-instruct` vía [src/llm.py](src/llm.py). Aun así, el cliente
+Corre con `nvidia/nemotron-3-super-120b-a12b` vía [src/llm.py](src/llm.py). Aun así, el cliente
 se hace **multi-proveedor desde el principio** (F6.6): cuando el experimento dé señales
 interesantes, pasar a un modelo premium debe ser cambiar un parámetro del perfil, no
 reescribir el analista.
 
-⚠️ **Era `llama-3.3-70b` hasta el 2026-08-12**, cuando su endpoint se quedó colgado en NIM
-(F9.22). El cambio de versión no es una preferencia: es la única de la gama grande que
-respondía. Y es el primer coste real de la capa gratuita que se paga en decisiones
-perdidas, no en latencia.
+⚠️ **El modelo ha cambiado tres veces en dos semanas, y ninguna por gusto.** Era
+`llama-3.3-70b` hasta el 2026-08-12, cuando su endpoint se quedó colgado en NIM (F9.22);
+pasó a `llama-3.1-70b`, y el 2026-08-26 NVIDIA lo retiró con un 410 «end of life» a las
+09:00 UTC, dejando la gama `meta/llama` sin ninguna versión servida (F9.23). Así que el
+modelo salió de la gama entera, a `minimaxai/minimax-m3` — que al día siguiente devolvía
+**429 en todas las llamadas, en 206 ms**, mientras la misma clave era servida por otros
+modelos: capacidad de ese modelo, no cuota de la cuenta (F9.23.1).
+
+**Lo que esto enseña sobre la capa gratuita no es la latencia: son las tres formas
+distintas en que el proveedor te quita la variable del experimento sin avisar** — el
+endpoint que acepta y no despacha, la retirada con 410 a media mañana, y el modelo que
+existe, contesta a otros y a ti te da 429. El precio se paga en histórico partido —cuatro
+veces ya— y en decisiones perdidas: 29 de 29 llamadas el 2026-08-26 a las 10:20, y otras
+29 de 29 el 2026-08-27 a las 10:13. Es el argumento más fuerte que hay hoy para F9.1.
 
 **Alcance real tras F6.6:** NIM y **OpenAI**, que comparten el formato
 `/chat/completions` y por tanto salen gratis en dependencias. **Anthropic no**: su API tiene
@@ -3737,6 +3747,182 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       ese parámetro se partió en `price_interval`/`indicator_interval`. Se descubrió intentando
       verificar el modelo nuevo con el prompt real sin escribir en el histórico, que es
       exactamente para lo que sirve esa herramienta. Es anterior a F9.22 y no se toca aquí.
+
+- [x] **F9.23** **NVIDIA retiró el modelo, y el sustituto de F9.22 duró dos semanas.**
+      Abierta y cerrada el 2026-08-26. El ciclo de las 10:20 falló las 29 llamadas con un
+      error que no deja nada que diagnosticar:
+
+      ```
+      NVIDIA NIM devolvio 410: {"detail":"The model 'meta/llama-3.1-70b-instruct' has
+      reached its end of life on 2026-08-26T09:00:00Z and is no longer available."}
+      ```
+
+      **La gama `meta/llama` se quedó sin salida.** F9.22 había movido los perfiles de
+      `llama-3.3-70b` (colgado) a `llama-3.1-70b` porque era «la única de la gama grande que
+      respondía»; hoy esa única está retirada y la 3.3 sigue colgada, así que no hay adónde
+      volver dentro de la familia. El catálogo (`GET /v1/models`) devuelve 83 ids y ninguno
+      es `meta/llama-*` de instrucción general.
+
+      **Se midió en vez de elegir por benchmark**, con el prompt de entrada real de SGO.PA
+      reconstruido de `bar_cache` (2.400 tokens, indicadores diarios, las diez últimas
+      sesiones) contra la base congelada y sin escribir nada:
+
+      | Modelo | Resultado |
+      |---|---|
+      | **`minimaxai/minimax-m3`** | **3 de 3 aprovechables. 15-20 s, ~330 tokens, JSON limpio, los nueve campos, prosa en español** |
+      | `openai/gpt-oss-120b` | 1 de 5. La buena, 49 s; las otras cuatro, colgadas a los 90 s |
+      | `nvidia/nemotron-3-ultra-550b-a55b` | 1 de 4. Ver abajo |
+      | `nvidia/nemotron-3-super-120b-a12b` | 0 de 1: abre el JSON con un `{` de más |
+      | `nvidia/nemotron-3.5-lightning-30b-a3b` | 0 de 1: razona en el `content` sin marcarlo y no llega al JSON |
+      | `mistralai/mistral-nemotron` | 0 de 1: colgado, 187 s hasta el corte |
+      | `nemotron-70b`, `palmyra-fin-70b`, `kimi-k3`, `kimi-k2.6`, `mistral-large-2`, `deepseek-v4-flash` | **404** a esta cuenta, estando los seis en el catálogo |
+
+      **Se descartó el más capaz, y es la decisión que cuesta explicar.** Nemotron 3 Ultra es
+      550B con 55B activos y un millón de contexto, y es el open-weight mejor colocado del
+      catálogo; aquí es el menos usable. Falla por dos motivos a la vez: razona en el
+      `content` **sin marcarlo con `<think>`** —1.432 tokens de los 1.600 del techo, o sea al
+      borde de truncar antes del JSON— y a veces emite `{
+{` en lugar de `{`. Un modelo que
+      necesita que le subas el techo de tokens y que le perdones la sintaxis no es más
+      capaz para este trabajo: es más caro de cuota y falla tres de cada cuatro veces.
+
+      ⚠️ **`extract_json_object` no perdona el `{` doblado, y eso tumba a la familia
+      `nemotron-3` entera.** `_first_balanced_object` arranca en el primer `{` y no vuelve a
+      intentarlo, así que con un `{` de más la profundidad nunca baja a cero y devuelve
+      `None`. Se deja **sin arreglar aquí a propósito**: arreglarlo no haría usable a Ultra
+      —el otro fallo, el razonamiento sin marcar, sigue en pie— y mezclaría un cambio del
+      parser con un cambio de modelo, que es justo lo que F9.22 avisó de no hacer. Queda
+      apuntado como **F9.24**.
+
+      **Lo que se hizo:** `minimaxai/minimax-m3` en el `default` de
+      [schema.sql](schema.sql), en el de [src/config.py](src/config.py), en `LLM_MODEL` del
+      `.env`, en el que propone la pantalla de perfil nuevo y en
+      [tools/seed_demo.py](tools/seed_demo.py). **El perfil que corre se cambia desde
+      Ajustes**, que es lo único que necesita el planificador: el modelo es una columna de
+      `agent_settings`, así que el ciclo siguiente ya lo lee de la base sin reconstruir nada.
+      Los `default` son para que un perfil nuevo no nazca apuntando a un modelo retirado.
+
+      **Esto parte el histórico, como F9.16 y F9.22**, y por el mismo motivo fuerte: el
+      modelo *es* la variable del experimento. `cycles.settings_json` guarda cuál corrió cada
+      ciclo, que para esto es justo para lo que existe. Es el tercer corte en once días, y
+      eso ya es un dato sobre el proveedor y no sobre el experimento.
+
+      ⚠️ **Medir modelos compite con el experimento por la cuota.** Unas treinta llamadas de
+      prueba seguidas dejaron la cuenta entera devolviendo 429 durante un rato — no el
+      modelo, la cuenta. Corrige el matiz de R8 una vez más: lo que la capa gratuita limita
+      no es solo la concurrencia, también hay un techo diario que una tanda de medición se
+      come. La medición se hace con el mercado cerrado.
+
+      ⚠️ **Corregido el 2026-08-27 en F9.23.1: ese 429 era del modelo.** Medido en el mismo
+      minuto y con la misma clave, `minimax-m3` devolvía 429 en 206 ms mientras
+      `nemotron-3.5-lightning` devolvía 200. Así que «la cuenta entera» se dio por buena sin
+      comprobarlo, y lo que R8 tiene medido sigue siendo solo la concurrencia.
+
+- [x] **F9.23.1** **El sustituto que eligió F9.23 no tenía turno, y los dos veredictos que
+      descartaron a la familia `nemotron-3` eran de una sola llamada cada uno.** Abierta y
+      cerrada el 2026-08-27, al día siguiente de F9.23.
+
+      El ciclo de las 10:13 CEST falló las 29 llamadas con `minimaxai/minimax-m3`, y el 429
+      llegaba **en 206 ms**: no es una generación que se cae a medias, es una petición que no
+      entra.
+
+      ```
+      NVIDIA NIM devolvio 429: {"status":429,"title":"Too Many Requests"}
+      ```
+
+      **El 429 es del modelo y no de la cuenta**, que es lo único que hacía falta saber para
+      decidir: una llamada mínima a cinco modelos, en el mismo minuto y con la misma clave,
+      dio 429 en 206 ms para minimax y 200 para `nemotron-3.5-lightning`. Eso corrige el
+      aviso que F9.23 dejó al pie.
+
+      **Y repetir la medición tumbó los dos veredictos de F9.23 sobre `nemotron-3`.** Cada uno
+      se había dado con una llamada. Con el prompt de entrada real y tres símbolos distintos
+      (AIR.PA, SAN.MC, BAYN.DE):
+
+      | Modelo | Latencia | Respuesta | JSON |
+      |---|---|---|---|
+      | **`nemotron-3-super-120b-a12b`** | 14 / 19 / 23 s | 1.158-1.492 tok | **3 de 3** |
+      | `nemotron-3-ultra-550b-a55b` | 62 / 160 s / — | 1.319-1.443 tok | 2 de 3; la tercera, un 503 «Service temporarily overloaded» a media generación |
+      | `nemotron-3.5-lightning-30b-a3b` | 120 s | **1.600, al techo** | 0 de 1 |
+
+      Ultra **sí manda el razonamiento separado en `reasoning_content`**, que es justo el campo
+      que `_read_sse` ya acumula aparte, así que el fallo grave por el que F9.23 lo descartó
+      —«razona en el `content` sin marcarlo»— era de la muestra y no del modelo. Se queda fuera
+      igual, por una razón que sí aguanta: 160 s por llamada son **77 minutos de ciclo** con 29
+      símbolos, y los ciclos van cada dos horas. Lightning, en cambio, confirma su veredicto:
+      agota los 1.600 tokens razonando en el `content` y no llega al JSON — y en el ciclo real
+      de las 10:00, que se paró a la mitad, fue 1 de 8.
+
+      **Lo que se hizo:** los cinco perfiles y los cinco `default` a
+      `nvidia/nemotron-3-super-120b-a12b` — [schema.sql](schema.sql),
+      [src/config.py](src/config.py), `LLM_MODEL` del `.env`,
+      [app/src/components/NewProfileForm.tsx](app/src/components/NewProfileForm.tsx) y
+      [tools/seed_demo.py](tools/seed_demo.py). **Los cinco perfiles y no solo el que corre**,
+      que es lo que hizo F9.23: los otros cuatro se quedaron apuntando al `llama-3.1-70b`
+      retirado, así que cualquiera de ellos habría fallado 29 de 29 en cuanto se activara.
+
+      ⚠️ **El precio de super son tres campos menos.** En dos de las tres llamadas dejó
+      `suggested_stop`, `suggested_target` y `suggested_weight_pct` a null. No rompe el ciclo,
+      porque el motor de riesgo está escrito para eso —stop de 3×ATR (`stop_source="atr"`),
+      objetivo derivado como el máximo entre el del ratio y el suelo en sigmas de F9.16
+      (`target_source="derived"`) y peso dentro de la banda de F9.21— y las dos columnas de
+      procedencia dejan leer después cuánto puso el modelo y cuánto el motor. Pero es menos
+      modelo en la decisión, y hay que tenerlo delante al interpretar este tramo.
+
+      **Cuarto corte del histórico en doce días**, por la misma razón fuerte de F9.16, F9.22 y
+      F9.23: el modelo *es* la variable del experimento, y `cycles.settings_json` guarda cuál
+      corrió cada ciclo.
+
+      **El streaming de F9.22 se ganó el sitio hoy, y por primera vez con número.** La llamada
+      de 160 s de Ultra pasó con `llm_timeout_seconds` en 120 porque el timeout mide silencio y
+      no duración total, que es exactamente lo que F9.22 dejó escrito en el docstring de
+      [src/llm.py](src/llm.py) sin poder demostrarlo.
+
+      **Cómo se midió, que es reproducible:** `rebuild_snapshot` de
+      [tools/replay_analyst.py](tools/replay_analyst.py) más `_render_entry_prompt` de
+      [src/analyst.py](src/analyst.py), contra la base abierta en `ro` y sin escribir nada, con
+      `max_retries=1` para que un 429 no se confunda con una espera. El propio
+      `replay_analyst.py` **sigue roto** —llama a `Analyst(interval=…)`, que F9.14 partió en
+      `price_interval`/`indicator_interval`—, tal como avisó F9.22; de ahí que se usaran sus
+      piezas y no el comando.
+
+      ⚠️ **No se tocó el cliente.** El techo de `max_tokens` y el `{` doblado siguen en F9.24,
+      con los números de hoy anotados allí. Mezclar un cambio de modelo con un cambio del
+      parser es lo que F9.22 avisó de no hacer, y hoy vuelve a valer.
+
+- [ ] **F9.24** **Un `{` de más deja al parser sin JSON, y con él a la familia `nemotron-3`
+      entera.** Abierta el 2026-08-26 al medir modelos para F9.23. Dos de los candidatos
+      —`nemotron-3-ultra-550b-a55b` y `nemotron-3-super-120b-a12b`— contestan un JSON
+      correcto precedido de una llave suelta:
+
+      ```
+      {
+      {  "action": "hold", "conviction": 75, ...}
+      ```
+
+      `_first_balanced_object` arranca en el **primer** `{` y no reintenta desde el
+      siguiente, así que la profundidad nunca vuelve a cero y `extract_json_object` devuelve
+      `None`: una respuesta buena se tira por un carácter. El arreglo es reintentar el
+      barrido desde cada `{`, o quedarse con el objeto balanceado más largo.
+
+      **Por qué no se arregló en F9.23:** no habría cambiado la elección de modelo —Ultra
+      falla además por razonar en el `content` sin marcarlo, que es el fallo grave— y habría
+      mezclado un cambio del parser con un cambio de modelo en el mismo commit. Tiene valor
+      igual: es tolerancia al modelo, que es lo que ese módulo promete en su docstring.
+
+      ⚠️ **Al cerrarla hay que decidir el techo de `max_tokens`, y ya no es hipotético.**
+      Medido el 2026-08-27 con el prompt real (F9.23.1): `nemotron-3-super`, que es el modelo
+      que corre desde hoy, gastó 1.158, 1.185 y **1.492** tokens de los 1.600, o sea que el
+      margen en la peor de tres fue del 7 %; `nemotron-3-ultra`, 1.319 y 1.443; y
+      `nemotron-3.5-lightning` los 1.600 enteros sin llegar al JSON. El parser ya no es el
+      cuello de botella: lo es el techo. Subirlo es cuota de la capa gratuita, así que es una
+      decisión, no un detalle.
+
+      ⚠️ **El `{` doblado es intermitente, no de familia.** No apareció en ninguna de las
+      siete llamadas a super y ultra del 2026-08-27, después de haber salido en las dos del
+      08-26. Eso no lo quita de en medio —una respuesta buena por llamada perdida sigue
+      siendo el fallo— pero sí explica por qué los veredictos de una sola llamada de F9.23
+      salieron como salieron.
 
 - [ ] **F9.20** **El modelo contesta con plantilla, y tres de sus cuatro campos son constantes.**
       Abierta el 2026-08-11 con id propio, porque venía mezclada con F9.16 y no es lo mismo.

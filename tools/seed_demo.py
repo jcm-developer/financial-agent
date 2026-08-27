@@ -111,7 +111,7 @@ def seed(db: Database) -> None:
             cash_start=cash,
             market_open=market_open,
             symbols=SYMBOLS,
-            llm_model="meta/llama-3.3-70b-instruct",
+            llm_model="nvidia/nemotron-3-super-120b-a12b",
         )
 
         # Deriva de precios.
@@ -200,7 +200,7 @@ def seed(db: Database) -> None:
                 suggested_stop=round(price - atr * 2.2, 2),
                 suggested_target=round(price + atr * 4, 2),
                 reference_price=round(price, 2),
-                model="meta/llama-3.3-70b-instruct",
+                model="nvidia/nemotron-3-super-120b-a12b",
                 latency_ms=int(rng.between(900, 5200)),
                 prompt_tokens=int(rng.between(1100, 1900)),
                 completion_tokens=int(rng.between(180, 620)),
