@@ -24,11 +24,10 @@ import { money, percent } from "@/lib/format";
  * So `source` is not cosmetic: it says which question the figures answer, and the
  * caller has to pick the right one.
  *
- * **`sector_cap` is shown greyed out and says so.** It is computed and **not
- * applied** (F6.5, FE.12): there is no sector datum per symbol at runtime.
- * Showing it as if it were in force would be the worst of the three options,
- * because it is a limit whose absence is invisible — nothing fails, positions
- * just pile up in one sector.
+ * **The sector cap is gone since 2026-09-25**, with the diversification slider
+ * it was computed from. It was shown greyed out as "computed but not applied",
+ * and a figure nothing enforces is the kind of setting this screen was cleaned
+ * of. It comes back the day there is a sector datum per symbol (F9.30).
  */
 interface Props {
   limits: DerivedLimits;
@@ -78,12 +77,10 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
 
   return (
     <Card padding="p-6" className={stale ? "opacity-60 transition-opacity" : undefined}>
-      <SectionTitle className="mb-1">Con estos ajustes</SectionTitle>
-      <p className="mb-3 text-caption leading-relaxed text-text-muted">
-        {source === "sliders"
-          ? "Lo que aplicaría el agente con los deslizadores donde están ahora."
-          : "Lo que aplica el agente ahora mismo, con el modo avanzado encendido: mandan los números escritos a mano y los deslizadores solo deciden los que están vacíos. Son los valores guardados, así que lo que escribas abajo no se refleja aquí hasta guardar."}
-      </p>
+      <SectionTitle className="mb-3">Con estos ajustes</SectionTitle>
+      {source === "effective" && (
+        <p className="mb-3 text-caption text-text-muted">Valores guardados, con los fijados a mano.</p>
+      )}
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-body-sm sm:grid-cols-3">
         <Stat
@@ -108,7 +105,10 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
         <Stat
           label="Posiciones abiertas"
           value={`máx. ${limits.max_open_positions}`}
-          title={origin("max_open_positions")}
+          title={
+            origin("max_open_positions") ??
+            "Sale del tamaño: la exposición total en posiciones mínimas. Más riesgo, menos posiciones y más grandes."
+          }
         />
         <Stat
           label="Kill switch diario"
@@ -125,8 +125,11 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
         />
         <Stat
           label="Stop"
-          value={`${limits.stop_atr_multiple}× ATR`}
-          title={origin("stop_atr_multiple")}
+          value={`${limits.stop_atr_multiple}× ATR · ${limits.stop_sigmas}σ`}
+          title={
+            origin("stop_atr_multiple") ??
+            `A ${limits.stop_sigmas} sigmas del horizonte de ${limits.horizon_days} días: el riesgo decide cuántas sigmas y el horizonte cuánto vale una.`
+          }
         />
         <Stat
           label="Reward/risk mínimo"
@@ -147,15 +150,6 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
           title="Fricción de ejecución, no apetito de riesgo: no se mueve con el deslizador."
         />
       </dl>
-
-      <p className="mt-4 border-t border-border pt-3 text-caption leading-relaxed text-text-muted">
-        <span className="font-semibold">
-          Tope por sector: máx. {limits.sector_cap} posiciones — calculado pero no aplicado.
-        </span>{" "}
-        El Risk Manager no lo hace cumplir porque no hay dato de sector por símbolo en tiempo
-        de ejecución (F6.5, FE.12). La diversificación limita cuántas posiciones hay, no en
-        cuántos sectores están.
-      </p>
     </Card>
   );
 }

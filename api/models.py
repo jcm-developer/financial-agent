@@ -175,7 +175,13 @@ class DerivedLimits(BaseModel):
     min_reward_risk: float
     min_target_sigma: float
     min_order_notional: float
-    sector_cap: int | None = None
+    #: The horizon the limits were derived at. It moves the stop and nothing
+    #: else, and the panel says so next to it.
+    horizon_days: int
+    #: The effective stop in sigmas of that horizon (2026-09-25): the unit the
+    #: risk level thinks in, while `stop_atr_multiple` is the unit the Risk
+    #: Manager applies per symbol.
+    stop_sigmas: float
     derived_fields: list[str]
     summary: str
 
@@ -266,10 +272,20 @@ class AgentSettings(BaseModel):
     llm_temperature: float
     llm_timeout_seconds: float
     llm_max_retries: int
+    llm_max_tokens: int
+    llm_reasoning_effort: str | None = None
     analyst_persona: str | None = None
+
+    # -- Noticias (F9.4)
+    news_enabled: bool
+    news_max_items: int
+    news_max_age_days: int
 
     # -- Estrategia
     risk_profile: int
+    #: Retired on 2026-09-25: the number of positions follows from the risk
+    #: level now. Still a column, so still here —a test keeps this model and the
+    #: table in step— but nothing reads it.
     diversification: int
     horizon_days: int
     max_new_positions_per_cycle: int
@@ -344,7 +360,15 @@ class SettingsUpdate(BaseModel):
     llm_temperature: float | None = Field(default=None, ge=0, le=2)
     llm_timeout_seconds: float | None = Field(default=None, ge=5)
     llm_max_retries: int | None = Field(default=None, ge=1, le=10)
+    llm_max_tokens: int | None = Field(default=None, ge=64, le=32000)
+    #: NULL = the provider's default, and then nothing is sent.
+    llm_reasoning_effort: Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"] | None = None
     analyst_persona: str | None = None
+
+    # -- Noticias (F9.4)
+    news_enabled: bool | None = None
+    news_max_items: int | None = Field(default=None, ge=1, le=30)
+    news_max_age_days: int | None = Field(default=None, ge=1, le=30)
 
     # -- Estrategia
     risk_profile: int | None = Field(default=None, ge=1, le=10)
@@ -474,6 +498,16 @@ class PositionRow(BaseModel):
     entry_commission: float | None = None
 
 
+class NewsCitation(BaseModel):
+    """A headline the analyst cited, as its prompt showed it (F9.4)."""
+
+    ref: str
+    title: str
+    source: str | None = None
+    url: str | None = None
+    published_at: str | None = None
+
+
 class DecisionRow(BaseModel):
     id: str
     cycle_id: str
@@ -502,6 +536,9 @@ class DecisionRow(BaseModel):
     approved_notional: float | None = None
     order_status: str | None = None
     filled_avg_price: float | None = None
+    #: The headlines the analyst said it relied on, resolved from `news_items`
+    #: (F9.4). Empty when it cited none or the profile ran without news.
+    news: list[NewsCitation] = []
 
 
 class OrderRow(BaseModel):

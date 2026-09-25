@@ -573,6 +573,8 @@ def command_cycle(settings: Settings) -> int:
         temperature=settings.llm_temperature,
         timeout=settings.llm_timeout_seconds,
         max_retries=settings.llm_max_retries,
+        max_tokens=settings.llm_max_tokens,
+        reasoning_effort=settings.llm_reasoning_effort,
     ) as llm:
         cycle = TradingCycle.build(settings, llm)
         report = cycle.run()
@@ -598,6 +600,8 @@ def command_close_experiment(settings: Settings) -> int:
         temperature=settings.llm_temperature,
         timeout=settings.llm_timeout_seconds,
         max_retries=settings.llm_max_retries,
+        max_tokens=settings.llm_max_tokens,
+        reasoning_effort=settings.llm_reasoning_effort,
     ) as llm:
         cycle = TradingCycle.build(settings, llm)
         report = cycle.close_all_positions()

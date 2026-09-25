@@ -310,7 +310,7 @@ def test_a_created_profile_brings_market_currency_and_limits(profile):
     assert profile["watched_symbols"] == 89
     assert profile["status"] == "draft"
     # The limits come from risk_presets, not from arithmetic repeated in the API.
-    assert profile["limits"]["max_open_positions"] == 13
+    assert profile["limits"]["max_open_positions"] == 8
     assert "risk_per_trade_pct" in profile["limits"]["derived_fields"]
 
 
@@ -323,27 +323,33 @@ def test_the_limits_preview_matches_the_anchors_of_f65(client):
     applies.
     """
     anchors = {
-        1: (0.25, 5.0, 85, 2.0),
-        5: (1.0, 20.0, 65, 5.0),
-        10: (3.0, 40.0, 45, 10.0),
+        1: (0.5, 8.0, 75, 2.0, 12),
+        5: (1.5, 20.0, 60, 5.0, 8),
+        10: (5.0, 40.0, 50, 10.0, 5),
     }
-    for level, (risk_per_trade, max_position, conviction, kill) in anchors.items():
+    for level, (risk_per_trade, max_position, conviction, kill, positions) in anchors.items():
         body = client.get(
             "/api/profiles/limits-preview",
-            params={"risk_profile": level, "diversification": 5},
+            params={"risk_profile": level, "horizon_days": 180},
         ).json()
         assert body["risk_per_trade_pct"] == risk_per_trade
         assert body["max_position_pct"] == max_position
         assert body["min_conviction"] == conviction
         assert body["max_daily_loss_pct"] == kill
+        assert body["max_open_positions"] == positions
 
-    # Diversification moves only the number of positions: 1 -> 3, 10 -> 25.
-    for level, expected in ((1, 3), (10, 25)):
-        body = client.get(
+    # The horizon moves the stop and only the stop, which stays at the same
+    # sigmas: half a sigma at level 5, whatever the plan's length.
+    corto, largo = (
+        client.get(
             "/api/profiles/limits-preview",
-            params={"risk_profile": 5, "diversification": level},
+            params={"risk_profile": 5, "horizon_days": days},
         ).json()
-        assert body["max_open_positions"] == expected
+        for days in (45, 180)
+    )
+    assert largo["stop_atr_multiple"] > corto["stop_atr_multiple"]
+    assert corto["stop_sigmas"] == largo["stop_sigmas"] == 0.5
+    assert corto["max_open_positions"] == largo["max_open_positions"]
 
 
 def test_the_preview_does_not_shadow_a_profile_route(client, profile):
@@ -367,7 +373,7 @@ def test_the_preview_writes_nothing(client, db_path, profile):
     before = client.get(f"/api/profiles/{profile['name']}/settings").json()
     client.get(
         "/api/profiles/limits-preview",
-        params={"risk_profile": 10, "diversification": 1},
+        params={"risk_profile": 10, "horizon_days": 180},
     )
     after = client.get(f"/api/profiles/{profile['name']}/settings").json()
     assert before == after
@@ -709,7 +715,7 @@ def test_switching_advanced_mode_off_hands_control_back_to_the_sliders(client, p
 
     client.patch(f"/api/profiles/{pid}/settings", json={"advanced_overrides": False})
     limites = client.get(f"/api/profiles/{pid}/limits").json()
-    assert limites["max_open_positions"] == 13
+    assert limites["max_open_positions"] == 8
     assert "max_open_positions" in limites["derived_fields"]
 
 

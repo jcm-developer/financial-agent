@@ -792,6 +792,8 @@ def main() -> int:
                     # other way round: a lost sample does not just go missing, it
                     # leaves the distribution with a hole nobody can see.
                     max_retries=max(1, args.retries),
+                    max_tokens=settings.llm_max_tokens,
+                    reasoning_effort=settings.llm_reasoning_effort,
                 )
                 for arm in arms:
                     arm.analyst = build_analyst(settings, llm, arm.interval)

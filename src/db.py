@@ -60,6 +60,13 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "max_new_positions_per_cycle": "integer not null default 0",
         # F9.21. Nullable like the rest of the band: NULL derives from the sliders.
         "min_position_pct": "real",
+        # 2026-09-25. Defaults are what the code did before they were columns:
+        # 1.600 tokens, the provider's reasoning effort, and no news.
+        "llm_max_tokens": "integer not null default 1600 check (llm_max_tokens >= 64)",
+        "llm_reasoning_effort": "text",
+        "news_enabled": "integer not null default 0",
+        "news_max_items": "integer not null default 8 check (news_max_items between 1 and 30)",
+        "news_max_age_days": "integer not null default 7 check (news_max_age_days between 1 and 30)",
     },
     "ingest_runs": {
         # Deliberately without a CHECK: SQLite cannot add a constraint with ALTER
@@ -86,6 +93,8 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # before this field existed did. A `default 0` would record them all as
         # having asked for nothing, which is a different claim.
         "suggested_weight_pct": "real",
+        # F9.4. NULL = no news in that prompt, which is every decision before it.
+        "news_refs_json": "text",
     },
 }
 
@@ -795,6 +804,9 @@ class Database:
                 "suggested_stop": proposal.suggested_stop,
                 "suggested_target": proposal.suggested_target,
                 "suggested_weight_pct": proposal.suggested_weight_pct,
+                "news_refs_json": (
+                    _dumps(list(proposal.news_refs)) if proposal.news_refs else None
+                ),
                 "reference_price": round(proposal.reference_price, 4),
                 "llm_model": proposal.model,
                 "latency_ms": proposal.latency_ms,
@@ -805,6 +817,41 @@ class Database:
             },
         )
         return decision_id
+
+    def save_news_items(
+        self,
+        *,
+        cycle_id: str,
+        symbol: str | None,
+        items: list[dict[str, Any]],
+    ) -> None:
+        """Records the headlines one prompt showed, with the ref it showed them by.
+
+        One row per headline and per cycle, even when the same headline was
+        already stored by the cycle before: what is being recorded is what *this*
+        prompt said, and a history that deduplicates across cycles cannot answer
+        "what did the model see at 10:20 on Tuesday".
+
+        @param cycle_id: The cycle that fetched them.
+        @param symbol: The company they are about, or None for market context.
+        @param items: Dicts with `ref`, `title`, `source`, `url`, `published_at`
+            and `provider`, as `news.Headline.as_row()` gives them.
+        """
+        if not items:
+            return
+        now = _now()
+        self._executemany(
+            "insert into news_items "
+            "(cycle_id, symbol, ref, title, source, url, published_at, provider, created_at) "
+            "values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    cycle_id, symbol, item["ref"], item["title"], item.get("source"),
+                    item.get("url"), item.get("published_at"), item["provider"], now,
+                )
+                for item in items
+            ],
+        )
 
     def save_risk_event(
         self,

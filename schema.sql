@@ -106,6 +106,32 @@ create index if not exists market_snapshots_cycle_symbol_idx
     on market_snapshots (cycle_id, symbol);
 
 -- ---------------------------------------------------------------------------
+-- news_items: los titulares que vio el analista, tal cual y con su fecha (F9.4).
+--
+-- Es la otra mitad de market_snapshots: sin esto, una tesis que cita una
+-- noticia no se puede comprobar despues, y "lo leyo" y "se lo invento" dejan de
+-- distinguirse -- que era la garantia del prompt cuando el sistema era 100 %
+-- tecnico. `ref` es el id con el que el modelo la vio y la cita (N1, M2...),
+-- unico dentro del ciclo y del simbolo. `symbol` NULL = contexto de mercado,
+-- compartido por todas las llamadas del ciclo.
+-- ---------------------------------------------------------------------------
+create table if not exists news_items (
+    id              integer primary key autoincrement,
+    cycle_id        text not null references cycles (id) on delete cascade,
+    symbol          text,
+    ref             text not null,
+    title           text not null,
+    source          text,
+    url             text,
+    published_at    text,
+    provider        text not null,
+    created_at      text not null
+);
+
+create index if not exists news_items_cycle_symbol_idx
+    on news_items (cycle_id, symbol);
+
+-- ---------------------------------------------------------------------------
 -- decisions: la salida cruda del LLM. La tabla mas valiosa del experimento:
 -- permite medir despues si el razonamiento del modelo tenia algun valor.
 -- ---------------------------------------------------------------------------
@@ -127,6 +153,10 @@ create table if not exists decisions (
     -- que no pidio ninguno, no que pidiera cero: el Risk Manager cae
     -- entonces al factor de conviccion.
     suggested_weight_pct real,
+    -- Los ids de news_items que el analista dice haber usado (F9.4), en JSON.
+    -- Solo los que existian en su prompt: uno inventado se queda en
+    -- raw_response_json y en el log, que es donde se ve la alucinacion.
+    news_refs_json    text,
     reference_price   real,
     llm_model         text,
     latency_ms        integer,
@@ -355,7 +385,8 @@ create index if not exists sim_fills_account_idx on sim_fills (account_id, fille
 -- infraestructura (rutas, nivel de log).
 --
 -- Los limites duros del risk manager son NULL a proposito: NULL significa
--- "derivalo de risk_profile y diversification". Solo se rellenan cuando el
+-- "derivalo de risk_profile y horizon_days" (desde el 2026-09-25; antes era de
+-- risk_profile y diversification). Solo se rellenan cuando el
 -- usuario activa el modo avanzado y los fija a mano. Asi mover un slider sigue
 -- surtiendo efecto sin tener que recalcular y reescribir nueve columnas.
 -- ===========================================================================
@@ -383,10 +414,26 @@ create table if not exists agent_settings (
     llm_max_retries        integer not null default 3
                            check (llm_max_retries between 1 and 10),
     analyst_persona        text,
+    -- Techo de tokens de la respuesta. Depende del modelo: Nemotron necesitaba
+    -- casi 1.600 porque razona dentro del content, GPT-6 Sol usa ~450.
+    llm_max_tokens         integer not null default 1600 check (llm_max_tokens >= 64),
+    -- Esfuerzo de razonamiento de los modelos que lo aceptan (OpenAI). NULL =
+    -- el que tenga el proveedor por defecto, y no se manda.
+    llm_reasoning_effort   text,
+
+    -- Noticias (F9.4). Titulares por empresa y de mercado, citados por id.
+    news_enabled           integer not null default 0,
+    news_max_items         integer not null default 8
+                           check (news_max_items between 1 and 30),
+    news_max_age_days      integer not null default 7
+                           check (news_max_age_days between 1 and 30),
 
     -- Estrategia. Estos dos mandan sobre los limites de abajo.
     risk_profile           integer not null default 5
                            check (risk_profile between 1 and 10),
+    -- RETIRADA el 2026-09-25: el numero de posiciones sale ahora del riesgo
+    -- (exposicion / posicion minima). La columna sigue para no reconstruir la
+    -- tabla bajo una base viva, pero nadie la lee.
     diversification        integer not null default 5
                            check (diversification between 1 and 10),
     -- Plazo, en dias naturales, al que se juzga una idea. **Desde F9.17 se usa de

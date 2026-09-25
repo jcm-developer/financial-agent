@@ -4,7 +4,7 @@ import { ChevronRight } from "lucide-react";
 import { useCycles, useDecisions } from "@/api/hooks";
 import type { DecisionRow } from "@/api/types";
 import { GroupedRows } from "@/components/GroupedRows";
-import { Input, LinkButton, Loading, Tag, PageTitle } from "@/components/pieces";
+import { Input, LINK_CLASSES, LinkButton, Loading, Tag, PageTitle } from "@/components/pieces";
 import { Select } from "@/components/Select";
 import { Section, ErrorAlert } from "@/components/Section";
 import {
@@ -537,7 +537,8 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
   const thesis = row.thesis?.trim();
   const risks = row.risks?.trim();
   const reason = row.risk_reason?.trim();
-  const hasDetail = Boolean(thesis || risks || reason);
+  const news = row.news ?? [];
+  const hasDetail = Boolean(thesis || risks || reason || news.length);
 
   return (
     <>
@@ -640,6 +641,35 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
             <p className="mt-1 text-caption leading-snug text-text-secondary">
               <span className="font-medium">Riesgo dijo:</span> {reason}
             </p>
+          )}
+          {/* F9.4: the headlines the analyst cited, as its prompt showed them. The
+              ref is kept because it is how the thesis refers to them, and a
+              citation that did not resolve simply does not appear here. */}
+          {news.length > 0 && (
+            <div className="mt-1 text-caption leading-snug text-text-secondary">
+              <span className="font-medium">Noticias citadas:</span>
+              <ul className="mt-0.5 flex flex-col gap-0.5">
+                {news.map((item) => (
+                  <li key={item.ref}>
+                    <span className="font-mono text-text-muted">[{item.ref}]</span>{" "}
+                    {item.url ? (
+                      <a
+                        className={LINK_CLASSES}
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                      >
+                        {item.title}
+                      </a>
+                    ) : (
+                      item.title
+                    )}
+                    {item.source ? ` · ${item.source}` : ""}
+                    {item.published_at ? ` · ${dateTime(item.published_at)}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
           <p className="mt-1 text-caption text-text-muted">
             {dateTime(row.created_at)}

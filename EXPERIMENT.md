@@ -8,8 +8,11 @@ Está escrito el 2026-08-10, con el primer experimento (`eu-05-muy-agresivo`)
 arrancando ese mismo día, y revisado el **2026-08-11** dos veces: al separar el
 reloj del precio del de los indicadores (F9.14, sección 6) y al poner suelo al
 recorrido del objetivo y banda al tamaño de la posición (F9.16–F9.18 y F9.21,
-secciones 4, 6 y 7 bis). Cuando algo aquí deje de ser cierto, se corrige aquí —no
-en un comentario suelto—, porque es el sitio donde se mira antes de tocar el ciclo.
+secciones 4, 6 y 7 bis). **Revisado otra vez el 2026-09-25**, con la base borrada y
+el experimento de seis meses por delante: el modelo lee noticias (sección 6 bis), el
+perfil de riesgo es el único deslizador y el stop se mide en sigmas del horizonte
+(sección 4). Cuando algo aquí deje de ser cierto, se corrige aquí —no en un
+comentario suelto—, porque es el sitio donde se mira antes de tocar el ciclo.
 
 ---
 
@@ -22,8 +25,15 @@ perfiles, no dos ramas del código.
 
 De un perfil salen: el mercado (y con él horario, calendario, divisa, benchmark y
 suelo de liquidez), el capital, el universo, el modelo de lenguaje, el intervalo
-de barras, las horas de ciclo y los dos deslizadores —**perfil de riesgo** y
-**diversificación**— de los que se derivan los once límites duros.
+de barras, las horas de ciclo, si lee noticias, el **horizonte** y el **perfil de
+riesgo**, del que —junto con el horizonte— se derivan los once límites duros.
+
+⚠️ **Un deslizador y no dos desde el 2026-09-25.** La diversificación fijaba el
+número de posiciones en un eje propio, y concentrar ya es asumir riesgo: ahora el
+riesgo decide el tamaño de cada posición y la exposición, y **el número de
+posiciones sale de ahí** (exposición / posición mínima). En riesgo 10 son cinco
+posiciones del 20–40 %; en riesgo 1, doce del 4–8 %. La columna sigue en la base y
+nadie la lee.
 
 `profiles.status` decide si corre: **solo los `active` se planifican y solo sus
 símbolos se siguen en vivo.**
@@ -117,9 +127,19 @@ una:
 
 | Lo que propone | Lo que el motor le permite | Por qué ese extremo |
 |---|---|---|
-| **Stop** | Solo **más lejos** que `1,2×–3× ATR` | Más aire implica posición más pequeña; acercarlo sería quitar protección |
+| **Stop** | Solo **más lejos** que el del perfil: **0,35–0,7 sigmas del horizonte** según el riesgo | Más aire implica posición más pequeña; acercarlo sería quitar protección |
 | **Objetivo** | Solo **por encima** del suelo en sigmas del horizonte | Debajo del suelo el nivel se alcanza por ruido (sección 7 bis) |
 | **Peso** | Solo **dentro** de la banda `min_position_pct`–`max_position_pct` | El techo evita concentrar; el suelo evita que la cartera se quede sin invertir (F9.21) |
+
+⚠️ **El stop está en sigmas del horizonte desde el 2026-09-25, no en ATRs fijos.**
+La tabla vieja lo ponía a 1,2×–3× ATR fuera cual fuera el plazo, lo que a 180 días
+es un −4 % bajo una tesis de seis meses. Ahora el riesgo dice cuántas sigmas de
+margen tiene una posición (0,35 en riesgo 1, 0,5 en el 5, 0,7 en el 10) y el
+horizonte cuánto vale una sigma: a 180 días, riesgo 5 da **5,67× ATR (~12 %)** y
+riesgo 10, **7,94× ATR (~17 %)**. El Risk Manager sigue aplicándolo en ATRs y por
+símbolo, así que un valor más volátil lleva un stop más ancho y una posición más
+pequeña. **Más riesgo es más margen, no menos**: el perfil agresivo aguanta la
+tesis y compensa con el tamaño, que recorta el presupuesto de riesgo por operación.
 
 ⚠️ **El suelo del peso es del perfil y no del modelo, y por eso no rompe la
 premisa.** Existe porque el modelo pedía `8 %` en 11 de 11 propuestas: con siete
@@ -243,15 +263,49 @@ como contexto:
 > barras, volatilidad, máximo y mínimo de 252 barras, distancia a esos extremos,
 > volumen y ratio sobre su media, y una decena de señales booleanas precalculadas.
 
-**No ve nada más.** No hay fundamentales, ni noticias, ni sentimiento, ni
-resultados trimestrales. El sistema es **100 % técnico**, y el prompt se lo dice
-explícitamente al modelo: *«No tienes acceso a noticias, resultados trimestrales ni
-precios posteriores a tu fecha de entrenamiento. NO inventes catalizadores, cifras
-de ingresos, upgrades de analistas ni titulares.»*
+**Y, si el perfil tiene `news_enabled`, titulares** (sección 6 bis). Nada más: no
+hay fundamentales, ni sentimiento, ni resultados trimestrales, ni el cuerpo de las
+noticias.
 
-Esa regla es lo que hace **interpretable** el experimento: hoy, si el modelo cita
-un catalizador, es una alucinación y se ve en la pantalla de Decisiones. Añadir
-noticias obligaría a rediseñar esa garantía (ver **F9.7**).
+Sin noticias, el prompt es exactamente el de antes y le sigue diciendo al modelo:
+*«No tienes acceso a noticias, resultados trimestrales ni precios posteriores a tu
+fecha de entrenamiento. NO inventes catalizadores, cifras de ingresos, upgrades de
+analistas ni titulares.»* Esa regla es lo que hacía **interpretable** el
+experimento: si el modelo citaba un catalizador, era una alucinación y se veía.
+
+### 6 bis. Las noticias, y cómo se conserva esa garantía (F9.4)
+
+**Las busca el sistema, no el modelo.** Antes de cada llamada, el ciclo pide a
+Google News los titulares de los últimos `news_max_age_days` (7) de esa empresa,
+**por su nombre y en el idioma de su bolsa** (`universe/news_names.txt`, escrito a
+mano), y una vez por ciclo el **contexto de mercado**: índices, BCE, prima de
+riesgo y la crónica diaria de las bolsas europeas, de los últimos 2 días. Yahoo es
+el respaldo **solo cuando Google falla**, nunca cuando no hay nada: una semana sin
+titulares es información, y rellenarla con agregadores americanos era el sesgo que
+midió F9.7.
+
+**Cada titular lleva un id** (`[N1]` de la empresa, `[M1]` del mercado) y el
+modelo cita por id en `news_refs`. Todo lo que vio queda en **`news_items`** con
+ese id, y las citas en `decisions.news_refs_json`; un id inventado se descarta, se
+avisa en el log y queda en `raw_response_json` como `unknown_news_refs`. Así la
+regla se **reescribe en vez de levantarse**: «lo leyó» y «se lo inventó» siguen
+distinguiéndose. La pantalla de Decisiones enseña los titulares citados en el
+desplegable de cada fila.
+
+**Tres casos que el prompt distingue a propósito:** titulares, ningún titular («no
+se escribió nada») y consulta fallida («no sabemos»). Juntar los dos últimos haría
+pasar una caída del feed por una semana tranquila.
+
+**Lo que hay que asumir:**
+
+- **Solo titulares.** El modelo no ha leído el artículo, y el prompt se lo dice.
+- **Filtro de ruido, no de calidad.** Se quitan páginas de cotización, foros,
+  warrants y homónimos (un titular tiene que nombrar a la empresa), pero lo que
+  queda es prensa de toda calidad.
+- **Cuesta ~1.000 tokens más por llamada** y ~1 s por consulta; medido el
+  2026-09-25 con Sol, ~3.100 de entrada y ~600 de salida por análisis.
+- **Google no publica cuota**: es una dependencia más que puede cambiar sin avisar,
+  como Yahoo.
 
 ### Los indicadores son diarios, el precio no (F9.14)
 
@@ -475,7 +529,7 @@ Para no volver a preguntárselo:
 | No hace | Tarea |
 |---|---|
 | Ejecutar al precio del momento de la orden (usa la apertura de la barra) | **F9.3** |
-| Leer noticias o fundamentales | **F9.7** (spike), luego **F9.4** |
+| Leer fundamentales (las noticias sí, desde F9.4) | **F9.7**, mitad pendiente |
 | Aplicar el tope por sector (lo calcula y no lo hace cumplir) | **FE.12** / **F6.5** |
 | Operar en corto | `allow_shorts` existe y está a 0 |
 | Cerrar por horizonte cumplido (`horizon_days` fija la escala del objetivo y del suelo, pero no cierra ninguna posición al expirar) | — |
@@ -496,9 +550,13 @@ Para no volver a preguntárselo:
    —**en orden de puntuación**, que es el orden en que se gasta la caja— y sobre
    cada posición abierta; el risk manager decide; el broker ejecuta, hasta
    `max_new_positions_per_cycle` entradas nuevas.
-4 bis. **El plazo del perfil (`horizon_days`) fija el tamaño del objetivo**, y hay un
-   suelo en sigmas de ese plazo por debajo del cual la propuesta se rechaza
-   (sección 7 bis). Una sigma a 14 días son 6,8 % del precio; a 45 días, 12,1 %.
+4 bis. **El plazo del perfil (`horizon_days`) fija el tamaño del objetivo y la
+   distancia del stop**: los dos se miden en sigmas de ese plazo (sección 7 bis y
+   sección 4). Una sigma a 45 días son 12,1 % del precio; a 180, 24,3 %.
+4 ter. **El perfil de riesgo es el único deslizador**: decide tamaño, número de
+   posiciones, exposición, convicción mínima, cuántas sigmas de stop y de objetivo.
+4 quater. **Con `news_enabled`, el modelo lee titulares numerados** y los cita por
+   id; lo que vio queda en `news_items` (sección 6 bis).
 5. Se decide con la **última barra completa** de `bar_interval` y se ejecuta en la
    **apertura de la siguiente**, con deslizamiento en contra y la comisión del banco
    por cada lado (4,11 € en españolas, 3,00 € en el resto de Europa).

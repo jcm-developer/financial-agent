@@ -21,13 +21,14 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from . import market_calendar, stop_signal
-from .analyst import Analyst
+from .analyst import Analyst, prompt_versions
 from .broker import Broker, BrokerError
 from .config import Settings
 from .db import Database, DatabaseError
 from .llm import LLMClient
 from .market_data import INDICATOR_INTERVAL, MarketDataError, build_market_data
 from .models import AccountState, ExitSignal, MarketSnapshot, Proposal
+from .news import NewsContext, NewsProvider, NumberedHeadline, build_news_provider, number
 from .risk import RiskManager
 from .sim_broker import Quote, SimBroker
 
@@ -93,6 +94,12 @@ class CycleReport:
     screened: str | None = None
     analyst_calls: int = 0
     analyst_failures: int = 0
+    #: News lookups this cycle made (one per analysed symbol, plus the market),
+    #: how many could not be made, and how many headlines reached a prompt. All
+    #: zero with news off, and then the summary does not mention them.
+    news_queries: int = 0
+    news_failures: int = 0
+    news_headlines: int = 0
     #: Open positions this cycle got no price for. Empty is the normal case.
     positions_without_price: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
@@ -125,6 +132,15 @@ class CycleReport:
                 "(stop no comprobado, tesis no revisada)"
             )
 
+        if self.news_queries:
+            line = (
+                f"Noticias: {self.news_headlines} titulares en "
+                f"{self.news_queries} consultas"
+            )
+            if self.news_failures:
+                line += f" ({self.news_failures} sin poder consultar)"
+            lines.append(line)
+
         # Only mentioned when there are failures: "0 of 33" in every summary is
         # noise that ends up unread, and this line has to stand out when it appears.
         if self.analyst_failures:
@@ -152,6 +168,7 @@ class TradingCycle:
         analyst: Analyst,
         risk_manager: RiskManager,
         portfolio_id: str | None = None,
+        news: NewsProvider | None = None,
     ) -> None:
         self.settings = settings
         self.broker = broker
@@ -160,6 +177,13 @@ class TradingCycle:
         self.analyst = analyst
         self.risk = risk_manager
         self.portfolio_id = portfolio_id
+        #: Where headlines come from, or None when the profile runs without news
+        #: (F9.4). None and not an empty provider: a profile without news must
+        #: send the analyst exactly the prompt it always sent.
+        self.news = news
+        #: This cycle's market context, fetched once and shown to every prompt.
+        self._market_news: tuple[NumberedHeadline, ...] = ()
+        self._market_news_error: str | None = None
         #: Resolved once and kept here instead of asking the calendar at each
         #: use: it was being derived in three places and forgotten in a fourth,
         #: which is how the sell line ended up printing "USD" in a European book.
@@ -236,6 +260,7 @@ class TradingCycle:
                 horizon_days=settings.horizon_days,
             ),
             portfolio_id=portfolio_id,
+            news=build_news_provider(settings),
         )
 
     # ------------------------------------------------------------------
@@ -313,7 +338,13 @@ class TradingCycle:
             market_open=market_open,
             symbols=list(symbols),
             llm_model=settings.llm_model,
-            settings=settings.snapshot(),
+            # Plus which prompts it ran on (2026-09-25): experiments run one after
+            # another now, and a prompt edited between two of them is a difference
+            # in what was measured that no setting records.
+            settings={
+                **settings.snapshot(),
+                "prompt_versions": prompt_versions(self.news is not None),
+            },
         )
         report.cycle_id = cycle_id
         # Any request still lying around is for an earlier cycle: this one did not
@@ -636,6 +667,9 @@ class TradingCycle:
             except DatabaseError as exc:
                 log.warning("No se pudo guardar el snapshot de %s: %s", symbol, exc)
 
+        # --- 2 bis. Market context, once for the whole cycle (F9.4) ---------
+        self._fetch_market_news(report, cycle_id)
+
         tracked = self.db.get_open_positions(portfolio_id)
 
         # Adopted orphans have no stop: one is assigned by ATR so they are
@@ -702,6 +736,7 @@ class TradingCycle:
                 entry_thesis=row.get("thesis"),
                 stop_price=_opt_float(row.get("stop_price")),
                 target_price=_opt_float(row.get("target_price")),
+                news=self._news_for(report, cycle_id, symbol),
             )
             if proposal is None:
                 continue
@@ -791,7 +826,9 @@ class TradingCycle:
 
             self._check_stop(cycle_id)
             snapshot = snapshots[symbol]
-            proposal = self.analyst.evaluate_entry(snapshot, account)
+            proposal = self.analyst.evaluate_entry(
+                snapshot, account, news=self._news_for(report, cycle_id, symbol)
+            )
             if proposal is None:
                 continue
 
@@ -837,6 +874,63 @@ class TradingCycle:
     # ------------------------------------------------------------------
     # Ejecucion
     # ------------------------------------------------------------------
+
+    def _fetch_market_news(self, report: CycleReport, cycle_id: str) -> None:
+        """The market context for this cycle: fetched once, stored once, shown to
+        every prompt. Never raises: a feed that fails leaves an error the prompt
+        states, not a dead cycle."""
+        if self.news is None:
+            return
+        report.news_queries += 1
+        result = self.news.market_context()
+        if result.error:
+            report.news_failures += 1
+            self._market_news_error = result.error
+            log.warning("Contexto de mercado no disponible: %s", result.error)
+            return
+        self._market_news = number(result.headlines, "M")
+        report.news_headlines += len(self._market_news)
+        self._save_news(cycle_id, None, self._market_news)
+        log.info("Contexto de mercado: %d titulares.", len(self._market_news))
+
+    def _news_for(
+        self, report: CycleReport, cycle_id: str, symbol: str
+    ) -> NewsContext | None:
+        """What one prompt is told about the news, already stored.
+
+        Fetched right before the model is asked, not up front for every
+        candidate: the entries stop at `max_new_positions_per_cycle`, and
+        headlines for symbols nobody analyses would be requests to Google and
+        rows in `news_items` that no prompt ever showed.
+        """
+        if self.news is None:
+            return None
+        report.news_queries += 1
+        result = self.news.company(symbol)
+        company = number(result.headlines, "N")
+        if result.error:
+            report.news_failures += 1
+        report.news_headlines += len(company)
+        self._save_news(cycle_id, symbol, company)
+        return NewsContext(
+            company=company,
+            company_error=result.error,
+            market=self._market_news,
+            market_error=self._market_news_error,
+            max_age_days=self.settings.news_max_age_days,
+        )
+
+    def _save_news(
+        self, cycle_id: str, symbol: str | None, items: tuple[NumberedHeadline, ...]
+    ) -> None:
+        try:
+            self.db.save_news_items(
+                cycle_id=cycle_id, symbol=symbol, items=[item.as_row() for item in items]
+            )
+        except DatabaseError as exc:
+            # Logged and not raised: the analysis can still run, but the record of
+            # what it read is incomplete, and that is worth a warning.
+            log.warning("No se pudieron guardar los titulares de %s: %s", symbol or "mercado", exc)
 
     def _check_stop(self, cycle_id: str) -> None:
         """Honours a stop asked for from the interface, if it is for this cycle.

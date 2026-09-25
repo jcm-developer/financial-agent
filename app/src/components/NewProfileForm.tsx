@@ -86,7 +86,7 @@ export function NewProfileForm({ onCancel }: Props) {
   const [budget, setBudget] = useState("10000");
   const [watch, setWatch] = useState("");
   const [risk, setRisk] = useState(5);
-  const [diversification, setDiversification] = useState(5);
+  const [horizon, setHorizon] = useState("180");
   const [provider, setProvider] = useState("nvidia");
   const [model, setModel] = useState(DEFAULT_MODEL.nvidia ?? "");
   const [apiKey, setApiKey] = useState("");
@@ -136,7 +136,7 @@ export function NewProfileForm({ onCancel }: Props) {
         ref: name.trim(),
         changes: {
           risk_profile: risk,
-          diversification,
+          horizon_days: Number(horizon),
           llm_provider: provider as NonNullable<SettingsUpdate["llm_provider"]>,
           llm_model: model.trim(),
           // An empty key is not "no key": with NIM it means NVIDIA_API_KEY from
@@ -238,20 +238,23 @@ export function NewProfileForm({ onCancel }: Props) {
               low="1 · muy conservador"
               high="10 · muy agresivo"
               onChange={(e) => setRisk(Number(e.target.value))}
-              hint="Decide riesgo por operación, tamaño de posición, exposición, convicción mínima, stop y kill switch."
+              hint="Decide tamaño y número de posiciones, exposición, convicción mínima, stop, objetivo y kill switch."
             />
-            <Slider
-              label="Diversificación"
-              value={diversification}
-              low="1 · concentrado"
-              high="10 · repartido"
-              onChange={(e) => setDiversification(Number(e.target.value))}
-              hint="Decide cuántas posiciones abiertas caben a la vez, de 3 a 25."
+            <Input
+              label="Horizonte (días)"
+              type="number"
+              min={1}
+              max={3650}
+              required
+              value={horizon}
+              onChange={(e) => setHorizon(e.target.value)}
+              hint="Plazo al que se juzga cada idea, en días naturales. Fija el tamaño del objetivo y la distancia del stop."
             />
           </div>
           <p className="text-caption text-text-muted">
-            Los once límites duros se derivan de estos dos deslizadores. Se pueden fijar a
-            mano después, en Ajustes, activando el modo avanzado.
+            Los once límites duros salen del perfil de riesgo y del horizonte: el riesgo decide
+            el tamaño, la concentración y cuánto margen tiene cada posición, y el horizonte cuánto
+            vale ese margen. Se pueden fijar a mano después, en Ajustes.
           </p>
         </fieldset>
 

@@ -64,9 +64,13 @@ def list_profiles(db: ReadDb, include_archived: bool = False):
 @router.get("/limits-preview", response_model=DerivedLimits)
 def limits_preview(
     risk_profile: int = Query(5, ge=1, le=10),
-    diversification: int = Query(5, ge=1, le=10),
+    horizon_days: int = Query(10, ge=1, le=3650),
 ):
-    """The eleven limits these two sliders would give, without writing anything.
+    """The eleven limits this risk level would give at this horizon, writing nothing.
+
+    The horizon travels with the risk level since 2026-09-25 because the stop is
+    derived from both: it sits at a number of sigmas of the horizon, so the same
+    slider position means a different stop at 45 days than at 180.
 
     ⚠️ **It answers what the sliders alone give, so it is only the truth when
     advanced mode is off.** The form has to pick between this and the profile's own
@@ -88,7 +92,7 @@ def limits_preview(
     return queries.derived_limits(
         {
             "risk_profile": risk_profile,
-            "diversification": diversification,
+            "horizon_days": horizon_days,
             # No overrides: the question being asked is precisely what the
             # sliders alone give.
             "advanced_overrides": 0,

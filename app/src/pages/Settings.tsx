@@ -23,14 +23,29 @@ import { useTitle } from "@/layout/useTitle";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 
 /**
- * The experiment's parameters (F6.8).
+ * The experiment's parameters (F6.8, reorganised on 2026-09-25).
  *
- * **The two sliders are the screen, and the 46 fields are the small print.**
- * That is the shape F6.5 asks for: risk profile and diversification decide the
- * eleven hard limits, and the panel beside them says what those limits are while
- * the slider moves. Everything else is grouped underneath in the four families
- * the parameters actually have —model, strategy, execution and hard limits— and
- * the last of those only opens in advanced mode.
+ * **What defines the experiment is on screen, and the rest is folded away.**
+ * The risk slider and the horizon decide the eleven hard limits —the panel beside
+ * them says what those limits are while the slider moves—, and next to them sit
+ * the other few things that make one experiment different from the next: the
+ * model, the cycle's clock and whether it reads news. Everything else —model
+ * tuning, screener filters, execution friction, the hard limits by hand— lives
+ * under "Configuración avanzada", closed by default, with the values the risk
+ * level or the market gave it.
+ *
+ * ⚠️ **One slider, not two.** Diversification decided the number of positions
+ * on its own axis; since 2026-09-25 that number follows from the risk level
+ * (`src/risk_presets.py`). The column is still there and the API still carries
+ * it, but this screen no longer shows it or sends it.
+ *
+ * ⚠️ **And five fields are gone from the screen because nothing reads them**:
+ * the benchmark, the cash reserve, the excluded sectors, "allow shorts" and the
+ * analyst's persona. The first four said so in a hint since F10.11; the persona
+ * did not even say it, and typing "value investor" into it changed nothing. A
+ * field that looks like it configures the experiment and does not is worse than
+ * a missing one. They come back when something reads them: the benchmark with
+ * F9.29, the sectors with F9.30.
  *
  * **Nothing is derived in the browser.** The limits come from the API, which
  * runs the same `resolve_limits` as the cycle. A copy of that arithmetic in
@@ -41,7 +56,7 @@ import { useActiveProfile } from "@/profile/useActiveProfile";
  *
  * ⚠️ **Only what changed is sent.** `update_settings` ignores a field arriving
  * with the value it already had, and `agent_settings_history` records real
- * changes only (F6.2). Sending the 46 fields on every save would not corrupt
+ * changes only (F6.2). Sending every field on every save would not corrupt
  * anything, but it would fill the history with rows saying "5 → 5" and the
  * history is what makes an experiment readable afterwards.
  *
@@ -74,48 +89,15 @@ export function Settings() {
   );
 }
 
-/**
- * Why the commission field says "surcharge".
- *
- * The bank's tariff is not a parameter of the experiment: it depends on the
- * exchange of each symbol (`src/fees.py`) and applies on its own. This field is
- * what gets added on top, and it is worth saying so, because a zero here used to
- * mean "no commission" and now means "the standard one and nothing more".
- *
- * The amounts are deliberately left out: repeating them here would be a second
- * copy that drifts the day the bank changes its rates, and the screen would
- * promise a friction the simulator does not apply.
- */
-const SURCHARGE_HINT =
-  "Se suma a la tarifa del banco, que ya se aplica sola y depende de la bolsa de cada símbolo. 0 = solo la tarifa.";
+const ADVANCED_SUMMARY = "Configuración avanzada";
 
-/**
- * The four columns that are stored, editable, and **read by nobody**.
- *
- * Audited on 2026-08-11 after a screen-by-screen read of this form: `grep` finds
- * none of them in `src/`. They are not removed from the screen —they are real
- * columns, and three of the four are things the project intends to do— but a field
- * that looks like it configures the experiment and does not is worse than a
- * missing one: it invites a decision that has no effect and cannot be seen not
- * working.
- *
- * It is the same treatment `sector_cap` already gets in `DerivedLimitsPanel`, and
- * for the same reason: the absence of these limits is invisible. Nothing fails.
- *
- * `horizon_days` was the fifth until F9.17, and it was the one that cost real
- * money: nobody had told the model the plan, so it aimed at one sigma of the two
- * weeks it invented. That is the precedent for marking the rest.
- */
-const NOT_APPLIED = {
-  benchmark:
-    "No se usa todavía: la Analítica no compara contra el índice. El que sale en Mercado es el del mercado del perfil, no este.",
-  cash_reserve_pct:
-    "No se aplica todavía: el ciclo gasta hasta la exposición máxima. Para no comprometer la caja de golpe, usa «Máx. entradas nuevas por ciclo».",
-  excluded_sectors_json:
-    "No se aplica: no hay dato de sector por símbolo en tiempo de ejecución (F6.5, FE.12), el mismo motivo por el que el tope por sector solo se calcula.",
-  allow_shorts:
-    "No se aplica, y es del diseño: el analista solo propone compra o mantener, y el Risk Manager rechaza cualquier otra acción.",
-} as const;
+/** Reasoning effort options. The empty one is "not sent": the provider decides. */
+const REASONING_OPTIONS: [string, string][] = [
+  ["", "Por defecto del proveedor"],
+  ["low", "low"],
+  ["medium", "medium"],
+  ["high", "high"],
+];
 
 /** The subset of settings this form edits as free values, keyed as they are sent. */
 type Draft = Record<string, string | number | boolean>;
@@ -132,7 +114,7 @@ type Draft = Record<string, string | number | boolean>;
  * @param props.profileRef - Profile name, as it travels in the URL.
  * @param props.settings - The saved settings, already typed.
  * @param props.effective - The limits **in force**, overrides included, as the
- *     API resolved them. Not the same thing as the sliders' preview: see the
+ *     API resolved them. Not the same thing as the slider's preview: see the
  *     comment where the panel is rendered.
  * @param props.symbol - Currency symbol of the profile's market.
  * @return The rendered form.
@@ -151,12 +133,9 @@ function SettingsForm({
   const save = useUpdateSettings();
 
   const [risk, setRisk] = useState(settings.risk_profile);
-  const [diversification, setDiversification] = useState(settings.diversification);
   const [advanced, setAdvanced] = useState(settings.advanced_overrides);
   const [draft, setDraft] = useState<Draft>({});
   const [saved, setSaved] = useState<string[] | null>(null);
-
-  const preview = useLimitsPreview(risk, diversification);
 
   /**
    * Current value of a field: what the user typed, or what is stored.
@@ -168,6 +147,13 @@ function SettingsForm({
     const current = draft[field as string] ?? settings[field];
     return current === null || current === undefined ? "" : String(current);
   }
+
+  // The horizon being typed feeds the preview, so the stop moves with it before
+  // saving. A half-typed or empty horizon falls back to the stored one instead
+  // of asking the API about day zero.
+  const typedHorizon = Number(value("horizon_days"));
+  const horizon = typedHorizon >= 1 ? typedHorizon : settings.horizon_days;
+  const preview = useLimitsPreview(risk, horizon);
 
   /**
    * Records a typed value without sending it.
@@ -191,19 +177,16 @@ function SettingsForm({
 
     const changes: Record<string, unknown> = {};
 
-    // The sliders are compared against what is stored, like everything else:
-    // moving one and moving it back has to send nothing.
+    // The slider is compared against what is stored, like everything else:
+    // moving it and moving it back has to send nothing.
     if (risk !== settings.risk_profile) changes.risk_profile = risk;
-    if (diversification !== settings.diversification) {
-      changes.diversification = diversification;
-    }
     if (advanced !== settings.advanced_overrides) changes.advanced_overrides = advanced;
 
     for (const [field, typed] of Object.entries(draft)) {
       const stored = settings[field as keyof AgentSettings];
       const parsed = coerce(field, typed, stored);
       // `null` is a value here and not "unset": on the hard limits it means
-      // "derive it from the sliders again" (F6.5), so it is compared and sent
+      // "derive it from the slider again" (F6.5), so it is compared and sent
       // like any other.
       if (parsed !== stored) changes[field] = parsed;
     }
@@ -224,7 +207,7 @@ function SettingsForm({
     <form className="flex flex-col gap-8" onSubmit={submit}>
       <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr] lg:items-start">
         <Card padding="p-6" className="flex flex-col gap-6">
-          <SectionTitle>Los dos deslizadores</SectionTitle>
+          <SectionTitle>El perfil de riesgo</SectionTitle>
           <Slider
             label="Perfil de riesgo"
             value={risk}
@@ -235,34 +218,17 @@ function SettingsForm({
               setRisk(Number(e.target.value));
             }}
           />
-          <Slider
-            label="Diversificación"
-            value={diversification}
-            low="1 · concentrado"
-            high="10 · repartido"
-            onChange={(e) => {
-              setSaved(null);
-              setDiversification(Number(e.target.value));
-            }}
-          />
-          <Checkbox
-            className="border-t border-border pt-6"
-            checked={advanced}
-            onChange={(e) => {
-              setSaved(null);
-              setAdvanced(e.target.checked);
-            }}
-            label="Modo avanzado: fijar los once límites a mano"
-            /* This is the master switch of F6.5, and its wording matters: with
-               it off the sliders win *even if the columns still hold numbers
-               from a previous session*. Without saying so, turning it off looks
-               like it did nothing. */
-            hint="Con esto apagado mandan los deslizadores, aunque las columnas conserven números de antes. Encendido, mandan los números de abajo."
+          <NumberField
+            label="Horizonte (días)"
+            field="horizon_days"
+            value={value}
+            set={set}
+            step="1"
           />
         </Card>
 
         {/* ⚠️ **Cuál de los dos, y no siempre el mismo.** Con el modo avanzado
-            apagado mandan los deslizadores, así que la vista previa por posición
+            apagado manda el deslizador, así que la vista previa por posición
             del deslizador es la respuesta correcta y es lo que F6.8 pedía.
             Encendido, mandan los números escritos a mano y la vista previa
             contesta a otra pregunta: enseñarla ahí era poner en pantalla dos
@@ -282,6 +248,32 @@ function SettingsForm({
           )
         )}
       </div>
+
+      <Group title="Experimento">
+        <NumberField label="Capital inicial" field="initial_budget" value={value} set={set} />
+        <Select
+          label="Intervalo de barras"
+          value={value("bar_interval")}
+          onChange={(next) => set("bar_interval", next)}
+          options={[
+            ["1h", "1h — precio de la última hora"],
+            ["1d", "1d — precio del cierre de ayer"],
+          ]}
+        />
+        <Input
+          label="Horas de ciclo"
+          value={value("cycle_times")}
+          placeholder="10:20"
+          onChange={(e) => set("cycle_times", e.target.value)}
+        />
+        <Check
+          label="Leer noticias"
+          field="news_enabled"
+          settings={settings}
+          draft={draft}
+          set={set}
+        />
+      </Group>
 
       <Group title="Modelo">
         <Select
@@ -311,164 +303,172 @@ function SettingsForm({
           }
           value={(draft.llm_api_key as string) ?? ""}
           onChange={(e) => set("llm_api_key", e.target.value)}
-          hint="Vacío no la borra: deja la que hay."
-        />
-        <NumberField label="Temperatura" field="llm_temperature" value={value} set={set} step="0.1" />
-        <NumberField label="Timeout (s)" field="llm_timeout_seconds" value={value} set={set} />
-        <NumberField label="Reintentos" field="llm_max_retries" value={value} set={set} />
-        <Input
-          label="Instrucciones al analista"
-          value={value("analyst_persona")}
-          placeholder="p. ej. value investor, momentum…"
-          onChange={(e) => set("analyst_persona", e.target.value)}
-          fieldClass="sm:col-span-2"
         />
       </Group>
 
-      <Group title="Estrategia">
-        <NumberField label="Horizonte objetivo (días)" field="horizon_days" value={value} set={set} />
-        <NumberField
-          label="Máx. entradas nuevas por ciclo"
-          field="max_new_positions_per_cycle"
-          value={value}
-          set={set}
-        />
-        <Select
-          label="Modo del screener"
-          value={value("screener_mode")}
-          onChange={(next) => set("screener_mode", next)}
-          options={[
-            ["score", "score — puntuación por tendencia y volumen"],
-            ["random", "random — grupo de control"],
-          ]}
-        />
-        <NumberField label="Candidatos al modelo" field="screener_top_n" value={value} set={set} />
-        <NumberField
-          label={`Liquidez mínima (${symbol}/día)`}
-          field="screener_min_turnover"
-          value={value}
-          set={set}
-        />
-        <NumberField label="Precio mínimo" field="screener_min_price" value={value} set={set} />
-        <NumberField
-          label="Volatilidad máxima (%)"
-          field="screener_max_volatility_pct"
-          value={value}
-          set={set}
-        />
-        <Input
-          label="Fichero de universo"
-          value={value("universe_file")}
-          onChange={(e) => set("universe_file", e.target.value)}
-        />
-        <Input
-          label="Benchmark"
-          value={value("benchmark")}
-          onChange={(e) => set("benchmark", e.target.value)}
-          hint={NOT_APPLIED.benchmark}
-        />
-        <NumberField
-          label="Reserva de caja (%)"
-          field="cash_reserve_pct"
-          value={value}
-          set={set}
-          hint={NOT_APPLIED.cash_reserve_pct}
-        />
-        <Input
-          label="Sectores excluidos (JSON)"
-          value={value("excluded_sectors_json")}
-          onChange={(e) => set("excluded_sectors_json", e.target.value)}
-          hint={NOT_APPLIED.excluded_sectors_json}
-        />
-        <Check
-          label="Permitir cortos"
-          field="allow_shorts"
-          settings={settings}
-          draft={draft}
-          set={set}
-          hint={NOT_APPLIED.allow_shorts}
-        />
-      </Group>
+      <details className="group">
+        <summary className="cursor-pointer text-h3">
+          {ADVANCED_SUMMARY}
+        </summary>
+        <div className="mt-4 flex flex-col gap-8">
 
-      <Group title="Ejecución">
-        <NumberField label="Capital inicial" field="initial_budget" value={value} set={set} />
-        <Select
-          label="Intervalo de barras"
-          value={value("bar_interval")}
-          onChange={(next) => set("bar_interval", next)}
-          options={[
-            ["1d", "1d — un ciclo tras el cierre"],
-            ["1h", "1h — varios ciclos por sesión"],
-          ]}
-        />
-        <NumberField label="Barras de histórico" field="lookback_days" value={value} set={set} />
-        <Input
-          label="Horas de ciclo"
-          value={value("cycle_times")}
-          placeholder="17:40 o 11:20,14:20,17:40"
-          onChange={(e) => set("cycle_times", e.target.value)}
-          hint="HH:MM separadas por comas. El planificador lo recoge en menos de un minuto, sin reiniciar nada."
-        />
-        <Input
-          label="Zona horaria del ciclo"
-          value={value("cycle_tz")}
-          onChange={(e) => set("cycle_tz", e.target.value)}
-          hint="Nombre IANA, p. ej. Europe/Madrid."
-        />
-        <NumberField label="Deslizamiento (pb)" field="sim_slippage_bps" value={value} set={set} />
-        <NumberField
-          label="Recargo de comisión por orden"
-          field="sim_commission"
-          value={value}
-          set={set}
-          hint={SURCHARGE_HINT}
-        />
-        <Check
-          label="Dry run: analiza y registra pero no ordena"
-          field="dry_run"
-          settings={settings}
-          draft={draft}
-          set={set}
-        />
-        <Check
-          label="Saltar el ciclo con el mercado cerrado"
-          field="skip_when_market_closed"
-          settings={settings}
-          draft={draft}
-          set={set}
-        />
-      </Group>
+          <Group title="Modelo, en detalle">
+            <NumberField label="Temperatura" field="llm_temperature" value={value} set={set} step="0.1" />
+            <NumberField
+              label="Techo de tokens de la respuesta"
+              field="llm_max_tokens"
+              value={value}
+              set={set}
+              step="1"
+            />
+            <Select
+              label="Esfuerzo de razonamiento"
+              value={value("llm_reasoning_effort")}
+              onChange={(next) => set("llm_reasoning_effort", next)}
+              options={REASONING_OPTIONS}
+            />
+            <NumberField label="Timeout (s)" field="llm_timeout_seconds" value={value} set={set} />
+            <NumberField label="Reintentos" field="llm_max_retries" value={value} set={set} step="1" />
+          </Group>
 
-      {advanced && (
-        <Group title="Límites duros (modo avanzado)">
-          <NumberField label="Riesgo por operación (%)" field="risk_per_trade_pct" value={value} set={set} />
-          <NumberField label="Máx. por posición (%)" field="max_position_pct" value={value} set={set} />
-          <NumberField
-            label="Mín. por posición (%)"
-            field="min_position_pct"
-            value={value}
-            set={set}
-            hint="Suelo de la banda: por debajo de esto no baja aunque el analista pida menos. Es lo que evita que la cartera se quede a medio invertir."
-          />
-          <NumberField label="Exposición total (%)" field="max_total_exposure_pct" value={value} set={set} />
-          <NumberField label="Máx. posiciones abiertas" field="max_open_positions" value={value} set={set} />
-          <NumberField label="Pérdida diaria máxima (%)" field="max_daily_loss_pct" value={value} set={set} />
-          <NumberField label="Convicción mínima" field="min_conviction" value={value} set={set} />
-          <NumberField label="Múltiplo de ATR del stop" field="stop_atr_multiple" value={value} set={set} />
-          <NumberField label="Reward/risk mínimo" field="min_reward_risk" value={value} set={set} />
-          <NumberField
-            label="Objetivo mínimo (σ del horizonte)"
-            field="min_target_sigma"
-            value={value}
-            set={set}
-          />
-          <NumberField label="Notional mínimo" field="min_order_notional" value={value} set={set} />
-          <p className="text-caption leading-relaxed text-text-muted sm:col-span-2 lg:col-span-3">
-            Un campo vacío vuelve a NULL, que significa «derívalo de los deslizadores». No es
-            lo mismo que un cero: el cero es un límite que se ha elegido.
-          </p>
-        </Group>
-      )}
+          <Group title="Noticias">
+            <NumberField
+              label="Titulares por empresa y de mercado"
+              field="news_max_items"
+              value={value}
+              set={set}
+              step="1"
+            />
+            <NumberField
+              label="Antigüedad máxima (días)"
+              field="news_max_age_days"
+              value={value}
+              set={set}
+              step="1"
+            />
+          </Group>
+
+          <Group title="Screener">
+            <Select
+              label="Modo del screener"
+              value={value("screener_mode")}
+              onChange={(next) => set("screener_mode", next)}
+              options={[
+                ["score", "score — puntuación por tendencia y volumen"],
+                ["random", "random — grupo de control"],
+              ]}
+            />
+            <NumberField label="Candidatos al modelo" field="screener_top_n" value={value} set={set} step="1" />
+            <NumberField
+              label={`Liquidez mínima (${symbol}/día)`}
+              field="screener_min_turnover"
+              value={value}
+              set={set}
+            />
+            <NumberField label="Precio mínimo" field="screener_min_price" value={value} set={set} />
+            <NumberField
+              label="Volatilidad máxima (%)"
+              field="screener_max_volatility_pct"
+              value={value}
+              set={set}
+            />
+            <Input
+              label="Fichero de universo"
+              value={value("universe_file")}
+              onChange={(e) => set("universe_file", e.target.value)}
+            />
+          </Group>
+
+          <Group title="Ejecución">
+            <NumberField
+              label="Máx. entradas nuevas por ciclo"
+              field="max_new_positions_per_cycle"
+              value={value}
+              set={set}
+              step="1"
+            />
+            <NumberField
+              label="Días de histórico"
+              field="lookback_days"
+              value={value}
+              set={set}
+              step="1"
+            />
+            <Input
+              label="Zona horaria del ciclo"
+              value={value("cycle_tz")}
+              onChange={(e) => set("cycle_tz", e.target.value)}
+            />
+            <NumberField label="Deslizamiento (pb)" field="sim_slippage_bps" value={value} set={set} />
+            <NumberField
+              label="Recargo de comisión por orden"
+              field="sim_commission"
+              value={value}
+              set={set}
+            />
+            <Check
+              label="Dry run: analiza y registra pero no ordena"
+              field="dry_run"
+              settings={settings}
+              draft={draft}
+              set={set}
+            />
+            <Check
+              label="Saltar el ciclo con el mercado cerrado"
+              field="skip_when_market_closed"
+              settings={settings}
+              draft={draft}
+              set={set}
+            />
+          </Group>
+
+          <Group title="Límites duros">
+            <Checkbox
+              className="sm:col-span-2 lg:col-span-3"
+              checked={advanced}
+              onChange={(e) => {
+                setSaved(null);
+                setAdvanced(e.target.checked);
+              }}
+              label="Fijar los límites a mano"
+              /* This is the master switch of F6.5, and its wording matters: with
+                 it off the slider wins *even if the columns still hold numbers
+                 from a previous session*. Without saying so, turning it off looks
+                 like it did nothing. */
+            />
+            {advanced && (
+              <>
+                <NumberField label="Riesgo por operación (%)" field="risk_per_trade_pct" value={value} set={set} />
+                <NumberField label="Máx. por posición (%)" field="max_position_pct" value={value} set={set} />
+                <NumberField
+                  label="Mín. por posición (%)"
+                  field="min_position_pct"
+                  value={value}
+                  set={set}
+                />
+                <NumberField label="Exposición total (%)" field="max_total_exposure_pct" value={value} set={set} />
+                <NumberField label="Máx. posiciones abiertas" field="max_open_positions" value={value} set={set} step="1" />
+                <NumberField label="Pérdida diaria máxima (%)" field="max_daily_loss_pct" value={value} set={set} />
+                <NumberField label="Convicción mínima" field="min_conviction" value={value} set={set} step="1" />
+                <NumberField
+                  label="Múltiplo de ATR del stop"
+                  field="stop_atr_multiple"
+                  value={value}
+                  set={set}
+                />
+                <NumberField label="Reward/risk mínimo" field="min_reward_risk" value={value} set={set} />
+                <NumberField
+                  label="Objetivo mínimo (σ del horizonte)"
+                  field="min_target_sigma"
+                  value={value}
+                  set={set}
+                />
+                <NumberField label="Notional mínimo" field="min_order_notional" value={value} set={set} />
+              </>
+            )}
+          </Group>
+        </div>
+      </details>
 
       {save.error && <Alert>{save.error.message}</Alert>}
 
@@ -484,10 +484,6 @@ function SettingsForm({
         <Button type="submit" variant="primary" disabled={save.isPending}>
           {save.isPending ? "Guardando…" : "Guardar cambios"}
         </Button>
-        <span className="self-center text-caption text-text-muted">
-          Los cambios se aplican al siguiente ciclo: el que esté corriendo leyó sus
-          parámetros al arrancar y no los recarga (R6).
-        </span>
       </div>
     </form>
   );
@@ -620,8 +616,9 @@ function coerce(
   }
   if (typeof stored === "number") return Number(typed);
   // A limit sitting at NULL is numeric even though there is nothing stored to
-  // tell by: those are exactly the eleven of advanced mode.
-  if (stored === null && field !== "universe_file" && field !== "analyst_persona") {
+  // tell by: those are exactly the eleven of advanced mode. The two nullable
+  // text columns the form edits are the exceptions.
+  if (stored === null && field !== "universe_file" && field !== "llm_reasoning_effort") {
     const asNumber = Number(typed);
     if (!isNaN(asNumber)) return asNumber;
   }

@@ -222,9 +222,9 @@ interfaz ni el agente se enteran.
 
 ### La configuración vive en el perfil, no en el `.env`
 
-`agent_settings` tiene 46 columnas por perfil; del `.env` solo sale la infraestructura
+`agent_settings` tiene 51 columnas por perfil; del `.env` solo sale la infraestructura
 ([src/config.py](src/config.py)). Los límites duros del risk manager **nacen NULL a
-propósito**: NULL significa «derívalo de los sliders», y si nacieran con números mover el
+propósito**: NULL significa «derívalo del perfil de riesgo y del horizonte», y si nacieran con números mover el
 slider de riesgo no cambiaría nada.
 
 `cycles.settings_json` guarda copia de los parámetros con los que corrió cada ciclo, así que

@@ -1,0 +1,114 @@
+# Nombres de busqueda de noticias por simbolo (F9.4).
+#
+# Formato:  SIMBOLO | consulta | alias, alias... | idioma (opcional, p. ej. en-GB)
+#
+# - La consulta es lo que se busca en Google News, entre comillas y en el idioma
+#   de la bolsa del simbolo (espanol para .MC, frances para .PA...).
+# - Los alias son las otras formas en que la prensa escribe el nombre. Un titular
+#   solo se queda si nombra la consulta o un alias: es el filtro contra los
+#   homonimos, que en la medicion del 2026-09-25 trajo una ficha de Almirall
+#   buscando Rovi.
+# - Un alias corto y en mayusculas (ING, ACS, AXA) se compara respetando
+#   mayusculas, para que "ING" no encaje en cualquier palabra.
+# - Un nombre ambiguo lleva la consulta escrita entera, con comillas y contexto
+#   ("Puig" (Ibex OR bolsa ...)), y entonces SOLO cuentan los alias para el
+#   filtro. Medido el 2026-09-25: "Puig" a secas trajo la estacion de Fabra i
+#   Puig, un medico y pisos en El Puig de Santa Maria.
+#   ⚠️ Sin acentos dentro del contexto: con «cosmética» en el grupo Google
+#   devolvio cero resultados, y con las mismas palabras sin ella, 31.
+#
+# Escritos a mano y no sacados de Yahoo, y es la leccion de F9.7: `.info`
+# devuelve "CORPORACI...N ACCIONA ENERG...A" y "DEUTSCHE BOERSE N", y con esos
+# nombres 7 de los 89 salian sin ninguna noticia teniendo decenas. Un simbolo que
+# no este aqui cae a las noticias de Yahoo, que cubren bien las grandes
+# americanas y mal las medianas europeas.
+
+ABI.BR    | AB InBev             | Anheuser-Busch, ABInBev
+ACS.MC    | Grupo ACS            | ACS
+ACX.MC    | Acerinox             |
+AD.AS     | Ahold Delhaize       | Ahold, Delhaize
+ADS.DE    | Adidas               |
+ADYEN.AS  | Adyen                |
+AENA.MC   | Aena                 |
+AI.PA     | Air Liquide          |
+AIR.PA    | Airbus               |
+ALV.DE    | Allianz              |
+AMS.MC    | "Amadeus" (Ibex OR bolsa OR acciones OR viajes) | Amadeus
+ANA.MC    | Acciona              |
+ANE.MC    | Acciona Energía      | Acciona Energia
+ASM.AS    | ASM International    | ASMI
+ASML.AS   | ASML                 |
+BAS.DE    | BASF                 |
+BAYN.DE   | "Bayer" (Aktie OR Konzern OR DAX OR Glyphosat OR Pharma) | Bayer
+BBVA.MC   | BBVA                 |
+BKT.MC    | Bankinter            |
+BMW.DE    | BMW                  |
+BN.PA     | Danone               |
+BNP.PA    | BNP Paribas          | BNP
+CABK.MC   | CaixaBank            |
+CLNX.MC   | Cellnex              |
+COL.MC    | Inmobiliaria Colonial | Colonial
+CS.PA     | AXA                  |
+DB1.DE    | Deutsche Börse       | Deutsche Boerse
+DG.PA     | "Vinci" (Bourse OR CAC OR autoroutes OR concessions OR action) | Vinci
+DHL.DE    | DHL Group            | DHL, Deutsche Post
+DSY.PA    | Dassault Systèmes    | Dassault Systemes
+DTE.DE    | Deutsche Telekom     | Telekom
+EL.PA     | EssilorLuxottica     | Essilor
+ELE.MC    | Endesa               |
+ENEL.MI   | Enel                 |
+ENG.MC    | Enagás               | Enagas
+ENGI.PA   | Engie                |
+ENI.MI    | Eni                  |
+ENR.DE    | Siemens Energy       |
+FDR.MC    | Fluidra              |
+FER.MC    | Ferrovial            |
+G.MI      | "Generali" (assicurazioni OR Borsa OR "Piazza Affari" OR titolo) | Generali, Assicurazioni Generali
+GLE.PA    | Société Générale     | Societe Generale, SocGen
+GRF.MC    | Grifols              |
+IAG.MC    | IAG                  | International Airlines Group
+IBE.MC    | Iberdrola            |
+IDR.MC    | Indra                |
+IFX.DE    | Infineon             |
+INGA.AS   | ING                  | ING Groep
+ISP.MI    | Intesa Sanpaolo      | Intesa
+ITX.MC    | Inditex              |
+KER.PA    | Kering               |
+LOG.MC    | Logista              |
+MAP.MC    | Mapfre               |
+MBG.DE    | Mercedes-Benz        | Mercedes
+MC.PA     | LVMH                 |
+MRL.MC    | Merlin Properties    | Merlin
+MTS.MC    | ArcelorMittal        |
+MUV2.DE   | Munich Re            | Münchener Rück, Muenchener Rueck
+NDA-FI.HE | Nordea               |
+NOKIA.HE  | Nokia                |
+NTGY.MC   | Naturgy              |
+OR.PA     | L'Oréal              | L'Oreal, Oréal
+PRX.AS    | Prosus               |
+PUIG.MC   | "Puig" (Ibex OR bolsa OR acciones OR perfumes) | Puig
+RACE.MI   | Ferrari              |
+RED.MC    | Redeia               | Red Eléctrica, Red Electrica
+REP.MC    | Repsol               |
+RI.PA     | Pernod Ricard        | Pernod
+RMS.PA    | Hermès               | Hermes
+ROVI.MC   | Laboratorios Rovi    | Rovi
+RWE.DE    | RWE                  |
+SAB.MC    | Banco Sabadell       | Sabadell
+SAF.PA    | Safran               |
+SAN.MC    | Banco Santander      | Santander
+SAN.PA    | Sanofi               |
+SAP.DE    | SAP                  |
+SCYR.MC   | Sacyr                |
+SGO.PA    | Saint-Gobain         | Saint Gobain
+SIE.DE    | Siemens              |
+SLR.MC    | Solaria              |
+STLAP.PA  | Stellantis           |
+SU.PA     | Schneider Electric   | Schneider
+TEF.MC    | Telefónica           | Telefonica
+TTE.PA    | TotalEnergies        |
+UCG.MI    | UniCredit            |
+UNI.MC    | "Unicaja" (banco OR Ibex OR bolsa OR acciones OR hipotecas) | Unicaja
+VIE.PA    | Veolia               |
+VOW3.DE   | Volkswagen           | VW
+WKL.AS    | Wolters Kluwer       |

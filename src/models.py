@@ -95,6 +95,11 @@ class Proposal:
     #: constant dressed up as a judgement. "How sure am I" and "how much do I
     #: want" are different questions and now have different fields.
     suggested_weight_pct: float | None = None
+    #: Ids of the headlines the analyst says it relied on (F9.4), **only the ones
+    #: that were in its prompt**. A cited id that was not there is dropped here
+    #: and kept in `raw_response`: it is the one hallucination this system can
+    #: still see, now that the model may legitimately talk about news.
+    news_refs: tuple[str, ...] = ()
     reference_price: float = 0.0
     # Metadata of the model call, for auditing.
     model: str = ""

@@ -40,7 +40,12 @@ export interface AgentSettings {
   llm_temperature: number;
   llm_timeout_seconds: number;
   llm_max_retries: number;
+  llm_max_tokens: number;
+  llm_reasoning_effort?: string | null;
   analyst_persona?: string | null;
+  news_enabled: boolean;
+  news_max_items: number;
+  news_max_age_days: number;
   risk_profile: number;
   diversification: number;
   horizon_days: number;
@@ -210,6 +215,7 @@ export interface DecisionRow {
   approved_notional?: number | null;
   order_status?: string | null;
   filled_avg_price?: number | null;
+  news?: Array<NewsCitation>;
 }
 
 /**
@@ -230,7 +236,8 @@ export interface DerivedLimits {
   min_reward_risk: number;
   min_target_sigma: number;
   min_order_notional: number;
-  sector_cap?: number | null;
+  horizon_days: number;
+  stop_sigmas: number;
   derived_fields: Array<string>;
   summary: string;
 }
@@ -313,6 +320,17 @@ export interface MarketInfo {
   is_session_open: boolean;
   is_operating: boolean;
   status_text: string;
+}
+
+/**
+ * A headline the analyst cited, as its prompt showed it (F9.4).
+ */
+export interface NewsCitation {
+  ref: string;
+  title: string;
+  source?: string | null;
+  url?: string | null;
+  published_at?: string | null;
 }
 
 export interface OrderRow {
@@ -566,7 +584,12 @@ export interface SettingsUpdate {
   llm_temperature?: number | null;
   llm_timeout_seconds?: number | null;
   llm_max_retries?: number | null;
+  llm_max_tokens?: number | null;
+  llm_reasoning_effort?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null;
   analyst_persona?: string | null;
+  news_enabled?: boolean | null;
+  news_max_items?: number | null;
+  news_max_age_days?: number | null;
   risk_profile?: number | null;
   diversification?: number | null;
   horizon_days?: number | null;

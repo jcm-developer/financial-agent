@@ -136,13 +136,22 @@ class LLMClient:
         temperature: float = 0.2,
         timeout: float = 120.0,
         max_retries: int = 3,
+        max_tokens: int = 1600,
+        reasoning_effort: str | None = None,
     ) -> None:
         """An empty `base_url` = the provider's. It can be set to point at a proxy
-        or at an OpenAI-compatible deployment of your own."""
+        or at an OpenAI-compatible deployment of your own.
+
+        `max_tokens` and `reasoning_effort` come from the profile since
+        2026-09-25: both depend on the model, and a constant here was one more
+        thing a model change had to discover by failing.
+        """
         self.provider = resolve_provider(provider)
         self.model = model
         self.temperature = temperature
         self.max_retries = max_retries
+        self.max_tokens = max_tokens
+        self.reasoning_effort = (reasoning_effort or "").strip().lower() or None
         self._supports_json_mode = True
         self._supports_usage_in_stream = True
         #: Name of the output ceiling. OpenAI's reasoning models (GPT-6) refuse
@@ -157,6 +166,10 @@ class LLMClient:
         #: profile's `llm_temperature` is still what `cycles.settings_json` says,
         #: and from then on it is not what the model ran with.
         self._supports_temperature = True
+        #: Same treatment as the temperature: dropped if the model refuses it,
+        #: with a WARNING, because from then on the profile says one thing and
+        #: the model runs with another.
+        self._supports_reasoning_effort = True
         if not api_key:
             raise LLMError(
                 f"Falta la clave de API de {self.provider.label}. "
@@ -189,14 +202,16 @@ class LLMClient:
         *,
         system: str,
         user: str,
-        max_tokens: int = 1600,
+        max_tokens: int | None = None,
     ) -> LLMResponse:
         """Asks for a response and demands that it contain a JSON object.
 
         Raises `LLMError` if no parsable JSON is obtained after the retries: we
         would rather skip the symbol than trade on a guess.
         """
-        response = self._post_chat(system=system, user=user, max_tokens=max_tokens)
+        response = self._post_chat(
+            system=system, user=user, max_tokens=max_tokens or self.max_tokens
+        )
         if response.parsed is None:
             raise LLMError(
                 f"El modelo {self.model} no devolvio JSON valido. "
@@ -225,6 +240,8 @@ class LLMClient:
             body[self._token_field] = max_tokens
             if self._supports_temperature:
                 body["temperature"] = self.temperature
+            if self.reasoning_effort and self._supports_reasoning_effort:
+                body["reasoning_effort"] = self.reasoning_effort
             if self._supports_json_mode:
                 body["response_format"] = {"type": "json_object"}
             if self._supports_usage_in_stream:
@@ -349,6 +366,18 @@ class LLMClient:
         ):
             self._token_field = "max_completion_tokens"
             return "max_tokens"
+        if (
+            "reasoning_effort" in lowered
+            and self.reasoning_effort
+            and self._supports_reasoning_effort
+        ):
+            self._supports_reasoning_effort = False
+            log.warning(
+                "El modelo %s no acepta reasoning_effort=%s: corre con el suyo por "
+                "defecto, que no es el que dice el perfil.",
+                self.model, self.reasoning_effort,
+            )
+            return "reasoning_effort"
         if "temperature" in lowered and self._supports_temperature:
             self._supports_temperature = False
             log.warning(

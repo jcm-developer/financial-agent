@@ -339,6 +339,23 @@ class Settings:
     #: notion of how many it has already approved in this cycle.
     max_new_positions_per_cycle: int = 0
 
+    #: Output ceiling of each model call. It depends on the model, which is why
+    #: it is a setting: `nemotron-3-super` reasoned inside the content and needed
+    #: close to 1.600 (F9.24), `gpt-6-sol` answers in ~450.
+    llm_max_tokens: int = 1600
+    #: `reasoning_effort` for the models that take it. None = not sent, so the
+    #: provider's default applies.
+    llm_reasoning_effort: str | None = None
+
+    #: News as an input of the analyst (F9.4). Off by default because turning it
+    #: on changes what the experiment measures: a profile with news and one
+    #: without are different experiments, not two runs of the same one.
+    news_enabled: bool = False
+    #: Headlines per company and for the market context, at most.
+    news_max_items: int = 8
+    #: How old a headline may be, in calendar days.
+    news_max_age_days: int = 7
+
     risk: RiskLimits = field(default_factory=RiskLimits)
     screener: ScreenerSettings = field(default_factory=ScreenerSettings)
 

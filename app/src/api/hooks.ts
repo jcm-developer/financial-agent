@@ -395,7 +395,7 @@ export function useProfileSettings(ref: string | undefined) {
 }
 
 /**
- * What the two sliders would give, without writing anything.
+ * What the risk slider would give at this horizon, without writing anything.
  *
  * This is how the form shows the derived limits **while the slider moves**
  * (F6.8). It is a request per position of the slider, which sounds like a lot
@@ -404,17 +404,21 @@ export function useProfileSettings(ref: string | undefined) {
  * the cache. The alternative was redoing `derive_limits` in TypeScript, which is
  * the one thing F6.5 forbids.
  *
+ * The horizon travels with the risk level since 2026-09-25: the stop sits at a
+ * number of sigmas of the horizon, so the same slider position means a wider
+ * stop at 180 days than at 45.
+ *
  * @param risk - Risk profile, 1 to 10.
- * @param diversification - Diversification, 1 to 10.
+ * @param horizon - Horizon in calendar days.
  * @return The query for `GET /api/profiles/limits-preview`.
  */
-export function useLimitsPreview(risk: number, diversification: number) {
+export function useLimitsPreview(risk: number, horizon: number) {
   return useQuery({
-    queryKey: ["limits-preview", risk, diversification] as const,
+    queryKey: ["limits-preview", risk, horizon] as const,
     queryFn: ({ signal }) =>
       api.get<DerivedLimits>(
         "/api/profiles/limits-preview",
-        { risk_profile: risk, diversification },
+        { risk_profile: risk, horizon_days: horizon },
         signal,
       ),
     staleTime: Infinity,

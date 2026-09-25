@@ -489,3 +489,31 @@ def test_the_cycle_snapshot_does_not_carry_the_profiles_key(db, perfil):
 
     assert "nvapi-secreto-del-perfil" not in str(datos)
     assert datos["llm_provider"] == "nvidia"
+
+
+def test_the_token_ceiling_comes_from_the_profile():
+    """It depends on the model (Nemotron needed ~1.600, Sol uses ~450), so it is
+    a setting and not a constant a model change has to discover by failing."""
+    client, seen = stub(ok_stream(), max_tokens=900)
+
+    client.complete_json(system="s", user="u")
+
+    assert sent_body(seen[0])["max_tokens"] == 900
+
+
+def test_reasoning_effort_is_sent_only_when_set_and_dropped_if_refused():
+    quiet, seen_quiet = stub(ok_stream())
+    quiet.complete_json(system="s", user="u")
+    assert "reasoning_effort" not in sent_body(seen_quiet[0])
+
+    client, seen = stub(
+        httpx.Response(400, json={"error": {"message": "Unsupported parameter: 'reasoning_effort'"}}),
+        ok_stream(),
+        max_retries=1,
+        reasoning_effort="medium",
+    )
+    client.complete_json(system="s", user="u")
+
+    assert sent_body(seen[0])["reasoning_effort"] == "medium"
+    assert "reasoning_effort" not in sent_body(seen[1])
+    assert "response_format" in sent_body(seen[1])  # the JSON mode survives

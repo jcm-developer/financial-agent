@@ -19,6 +19,7 @@ promises a floor the engine does not use.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from collections.abc import Callable
@@ -28,6 +29,7 @@ from typing import Any
 from . import fees, risk
 from .llm import LLMClient, LLMError
 from .models import AccountState, BrokerPosition, MarketSnapshot, Proposal
+from .news import MARKET_MAX_AGE_DAYS, NewsContext, NumberedHeadline
 
 log = logging.getLogger(__name__)
 
@@ -145,6 +147,87 @@ Responde UNICAMENTE con un objeto JSON, sin texto antes ni despues:
   "suggested_target": <objetivo revisado, o null>
 }
 """
+
+
+#: The honesty rule of the entry prompt when there is no news, verbatim.
+_ENTRY_HONESTY_NO_NEWS = """\
+- Solo puedes usar los datos numericos que te doy. No tienes acceso a noticias, \
+resultados trimestrales ni precios posteriores a tu fecha de entrenamiento. NO \
+inventes catalizadores, cifras de ingresos, upgrades de analistas ni titulares."""
+
+#: The same rule when the prompt carries headlines (F9.4).
+#:
+#: ⚠️ **It is rewritten, not lifted, and the difference is the whole design.** The
+#: old rule is what made the experiment readable: any catalyst in a thesis was
+#: invented, and it showed. With news the model may legitimately name one, so
+#: what keeps "it read it" apart from "it made it up" is the id: every headline
+#: comes numbered and is stored with that number, and the model cites by it. A
+#: catalyst without an id, or an id that was not in the list, is still visible.
+_ENTRY_HONESTY_NEWS = """\
+- Solo puedes usar los datos que te doy: los indicadores y los titulares \
+numerados ([N1], [M1]...). No tienes acceso a resultados trimestrales, al cuerpo \
+de las noticias ni a precios posteriores a tu fecha de entrenamiento. NO inventes \
+catalizadores, cifras de ingresos, upgrades de analistas ni titulares que no \
+esten en la lista.
+- Un titular es solo un titular: no has leido el articulo y no sabes si es \
+exacto. Si una noticia pesa en tu juicio, cita su id en `news_refs`; si no citas \
+ninguna, se entiende que decidiste solo con los datos.
+- Las [N] son de este activo y las [M], del mercado en general. Una noticia pesa \
+cuando cambia lo que se puede esperar AL HORIZONTE indicado, no por el movimiento \
+de un dia, y pesa mas cuando coincide con lo que dicen los datos.
+- Que un activo no tenga titulares no es una senal: muchos valores medianos \
+salen poco en prensa."""
+
+_EXIT_HONESTY_NO_NEWS = "- Solo puedes usar los datos numericos que te doy. No inventes noticias."
+
+_EXIT_HONESTY_NEWS = """\
+- Solo puedes usar los datos que te doy: los indicadores y los titulares \
+numerados ([N1], [M1]...). No inventes noticias fuera de esa lista. Un titular \
+es solo un titular: no has leido el articulo.
+- Si una noticia pesa en tu juicio, cita su id en `news_refs`. Una noticia \
+justifica cerrar cuando invalida la tesis original, no por el ruido de un dia."""
+
+_NEWS_REFS_FIELD = """\
+  "news_refs": ["<ids de los titulares que pesaron en tu juicio, p. ej. N2; [] si ninguno>"],
+"""
+
+
+def _with_news(prompt: str, honesty_old: str, honesty_new: str, before: str) -> str:
+    """The news variant of a system prompt, built from the plain one.
+
+    Built by replacement and not written twice so the two can only differ where
+    they are meant to: a copy would drift, and a profile without news has to run
+    on exactly the prompt it always ran on.
+    """
+    if honesty_old not in prompt or before not in prompt:
+        raise RuntimeError("El prompt base cambio y la variante con noticias ya no encaja.")
+    return prompt.replace(honesty_old, honesty_new).replace(before, _NEWS_REFS_FIELD + before)
+
+
+ENTRY_SYSTEM_PROMPT_NEWS = _with_news(
+    ENTRY_SYSTEM_PROMPT, _ENTRY_HONESTY_NO_NEWS, _ENTRY_HONESTY_NEWS,
+    '  "key_signals":',
+)
+EXIT_SYSTEM_PROMPT_NEWS = _with_news(
+    EXIT_SYSTEM_PROMPT, _EXIT_HONESTY_NO_NEWS, _EXIT_HONESTY_NEWS,
+    '  "suggested_stop": <nuevo stop',
+)
+
+
+def prompt_versions(news: bool) -> dict[str, str]:
+    """A short hash of each system prompt a cycle runs with.
+
+    Stored in `cycles.settings_json` (2026-09-25) because experiments now run one
+    after another, and a prompt edited between two of them is a difference in
+    what was measured that no setting records. Twelve hex characters are enough
+    to tell two versions apart; the text itself lives in git.
+    """
+    entry = ENTRY_SYSTEM_PROMPT_NEWS if news else ENTRY_SYSTEM_PROMPT
+    exit_ = EXIT_SYSTEM_PROMPT_NEWS if news else EXIT_SYSTEM_PROMPT
+    return {
+        "entry": hashlib.sha256(entry.encode("utf-8")).hexdigest()[:12],
+        "exit": hashlib.sha256(exit_.encode("utf-8")).hexdigest()[:12],
+    }
 
 
 # How the interval is named in the prompts. Saying "sessions" when they are
@@ -306,19 +389,29 @@ class Analyst:
     # -- Entradas ----------------------------------------------------------
 
     def evaluate_entry(
-        self, snapshot: MarketSnapshot, account: AccountState
+        self,
+        snapshot: MarketSnapshot,
+        account: AccountState,
+        news: NewsContext | None = None,
     ) -> Proposal | None:
         """Analyses one candidate. Returns None if the model fails: a symbol with
-        no analysis is skipped, not traded blind."""
+        no analysis is skipped, not traded blind.
+
+        `news` None means the profile runs without news, and then the prompt is
+        exactly the one it was before F9.4 — not a prompt saying "no news
+        today", which would be a different experiment.
+        """
         user_prompt = _render_entry_prompt(
             snapshot, account, self.labels, self.currency,
             self._commission_for(snapshot.symbol), self.max_position_pct,
             self.price_labels, self.horizon_days, self.min_target_sigma,
+            news,
         )
         self.calls += 1
         try:
             response = self.llm.complete_json(
-                system=ENTRY_SYSTEM_PROMPT, user=user_prompt
+                system=ENTRY_SYSTEM_PROMPT_NEWS if news is not None else ENTRY_SYSTEM_PROMPT,
+                user=user_prompt,
             )
         except LLMError as exc:
             self.failures += 1
@@ -327,6 +420,7 @@ class Analyst:
 
         data = response.parsed or {}
         action = _coerce_action(data.get("action"), allowed={"buy", "hold"})
+        refs, unknown = _coerce_news_refs(data.get("news_refs"), news)
         proposal = Proposal(
             symbol=snapshot.symbol,
             kind="entry",
@@ -338,13 +432,15 @@ class Analyst:
             suggested_stop=_coerce_price(data.get("suggested_stop")),
             suggested_target=_coerce_price(data.get("suggested_target")),
             suggested_weight_pct=_coerce_weight(data.get("suggested_weight_pct")),
+            news_refs=refs,
             reference_price=snapshot.price,
             model=response.model,
             latency_ms=response.latency_ms,
             prompt_tokens=response.prompt_tokens,
             completion_tokens=response.completion_tokens,
-            raw_response=_audit_payload(response.content, data),
+            raw_response=_audit_payload(response.content, data, unknown),
         )
+        _warn_unknown_refs(snapshot.symbol, unknown)
         log.info(
             "%s -> %s (conviccion %d) %s",
             snapshot.symbol, proposal.action, proposal.conviction,
@@ -361,16 +457,18 @@ class Analyst:
         entry_thesis: str | None,
         stop_price: float | None,
         target_price: float | None,
+        news: NewsContext | None = None,
     ) -> Proposal | None:
         user_prompt = _render_exit_prompt(
             position, snapshot, entry_thesis, stop_price, target_price,
             self.labels, self.currency, self._commission_for(position.symbol),
-            self.price_labels,
+            self.price_labels, news,
         )
         self.calls += 1
         try:
             response = self.llm.complete_json(
-                system=EXIT_SYSTEM_PROMPT, user=user_prompt
+                system=EXIT_SYSTEM_PROMPT_NEWS if news is not None else EXIT_SYSTEM_PROMPT,
+                user=user_prompt,
             )
         except LLMError as exc:
             self.failures += 1
@@ -378,6 +476,8 @@ class Analyst:
             return None
 
         data = response.parsed or {}
+        refs, unknown = _coerce_news_refs(data.get("news_refs"), news)
+        _warn_unknown_refs(position.symbol, unknown)
         return Proposal(
             symbol=position.symbol,
             kind="exit",
@@ -388,12 +488,13 @@ class Analyst:
             horizon_days=None,
             suggested_stop=_coerce_price(data.get("suggested_stop")),
             suggested_target=_coerce_price(data.get("suggested_target")),
+            news_refs=refs,
             reference_price=snapshot.price,
             model=response.model,
             latency_ms=response.latency_ms,
             prompt_tokens=response.prompt_tokens,
             completion_tokens=response.completion_tokens,
-            raw_response=_audit_payload(response.content, data),
+            raw_response=_audit_payload(response.content, data, unknown),
         )
 
 
@@ -411,6 +512,7 @@ def _render_entry_prompt(
     price_labels: tuple[str, str] | None = None,
     horizon_days: int = 10,
     min_target_sigma: float = 0.0,
+    news: NewsContext | None = None,
 ) -> str:
     bar_label, window_label = labels
     _, price_window_label = price_labels or labels
@@ -436,7 +538,7 @@ INDICADORES TECNICOS (calculados sobre {bar_label}; null = no disponible):
 {units}{context}
 ULTIMAS 10 {window_label} (fecha, apertura, maximo, minimo, cierre, volumen):
 {_format_bars(snapshot.recent_bars)}
-
+{_news_block(news, snapshot.symbol)}
 {horizon}
 COSTE DE OPERAR {snapshot.symbol}: {commission:.2f} {currency} por orden, o sea
 {commission * 2:.2f} {currency} de ida y vuelta. Es un importe fijo, no un
@@ -465,6 +567,7 @@ def _render_exit_prompt(
     currency: str = "USD",
     commission: float = 0.0,
     price_labels: tuple[str, str] | None = None,
+    news: NewsContext | None = None,
 ) -> str:
     bar_label, window_label = labels
     units = _window_units_note(bar_label)
@@ -489,8 +592,103 @@ INDICADORES TECNICOS ACTUALES (sobre {bar_label}):
 {units}{context}
 ULTIMAS 10 {window_label} (fecha, apertura, maximo, minimo, cierre, volumen):
 {_format_bars(snapshot.recent_bars)}
-
+{_news_block(news, snapshot.symbol)}
 Decide si la tesis sigue viva, en el JSON especificado."""
+
+
+def _news_block(news: NewsContext | None, symbol: str) -> str:
+    """The headlines, numbered, or nothing at all when the profile has no news.
+
+    Three cases are told apart on purpose, because they lead to different
+    judgements: headlines, **no** headlines ("nothing was written about it"), and
+    headlines that **could not be fetched** ("we do not know"). Collapsing the
+    last two would let a feed outage read as a quiet week.
+
+    It comes back with its own leading and trailing newline so that, with news
+    off, the prompt is byte for byte the one it was before F9.4.
+    """
+    if news is None:
+        return ""
+    lines = [
+        "",
+        f"NOTICIAS DE {symbol} (solo titulares, de los ultimos {news.max_age_days} "
+        "dias, de la mas reciente a la mas antigua):",
+    ]
+    if news.company_error:
+        lines.append(
+            f"  (no se pudieron consultar en este ciclo: {news.company_error}. "
+            "No es lo mismo que no haber noticias.)"
+        )
+    elif not news.company:
+        lines.append(f"  (ningun titular sobre {symbol} en ese periodo)")
+    else:
+        lines += [_format_headline(item) for item in news.company]
+
+    market_days = min(news.max_age_days, MARKET_MAX_AGE_DAYS)
+    lines.append(
+        f"CONTEXTO DE MERCADO (titulares economicos generales de los ultimos "
+        f"{market_days} dias):"
+    )
+    if news.market_error:
+        lines.append(f"  (no se pudo consultar en este ciclo: {news.market_error}.)")
+    elif not news.market:
+        lines.append("  (ningun titular en ese periodo)")
+    else:
+        lines += [_format_headline(item) for item in news.market]
+    return "\n".join(lines) + "\n"
+
+
+def _format_headline(item: NumberedHeadline) -> str:
+    """`[N1] 2026-09-24 · El Economista · titular`, on one line.
+
+    The title is flattened and capped: it comes from the open web, and a feed
+    that sends a paragraph —or a line break followed by something that reads
+    like an instruction— must not be able to reshape the prompt around it.
+    """
+    headline = item.headline
+    when = (
+        headline.published_at.strftime("%Y-%m-%d")
+        if headline.published_at else "fecha desconocida"
+    )
+    title = _truncate(headline.title, 220)
+    source = _truncate(headline.source or "fuente desconocida", 60)
+    return f"  [{item.ref}] {when} · {source} · {title}"
+
+
+def _coerce_news_refs(
+    value: Any, news: NewsContext | None
+) -> tuple[tuple[str, ...], list[str]]:
+    """The cited ids that were in the prompt, and the ones that were not.
+
+    The first go to the proposal and to `decisions.news_refs_json`; the second
+    are the hallucination this design keeps visible, and go to the audit payload
+    and the log. Anything that is not a list of strings is read as "cited
+    nothing", like every other malformed field of the answer.
+    """
+    if news is None or not isinstance(value, list):
+        return (), []
+    allowed = news.refs
+    valid: list[str] = []
+    unknown: list[str] = []
+    for raw in value:
+        if not isinstance(raw, str):
+            continue
+        ref = raw.strip().strip("[]").upper()
+        if not ref:
+            continue
+        target = valid if ref in allowed else unknown
+        if ref not in target:
+            target.append(ref)
+    return tuple(valid), unknown
+
+
+def _warn_unknown_refs(symbol: str, unknown: list[str]) -> None:
+    if unknown:
+        log.warning(
+            "%s: el analista cito noticias que no estaban en su prompt: %s. "
+            "Se descartan y quedan en la respuesta cruda.",
+            symbol, ", ".join(unknown),
+        )
 
 
 def _window_units_note(bar_label: str) -> str:
@@ -699,10 +897,19 @@ def _coerce_text(value: Any, *, limit: int) -> str:
     return text if len(text) <= limit else text[:limit]
 
 
-def _audit_payload(raw_content: str, parsed: dict[str, Any]) -> dict[str, Any]:
+def _audit_payload(
+    raw_content: str, parsed: dict[str, Any], unknown_refs: list[str] | None = None
+) -> dict[str, Any]:
     """What gets stored in `decisions.raw_response`. The trimmed raw text is
-    included: if the model hallucinates, we want to be able to see it later."""
-    return {
+    included: if the model hallucinates, we want to be able to see it later.
+
+    `unknown_news_refs` only appears when the model cited a headline that was
+    not in its prompt (F9.4), so it can be searched for in SQL.
+    """
+    payload: dict[str, Any] = {
         "parsed": parsed,
         "raw_text": raw_content[:8000],
     }
+    if unknown_refs:
+        payload["unknown_news_refs"] = list(unknown_refs)
+    return payload

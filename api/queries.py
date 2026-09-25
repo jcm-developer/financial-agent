@@ -21,6 +21,7 @@ from typing import Any
 from src import market_calendar, risk_presets
 from src.db import Database, DatabaseError
 from src.profile_settings import mask_secret
+from src.risk import horizon_sigma
 
 #: Cap on rows per page. It is not paranoia: `decisions` stores the model's raw
 #: response, so a few thousand rows are megabytes of JSON travelling to a browser
@@ -252,8 +253,14 @@ def derived_limits(settings: dict[str, Any]) -> dict[str, Any]:
     payload = {
         field: getattr(limits, field) for field in risk_presets.DERIVED_FIELDS
     }
-    payload["sector_cap"] = risk_presets.sector_cap(
-        settings.get("diversification", 5), limits.max_open_positions
+    # The stop in sigmas of the horizon, which is how the profile thinks about it
+    # since 2026-09-25 (the Risk Manager still applies it in ATRs, per symbol).
+    # From the effective multiple and not from the table, so a stop written by
+    # hand in advanced mode shows the sigmas it really amounts to.
+    horizon = int(settings.get("horizon_days") or risk_presets.DEFAULT_HORIZON_DAYS)
+    payload["horizon_days"] = horizon
+    payload["stop_sigmas"] = round(
+        limits.stop_atr_multiple / horizon_sigma(1.0, horizon), 2
     )
     payload["derived_fields"] = [
         field for field in risk_presets.DERIVED_FIELDS
@@ -511,7 +518,7 @@ def decisions(
         "select d.id, d.cycle_id, d.created_at, d.symbol, d.kind, d.action, "
         "       d.conviction, d.thesis, d.risks, d.horizon_days, "
         "       d.reference_price, d.suggested_stop, d.suggested_target, "
-        "       d.suggested_weight_pct, "
+        "       d.suggested_weight_pct, d.news_refs_json, "
         "       d.llm_model, d.latency_ms, d.prompt_tokens, d.completion_tokens, "
         "       r.verdict, r.rule, r.reason as risk_reason, r.approved_qty, "
         "       r.approved_notional, "
@@ -520,7 +527,47 @@ def decisions(
         "order by d.created_at desc limit ? offset ?",
         (*params, clamp_limit(limit), max(0, offset)),
     )
+    _attach_news(db, rows)
     return rows, total
+
+
+def _attach_news(db: Database, rows: list[dict[str, Any]]) -> None:
+    """Resolves each decision's cited refs to the headlines its prompt showed.
+
+    A ref is only unique within its cycle and, for `N`, within its symbol — `N1`
+    is a different headline for every company analysed in the cycle — so the
+    lookup key is `(cycle, symbol, ref)`, with symbol None for the market's `M`.
+    One query for the whole page, not one per row.
+    """
+    cited: dict[str, list[str]] = {}
+    for row in rows:
+        raw = row.pop("news_refs_json", None)
+        row["news"] = []
+        if raw:
+            try:
+                refs = [str(r) for r in json.loads(raw)]
+            except (TypeError, ValueError):
+                refs = []
+            if refs:
+                cited[row["id"]] = refs
+    if not cited:
+        return
+    cycles = sorted({row["cycle_id"] for row in rows if row["id"] in cited})
+    marks = ",".join("?" for _ in cycles)
+    items = db.query(
+        "select cycle_id, symbol, ref, title, source, url, published_at "
+        f"from news_items where cycle_id in ({marks})",
+        tuple(cycles),
+    )
+    by_key = {(i["cycle_id"], i["symbol"], i["ref"]): i for i in items}
+    for row in rows:
+        for ref in cited.get(row["id"], []):
+            symbol = None if ref.startswith("M") else row["symbol"]
+            item = by_key.get((row["cycle_id"], symbol, ref))
+            if item is not None:
+                row["news"].append({
+                    key: item[key] for key in ("ref", "title", "source", "url", "published_at")
+                })
 
 
 def orders(

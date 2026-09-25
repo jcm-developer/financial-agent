@@ -801,9 +801,8 @@ export function Input({
  * A 1–10 slider with its value beside the label.
  *
  * **The value is always in sight, and that is not decoration**: a slider whose
- * number you cannot read is a control you cannot set on purpose, and these two
- * —risk profile and diversification— are the ones the whole experiment is
- * described by. The ends are named as well, because "1" and "10" do not say
+ * number you cannot read is a control you cannot set on purpose, and the risk
+ * profile is the one the whole experiment is described by. The ends are named as well, because "1" and "10" do not say
  * which way is more risk.
  *
  * The filled half of the track is a gradient stop driven by the `--fill` custom

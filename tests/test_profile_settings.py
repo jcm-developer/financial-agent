@@ -84,13 +84,16 @@ def test_the_infrastructure_still_comes_from_the_environment(db, perfil):
     assert settings.log_level == INFRA.log_level
 
 
-def test_the_risk_limits_go_through_the_sliders(db, perfil):
-    db.update_settings(perfil, {"risk_profile": 10, "diversification": 1})
+def test_the_risk_limits_go_through_the_slider(db, perfil):
+    """Only the risk level and the horizon: `diversification` is still a column
+    and is set to an extreme here precisely to show it moves nothing."""
+    db.update_settings(perfil, {"risk_profile": 10, "diversification": 1, "horizon_days": 180})
 
     settings = resolve_settings(db, perfil, infra=INFRA)
 
-    assert settings.risk.risk_per_trade_pct == pytest.approx(3.0)
-    assert settings.risk.max_open_positions == 3
+    assert settings.risk.risk_per_trade_pct == pytest.approx(5.0)
+    assert settings.risk.max_open_positions == 5
+    assert settings.risk.stop_atr_multiple == pytest.approx(7.94)
     assert settings.risk_summary and "10/10" in settings.risk_summary
 
 

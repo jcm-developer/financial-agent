@@ -181,6 +181,12 @@ def resolve_settings(db: Database, profile_id: str, *, infra: Infra) -> Settings
         # del 6 %: el modelo no sabia a que plazo se le juzgaba.
         horizon_days=int(row["horizon_days"]),
         max_new_positions_per_cycle=int(row["max_new_positions_per_cycle"] or 0),
+        llm_max_tokens=int(row["llm_max_tokens"]),
+        llm_reasoning_effort=(str(row["llm_reasoning_effort"]).strip().lower() or None)
+        if row["llm_reasoning_effort"] else None,
+        news_enabled=bool(row["news_enabled"]),
+        news_max_items=int(row["news_max_items"]),
+        news_max_age_days=int(row["news_max_age_days"]),
         risk=risk,
         screener=screener,
         profile_id=profile_id,
@@ -297,6 +303,16 @@ def load_for_cycle(
 # Creacion de perfiles
 # ----------------------------------------------------------------------
 
+#: Calendar days of history a new profile downloads. `sma_200` needs 200
+#: sessions and the 52-week extremes 252, which is ~365 calendar days; 400 leaves
+#: room for holidays (F9.14, F9.33).
+NEW_PROFILE_LOOKBACK_DAYS = 400
+
+#: Entries a single cycle of a new profile may open (F9.18). Not zero, which
+#: would mean no cap and let the first cycle spend the book on the first names
+#: the screener ranks.
+NEW_PROFILE_MAX_NEW_POSITIONS = 2
+
 #: Above this, following the whole universe minute by minute stops being
 #: reasonable: these are requests per minute to Yahoo from a domestic IP (R2).
 #: The S&P 500 falls on this side; the European 89 does not.
@@ -401,6 +417,17 @@ def create_market_profile(
             # discards 15 of the 89.
             "screener_min_turnover": market.min_turnover,
             "initial_budget": budget,
+            # F9.33: the schema's defaults are the original American design with
+            # daily bars, and three of them contradicted decisions already taken.
+            # `lookback_days` 200 is ~138 sessions, so `sma_200` and the 52-week
+            # extremes came out null and the analyst judged with a third of its
+            # indicators blank; 400 is what F9.14 settled on. No cap on entries
+            # let the first cycle spend the cash on the first candidates (F9.18).
+            "lookback_days": NEW_PROFILE_LOOKBACK_DAYS,
+            "max_new_positions_per_cycle": NEW_PROFILE_MAX_NEW_POSITIONS,
+            # News on, now that there is a source that covers the universe (F9.4).
+            # A profile that wants to measure without it switches it off.
+            "news_enabled": 1,
         },
     )
     # The live universe is what the ingestor follows minute by minute;
