@@ -4481,8 +4481,17 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       - El consumo **no se ha medido con Opus**: por token cuesta el doble que Sonnet y con
         `medium` razona menos, así que se estima entre 1,5 y 2 veces lo de Sonnet (~0,80–1,10 $
         por ciclo en la API). El primer ciclo real del lunes lo dirá.
-      - El `check` lanzado contra `eu-claude-base` antes del cambio de nombre había creado una
-        cartera con ese nombre; vacía y sin nada que la referenciara, se borró.
+      - ⚠️ **Renombrar un perfil dejaba su cartera con el nombre viejo**, y el ciclo busca la
+        cartera **por nombre** (`ensure_portfolio`): el primer ciclo de `eu-opus-base` habría
+        creado una segunda cartera sin `profile_id` y las pantallas habrían seguido leyendo la
+        primera, vacía. Se destapó por un error de limpieza: se borró la cartera
+        `eu-claude-base` suponiendo por el nombre que era la huérfana, y era la enlazada al
+        perfil —la huérfana era la `eu-opus-base` que había creado el `check`—, así que
+        Resumen pasó a decir que el perfil no tenía cartera. Reparado enlazando la que quedaba,
+        vacía y sin referencias. **Arreglo:** `update_profile` renombra también la cartera
+        enlazada, y [api/guard.py](api/guard.py) deja actualizar `portfolios.name` y solo esa
+        columna —`initial_budget` sigue cerrado—. La API ya solo renombra perfiles sin
+        histórico, así que mover el nombre no desconecta nada.
 
 ---
 

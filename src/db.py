@@ -446,6 +446,17 @@ class Database:
             return []
         payload["updated_at"] = _now()
         self._update("profiles", profile_id, payload)
+        if name is not None:
+            # The cycle finds its book by name (`ensure_portfolio`), so the book
+            # has to follow the profile. Without this, the 2026-09-26 rename of
+            # `eu-claude-base` left the linked book with the old name, and the
+            # next cycle would have created a second one with no `profile_id`
+            # while the screens kept reading the first. The API only renames a
+            # profile with no history, so moving the name disconnects nothing.
+            self._execute(
+                "update portfolios set name = ? where profile_id = ?",
+                (name, profile_id),
+            )
         return sorted(key for key in payload if key != "updated_at")
 
     def set_profile_status(self, profile_id: str, status: str) -> None:

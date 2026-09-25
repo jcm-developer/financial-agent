@@ -29,11 +29,13 @@ Two details that took some thinking:
     closed in a `finally`. Deleting a profile drags its history along on purpose;
     what is not admitted is reaching that history by any other route.
 
-  * **`portfolios` can be inserted and deleted, but not updated.** Creating a
-    profile creates its book and deleting it deletes the book, but nothing has
-    any business *modifying* it: the only interesting column is
-    `initial_budget`, and changing it once the equity curve has started would
-    silently rewrite the reference the whole experiment is measured against.
+  * **`portfolios` can be inserted and deleted, and updated in one column
+    only: `name`.** Creating a profile creates its book and deleting it deletes
+    the book. `initial_budget` stays out of reach: changing it once the equity
+    curve has started would silently rewrite the reference the whole experiment
+    is measured against. `name` is let through because the book has to follow a
+    renamed profile —the cycle finds it by name— and the API only renames
+    profiles with no history (2026-09-26, `eu-claude-base` → `eu-opus-base`).
 
 What this module is **not**: security against an attacker. The API listens on
 loopback and without authentication (F3.8); whoever reaches the process reaches
@@ -75,6 +77,13 @@ WRITABLE: MappingProxyType[str, frozenset[str]] = MappingProxyType({
     "profile_universe": frozenset({"insert", "delete"}),
     # See the header: created with the profile and deleted with the profile.
     "portfolios": frozenset({"insert", "delete"}),
+})
+
+#: Columns that may be updated in a table that is otherwise not updatable. The
+#: authorizer is told the column of every UPDATE, so the exception can be this
+#: narrow: a book renamed with its profile, never its budget.
+UPDATABLE_COLUMNS: MappingProxyType[str, frozenset[str]] = MappingProxyType({
+    "portfolios": frozenset({"name"}),
 })
 
 #: Pragmas the data layer needs. `table_info` is used by `Database._columns` to
@@ -154,6 +163,8 @@ class ConfigDatabase(Database):
 
         table = arg1 or ""
         if verb in WRITABLE.get(table, frozenset()):
+            return sqlite3.SQLITE_OK
+        if verb == "update" and (arg2 or "") in UPDATABLE_COLUMNS.get(table, frozenset()):
             return sqlite3.SQLITE_OK
         return self._deny(verb, table)
 

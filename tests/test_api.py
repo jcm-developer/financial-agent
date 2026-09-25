@@ -162,6 +162,17 @@ def test_the_api_does_write_to_the_configuration_tables(db_path, profile):
         assert db.get_settings(profile["id"])["risk_profile"] == 9
 
 
+def test_a_book_can_be_renamed_but_its_budget_stays_fenced(db_path, profile):
+    """The one column opened in `portfolios` is `name`, so the book can follow a
+    renamed profile. The budget is the reference the experiment is measured
+    against, and it stays out of reach."""
+    with ConfigDatabase(path=db_path) as db:
+        db._execute("update portfolios set name = 'otro' where profile_id = ?", (profile["id"],))
+        with pytest.raises(HistoryIsReadOnly):
+            db._execute("update portfolios set initial_budget = 1 where profile_id = ?",
+                        (profile["id"],))
+
+
 def test_the_api_runs_no_free_form_sql(db_path):
     """`Database.execute` is there for the tools in tools/, not for the web.
 
@@ -804,6 +815,23 @@ def test_a_profile_that_already_has_history_is_not_renamed(client, db_path, prof
     assert client.patch(
         f"/api/profiles/{nuevo['id']}", json={"name": "europa-renombrado"}
     ).status_code == 200
+
+
+def test_the_book_follows_a_renamed_profile(client, db_path):
+    """The cycle finds its book by name. Renamed without it, the next cycle made
+    a second, unlinked book and the screens said the profile had none."""
+    nuevo = client.post("/api/profiles", json={"name": "europa-04", "market": "eu"}).json()
+    client.patch(f"/api/profiles/{nuevo['id']}", json={"name": "europa-renombrado"})
+
+    with Database(path=db_path) as db:
+        books = db.query("select id, name, profile_id from portfolios where profile_id = ?",
+                         (nuevo["id"],))
+        assert [b["name"] for b in books] == ["europa-renombrado"]
+        # What the cycle does: look the book up by the profile's current name.
+        found = db.ensure_portfolio(name="europa-renombrado", mode="paper",
+                                    initial_budget=10_000)
+        assert found == books[0]["id"]
+        assert db.query("select count(*) as n from portfolios")[0]["n"] == 1
 
 
 def test_activating_and_pausing_a_profile(client, profile):
