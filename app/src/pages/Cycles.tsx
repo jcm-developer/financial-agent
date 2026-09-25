@@ -30,6 +30,10 @@ import { useTitle } from "@/layout/useTitle";
 
 const LIMIT = 30;
 
+const EMPTY_CYCLES = "Todavía no ha corrido ningún ciclo.";
+const CONTROLS_DISABLED = "Los controles de ciclo están desactivados en este servidor.";
+const NO_SETTINGS = "Sin copia de los parámetros.";
+
 /**
  * How far from the end of the log still counts as "at the end", in pixels.
  *
@@ -83,9 +87,7 @@ export function Cycles() {
         {(page) => (
           <>
             {page.items.length === 0 ? (
-              <Empty>
-                Todavía no ha corrido ningún ciclo para este experimento.
-              </Empty>
+              <Empty>{EMPTY_CYCLES}</Empty>
             ) : (
               <Table title="Ciclos ejecutados">
                 <TableHead>
@@ -161,10 +163,7 @@ function Control({
 
   if (!state.enabled) {
     return (
-      <Card className="mb-6 text-body-sm text-text-secondary">
-        Los controles de ciclo están apagados en el servidor
-        (<code>API_CONTROLS=false</code>). Los ciclos los lanza el planificador.
-      </Card>
+      <Card className="mb-6 text-body-sm text-text-secondary">{CONTROLS_DISABLED}</Card>
     );
   }
 
@@ -199,11 +198,10 @@ function Control({
           )}
           {/* The request leaves no line in the log —it is a file the cycle has
               not read yet— so without saying it here the panel would look
-              untouched after pressing Parar, and a button that seems to have done
-              nothing gets pressed again. */}
+              untouched after pressing Parar. */}
           {state.stop_requested && (
             <p className="mt-0.5 text-caption font-semibold text-warning">
-              Parada pedida: el ciclo se detendrá en su siguiente punto de control.
+              Parada solicitada: se detendrá en el siguiente punto de control.
             </p>
           )}
         </div>
@@ -216,28 +214,26 @@ function Control({
           >
             Lanzar ciclo
           </Button>
-          {/* Dry run: it analyses and decides but does not execute. It is how to
-              see what the model would do without moving the experiment's book. */}
+          {/* Dry run: it analyses and decides but does not execute. */}
           <Button
             variant="ghost"
+            title="Analiza y decide sin enviar órdenes"
             disabled={live || run.isPending || !profile}
             onClick={() => run.mutate({ dry_run: true })}
           >
             Lanzar en seco
           </Button>
-          {/* Enabled for the scheduler's cycle too since F4.21: the request
-              travels through the database and not through a signal, so it reaches
-              the other container. What it cannot promise is that it is instant,
-              and that is what the title says instead of leaving it to be guessed. */}
+          {/* Enabled for the scheduler's cycle too: the request travels through
+              the shared volume, so it reaches the other container. */}
           <Button
             variant="destructive"
             disabled={!live || state.stop_requested || stop.isPending}
             title={
               state.stop_requested
-                ? "La parada ya está pedida: el ciclo se detendrá en su siguiente punto de control"
+                ? "Parada ya solicitada"
                 : !live
-                  ? "No hay ningún ciclo en marcha que parar"
-                  : "El ciclo se detiene en su siguiente punto de control, antes de la próxima consulta al modelo, y cierra su registro con el motivo"
+                  ? "No hay ningún ciclo en marcha"
+                  : "Se detiene antes de la siguiente consulta al modelo"
             }
             onClick={() => stop.mutate()}
           >
@@ -279,22 +275,10 @@ function Control({
         onCancel={() => setClosing(false)}
       >
         <p>
-          Vende <strong className="font-semibold">todas las posiciones abiertas</strong> por
-          el broker, a la apertura de la barra siguiente y con el mismo deslizamiento que
-          cualquier otra venta. A partir de ahí el resultado es <strong
-          className="font-semibold">realizado</strong>, no una cartera valorada a mercado.
+          Vende <strong className="font-semibold">todas las posiciones abiertas</strong> a
+          la apertura de la barra siguiente y da el experimento por terminado.
         </p>
-        <p>
-          {/* Said out loud because it is the question anyone asks here: no, the
-              model does not get to weigh in. The experiment is over. */}
-          No se consulta al modelo: no es una decisión de mercado, es el final del
-          experimento. Queda registrado como un ciclo más, con la regla
-          <code> experiment_closed</code>.
-        </p>
-        <p className="text-text-muted">
-          No se puede deshacer, y con el mercado cerrado no se puede hacer: no habría precio
-          al que vender.
-        </p>
+        <p className="text-text-muted">No se puede deshacer y requiere el mercado abierto.</p>
       </ConfirmDialog>
     </Card>
   );
@@ -350,7 +334,7 @@ function Log({ lines }: { lines: string[] }) {
         }}
         aria-expanded={open}
       >
-        {open ? "Ocultar" : "Ver"} el log ({lines.length} líneas)
+        {open ? "Ocultar" : "Ver"} el registro ({lines.length} líneas)
       </LinkButton>
       {open && (
         <Block
@@ -415,14 +399,10 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }) {
 
             {cycle.error && <Alert className="mt-3">{cycle.error}</Alert>}
 
-            {/* Settings from before F6.3 come back null. That is missing
-                information, not a zero: whoever compares experiments needs to
-                tell "it ran with these settings" from "we do not know which
-                settings it ran with". */}
+            {/* Settings from before they were versioned come back null: missing
+                information, not a zero. */}
             {cycle.settings === null || cycle.settings === undefined ? (
-              <p className="mt-3 text-body-sm text-text-muted">
-                Sin copia de los parámetros: es un ciclo anterior a que se guardaran.
-              </p>
+              <p className="mt-3 text-body-sm text-text-muted">{NO_SETTINGS}</p>
             ) : (
               <details className="mt-3">
                 <summary className="cursor-pointer text-body-sm text-text-secondary">

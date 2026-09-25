@@ -15,17 +15,16 @@ import {
   time,
   percent,
 } from "@/lib/format";
+import { cycleStatusLabel } from "@/lib/labels";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 import { useTitle } from "@/layout/useTitle";
 
 /**
- * The experiment's summary (F4.7).
+ * The experiment's summary.
  *
  * The figures at the top come from `/api/profiles`, which already brings them
  * computed in `metrics`: asking for them again separately would risk the card
  * and the summary telling different stories about the same experiment.
- *
- * The equity curve and the rest of the charts arrive in stretch E (F4.6).
  *
  * @return The rendered screen.
  */
@@ -41,18 +40,16 @@ export function Summary() {
 
   return (
     <>
-      <PageTitle aside={profile.risk_summary}>{profile.name}</PageTitle>
+      <PageTitle aside={<RiskHeadline summary={profile.risk_summary} />}>
+        {profile.name}
+      </PageTitle>
 
       <Figures profile={profile} />
 
       <Section title="Posiciones abiertas" query={positions}>
         {(page) =>
           page.items.length === 0 ? (
-            <Empty>
-              No hay ninguna posición abierta. Si el experimento acaba de empezar es lo
-              normal: el agente abre solo cuando el analista propone y el Risk Manager
-              aprueba.
-            </Empty>
+            <Empty>No hay posiciones abiertas.</Empty>
           ) : (
             <Table title="Posiciones abiertas del experimento">
               <TableHead>
@@ -81,16 +78,7 @@ export function Summary() {
       <Section title="Últimos ciclos" query={cycles}>
         {(page) =>
           page.items.length === 0 ? (
-            <Empty>
-              Todavía no ha corrido ningún ciclo. Se lanzan desde la pantalla de{" "}
-              <Link
-                className={LINK_CLASSES}
-                to={`/p/${encodeURIComponent(profile.name)}/cycles`}
-              >
-                Ciclos
-              </Link>{" "}
-              o los programa el planificador.
-            </Empty>
+            <Empty>Todavía no ha corrido ningún ciclo.</Empty>
           ) : (
             <Table title="Últimos ciclos ejecutados">
               <TableHead>
@@ -119,135 +107,110 @@ export function Summary() {
 }
 
 /**
- * The mark under a figure that is valued at the last cycle's bar (F9.8.2).
+ * The head of the risk summary beside the title, with the rest in its `title`.
  *
- * It exists because this screen shows **two prices at once and used to say
- * nothing about it**: Capital, Rentabilidad total and P&L del día are the last
- * row of `equity_snapshots`, written inside a cycle at the cycle's bar, while
- * the table underneath goes at the ingestor's price. Both are right —they are
- * the three prices of EXPERIMENT.md— but on screen they were two figures of the
- * same experiment that did not add up, with nothing telling them apart. It cost
- * a trip to the database to work out which was which.
+ * `risk_summary` is a whole sentence of limits, which Ajustes shows in full;
+ * beside a page title it was a paragraph competing with the name. The part
+ * before the colon (`Riesgo 5/10 a 10 días`) is what identifies the setting,
+ * and a summary with no colon is shown whole rather than cut somewhere invented.
  *
- * **The fix is not to unify the price.** Marking these to the live price would
- * throw away the history's own clock, which is what makes a past cycle
- * interpretable at all. Saying which clock each figure is on costs a line.
- *
- * It reads `equity_as_of` and **not** `last_cycle_at`, which is the whole
- * subtlety: a cycle that is running has already started and has not written its
- * snapshot yet, so the last cycle's start would name a valuation that did not
- * happen — this very footnote lying, in the one place written to stop the lie.
- *
- * @param props - Mark props.
- * @param props.at - When the snapshot was written, or null when there is none
- *     yet, in which case there is no figure to explain either.
- * @return The rendered line, or null before the first cycle.
+ * @param props - Headline props.
+ * @param props.summary - The profile's `risk_summary`.
+ * @return The rendered headline.
  */
-function CycleMark({ at }: { at: string | null | undefined }) {
-  if (!at) return null;
-
-  return (
-    <span className="mt-0.5 block text-text-muted" title={`Valorado el ${dateTime(at)}`}>
-      a precio del ciclo de las {time(at)}
-    </span>
-  );
+function RiskHeadline({ summary }: { summary: string }) {
+  const cut = summary.indexOf(":");
+  if (cut < 0) return <>{summary}</>;
+  return <span title={summary}>{summary.slice(0, cut)}</span>;
 }
 
 /**
  * The row of headline figures.
  *
+ * Capital, Rentabilidad total and P&L del día are the last row of
+ * `equity_snapshots`, marked at the last cycle's bar, while the table underneath
+ * goes at the ingestor's live price. Both are right, so the time of the
+ * valuation stays on screen under Capital and in the `title` of the other two:
+ * it reads `equity_as_of` and not `last_cycle_at`, because a running cycle has
+ * started but not yet written its snapshot.
+ *
+ * Before the first cycle there is no snapshot, and Capital shows the budget
+ * rather than a dash: until something is traded, that is what the capital is.
+ *
  * @param props - Figures props.
  * @param props.profile - The profile, whose `metrics` already carry the figures
  *     computed, so this screen and the profile card cannot disagree.
- * @return The rendered row, with the note on which clock it is on.
+ * @return The rendered row of cards.
  */
 function Figures({ profile }: { profile: ProfileSummary }) {
   const m = profile.metrics;
   const symbol = profile.currency_symbol;
   const marked = m.equity_as_of;
+  const valuedAt = marked ? `Valorado el ${dateTime(marked)}` : undefined;
+  const hasEquity = m.equity !== null && m.equity !== undefined;
 
   return (
-    <>
-      <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Figure label="Capital" value={money(m.equity, symbol)}>
+    <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <Figure
+        label="Capital"
+        value={money(hasEquity ? m.equity : m.initial_budget, symbol)}
+        title={valuedAt}
+      >
+        {hasEquity ? (
           <span className="text-text-muted">
             de {money(m.initial_budget, symbol)} inicial
+            {marked && ` · a las ${time(marked)}`}
           </span>
-          <CycleMark at={marked} />
-        </Figure>
-        <Figure
-          label="Rentabilidad total"
-          value={percent(m.total_return_pct, { sign: true })}
-          className={signClass(m.total_return_pct)}
-        >
-          <span className="text-text-muted">
-            contra el presupuesto asignado, no contra el primer día
-          </span>
-          <CycleMark at={marked} />
-        </Figure>
-        <Figure
-          label="P&L del día"
-          value={percent(m.day_pnl_pct, { sign: true })}
-          className={signClass(m.day_pnl_pct)}
-        >
-          <CycleMark at={marked} />
-        </Figure>
-        <Figure label="Posiciones abiertas" value={String(m.open_positions ?? 0)} />
-        <Figure
-          label="Operaciones cerradas"
-          value={String(m.closed_trades ?? 0)}
-        >
-          {/* 30 is the minimum the README talks about before anything can be said
-              about calibration; showing it stops conclusions being drawn from eight. */}
-          <span className="text-text-muted">
-            {(m.closed_trades ?? 0) < 30
-              ? `faltan ${30 - (m.closed_trades ?? 0)} para 30, el mínimo para leer la calibración`
-              : "suficientes para mirar la calibración"}
-          </span>
-        </Figure>
-        <Figure
-          label="Aciertos"
-          value={percent(m.win_rate_pct)}
-          className={
-            m.win_rate_pct === null || m.win_rate_pct === undefined
-              ? "text-text-muted"
-              : undefined
-          }
-        />
-        <Figure
-          label="P&L realizado"
-          value={signedMoney(m.realized_pnl, symbol)}
-          className={signClass(m.realized_pnl)}
-        />
+        ) : (
+          <span className="text-text-muted">presupuesto inicial</span>
+        )}
+      </Figure>
+      <Figure
+        label="Rentabilidad total"
+        value={percent(m.total_return_pct, { sign: true })}
+        className={signClass(m.total_return_pct)}
+        title={valuedAt}
+      />
+      <Figure
+        label="P&L del día"
+        value={percent(m.day_pnl_pct, { sign: true })}
+        className={signClass(m.day_pnl_pct)}
+        title={valuedAt}
+      />
+      <Figure label="Posiciones abiertas" value={String(m.open_positions ?? 0)} />
+      <Figure label="Operaciones cerradas" value={String(m.closed_trades ?? 0)} />
+      <Figure
+        label="Aciertos"
+        value={percent(m.win_rate_pct)}
+        className={
+          m.win_rate_pct === null || m.win_rate_pct === undefined
+            ? "text-text-muted"
+            : undefined
+        }
+      />
+      <Figure
+        label="P&L realizado"
+        value={signedMoney(m.realized_pnl, symbol)}
+        className={signClass(m.realized_pnl)}
+      />
+      {m.last_cycle_at ? (
         <Figure label="Último ciclo" value={dateTime(m.last_cycle_at)}>
-          <span
-            className={
-              m.last_cycle_status === "failed"
-                ? "font-semibold text-delta-bad"
-                : "text-text-muted"
-            }
-          >
-            {m.last_cycle_status ?? "ninguno"}
-            {/* A 'failed' cycle can be F6.9: the analyst got no answer. The detail
-                is on the Cycles screen. */}
-          </span>
+          {m.last_cycle_status && (
+            <span
+              className={
+                m.last_cycle_status === "failed"
+                  ? "font-semibold text-delta-bad"
+                  : "text-text-muted"
+              }
+            >
+              {cycleStatusLabel(m.last_cycle_status)}
+            </span>
+          )}
         </Figure>
-      </div>
-
-      {/* The sentence the three marks cannot carry on their own: "a precio del
-          ciclo" says which clock a figure is on, but not that anything else on
-          the screen is on a different one. Without this line the reader is left
-          comparing 9.932,58 € here against 9.936,50 € on Posiciones with no way
-          to know that both are right. */}
-      {marked && (
-        <p className="mb-8 text-caption leading-snug text-text-muted">
-          Las tres primeras cifras están marcadas a la barra del último ciclo. La tabla
-          de abajo y el «Valor de la cartera» de Posiciones van al precio vivo del
-          ingestor, así que durante la sesión no cuadran entre sí: la diferencia es lo
-          que el mercado se ha movido desde las {time(marked)}.
-        </p>
+      ) : (
+        <Figure label="Último ciclo" value="Ninguno" className="text-text-muted" />
       )}
-    </>
+    </div>
   );
 }
 
@@ -269,8 +232,8 @@ function OpenPositionTableRow({ row, symbol }: { row: PositionRow; symbol: strin
       <Td numeric>{row.qty}</Td>
       <Td numeric>{money(row.entry_price, symbol)}</Td>
       {/* Same as on Posiciones: with no tag on a live price, the freshness lives
-          in the cell's `title` (F4.18). */}
-      <Td numeric title={row.last_price_as_of ?? undefined}>
+          in the cell's `title`. */}
+      <Td numeric title={row.last_price_as_of ? dateTime(row.last_price_as_of) : undefined}>
         {money(row.last_price, symbol)}
         <PriceSource row={row} />
       </Td>

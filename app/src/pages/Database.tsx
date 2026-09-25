@@ -17,8 +17,18 @@ import {
 import { cn } from "@/lib/utils";
 
 const TITLE = "Base de datos";
-const UNMEASURED =
-  "El SQLite de este servidor no trae dbstat, así que el tamaño de cada tabla no se puede medir.";
+const UNMEASURED = "El tamaño por tabla no está disponible en este servidor.";
+
+/** Screen words for SQLite's `ON DELETE` actions. Unknown ones pass through. */
+const ON_DELETE: Record<string, string> = {
+  CASCADE: "en cascada",
+  "SET NULL": "a nulo",
+  "SET DEFAULT": "a valor por defecto",
+  RESTRICT: "impide borrar",
+  "NO ACTION": "sin acción",
+};
+
+const onDeleteLabel = (action: string) => ON_DELETE[action.toUpperCase()] ?? action.toLowerCase();
 
 /**
  * The database's shape: what hangs off what, and what each table weighs.
@@ -84,7 +94,7 @@ function SchemaView({ data }: { data: DatabaseSchema }) {
 
       <Card padding="p-6">
         <BlockTitle as="h2" className="mb-4">
-          Relaciones, una por fila
+          Claves foráneas
         </BlockTitle>
         <RelationsTable tables={data.tables} />
       </Card>
@@ -123,7 +133,7 @@ function Diagram({ layout }: { layout: ReturnType<typeof layoutSchema> }) {
     <div className="overflow-x-auto">
       <svg
         role="img"
-        aria-label="Diagrama de relaciones entre las tablas: cada línea va de la tabla que tiene la clave foránea a la tabla a la que apunta."
+        aria-label="Diagrama de relaciones entre las tablas"
         width={layout.width}
         height={layout.height}
         viewBox={`0 0 ${layout.width} ${layout.height}`}
@@ -138,7 +148,7 @@ function Diagram({ layout }: { layout: ReturnType<typeof layoutSchema> }) {
             strokeWidth={touches(edge) ? 2 : 1.25}
             opacity={active === null || touches(edge) ? 1 : 0.25}
           >
-            <title>{`${edge.from}.${edge.column} → ${edge.to} (al borrar: ${edge.onDelete})`}</title>
+            <title>{`${edge.from}.${edge.column} → ${edge.to} (al borrar: ${onDeleteLabel(edge.onDelete)})`}</title>
           </path>
         ))}
 
@@ -211,9 +221,7 @@ function Diagram({ layout }: { layout: ReturnType<typeof layoutSchema> }) {
       </svg>
       <p className="mt-3 text-caption text-text-muted">
         <span className="font-mono">PK</span> clave primaria ·{" "}
-        <span className="font-mono">FK</span> clave foránea · cabecera gris: tabla de
-        configuración, la única que la API puede escribir · la línea va de la tabla hija a la que
-        apunta
+        <span className="font-mono">FK</span> clave foránea · cabecera gris: configuración
       </p>
     </div>
   );
@@ -251,8 +259,8 @@ function WeightTable({ tables }: { tables: SchemaTable[] }) {
               <Td header>
                 <span className="font-mono">{table.name}</span>
                 {table.writable_by_api && (
-                  <Tag tone="neutral" title="La API puede escribir en esta tabla: es configuración, no histórico">
-                    config
+                  <Tag tone="neutral" title="Editable desde la aplicación">
+                    configuración
                   </Tag>
                 )}
               </Td>
@@ -326,7 +334,7 @@ function RelationsTable({ tables }: { tables: SchemaTable[] }) {
                   r.on_delete === "CASCADE" ? "text-warning" : "text-text-secondary",
                 )}
               >
-                {r.on_delete.toLowerCase()}
+                {onDeleteLabel(r.on_delete)}
               </span>
             </Td>
           </Row>
@@ -360,7 +368,7 @@ function ColumnsCard({ table }: { table: SchemaTable }) {
               <span className="font-mono text-text-muted">{column.type || "sin tipo"}</span>
               {column.primary_key && <span className="text-warning">PK</span>}
               {column.not_null && !column.primary_key && (
-                <span className="text-text-secondary">not null</span>
+                <span className="text-text-secondary">no nulo</span>
               )}
               {column.default !== null && column.default !== undefined && (
                 <span className="text-text-muted">= {column.default}</span>

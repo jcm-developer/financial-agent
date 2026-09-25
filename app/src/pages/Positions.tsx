@@ -24,7 +24,12 @@ import {
   dateTime,
   percent,
 } from "@/lib/format";
-import { splitExitReason, summarizeOpen, type OpenSummary } from "@/lib/portfolio";
+import {
+  exitRuleLabel,
+  splitExitReason,
+  summarizeOpen,
+  type OpenSummary,
+} from "@/lib/portfolio";
 import { cn } from "@/lib/utils";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 import { useTitle } from "@/layout/useTitle";
@@ -38,7 +43,7 @@ const OPEN_COLUMNS = 8;
 const CLOSED_COLUMNS = 7;
 
 /**
- * Open and closed positions (F4.7).
+ * Open and closed positions.
  *
  * They are **two tables and not one with a filter**, because the columns that
  * matter differ: on an open one you look at unrealised P&L and the distance to
@@ -68,7 +73,7 @@ export function Positions() {
       <Section title="Abiertas" query={open}>
         {(page) =>
           page.items.length === 0 ? (
-            <Empty>Ninguna posición abierta ahora mismo.</Empty>
+            <Empty>No hay posiciones abiertas.</Empty>
           ) : (
             <>
               {profile && (
@@ -104,11 +109,7 @@ export function Positions() {
         {(page) => (
           <>
             {page.items.length === 0 ? (
-              <Empty>
-                Todavía no se ha cerrado ninguna posición. Solo se cierran al tocar el stop o
-                el objetivo, o si el analista ve la tesis deteriorada: el horizonte en días no
-                cierra nada por sí solo.
-              </Empty>
+              <Empty>Aún no hay posiciones cerradas.</Empty>
             ) : (
               <Table title="Posiciones cerradas">
                 <TableHead>
@@ -192,11 +193,7 @@ function Totals({
 
   return (
     <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <Figure label="Capital inicial" value={money(metrics.initial_budget, symbol)}>
-        <span className="text-text-muted">
-          el presupuesto asignado al experimento
-        </span>
-      </Figure>
+      <Figure label="Capital inicial" value={money(metrics.initial_budget, symbol)} />
 
       <Figure label="Valor de la cartera" value={money(portfolioValue, symbol)}>
         <span className={withoutPrice ? "font-medium text-delta-bad" : "text-text-muted"}>
@@ -213,8 +210,8 @@ function Totals({
       >
         <span className={withoutCommission ? "font-medium text-warning" : "text-text-muted"}>
           {withoutCommission
-            ? `${withoutCommission} sin comisión conocida: su parte va en bruto`
-            : `${percent(summary.unrealizedPnlPct, { sign: true })} sobre lo invertido, con ${money(summary.commissions, symbol)} de comisiones dentro`}
+            ? `${withoutCommission} sin comisión conocida`
+            : `${percent(summary.unrealizedPnlPct, { sign: true })} · ${money(summary.commissions, symbol)} de comisiones`}
         </span>
       </Figure>
 
@@ -226,13 +223,11 @@ function Totals({
       <Figure
         label="Si saltan los stops"
         value={signedMoney(summary.stopOutcome, symbol)}
-        title="Lo que se realizaría si todas las posiciones salieran hoy por su stop, con la comisión de entrada ya descontada y sin la de salida"
+        title="Resultado si todas las posiciones salieran ahora por su stop, sin la comisión de salida"
       >
-        <span className={withoutStop ? "font-medium text-warning" : "text-text-muted"}>
-          {withoutStop
-            ? `${withoutStop} sin stop, fuera del total`
-            : "sin la comisión de salida, que aún no se conoce"}
-        </span>
+        {withoutStop > 0 && (
+          <span className="font-medium text-warning">{withoutStop} sin stop, fuera del total</span>
+        )}
       </Figure>
     </div>
   );
@@ -290,15 +285,15 @@ function OpenPositionTableRow({ row, symbol }: { row: PositionRow; symbol: strin
             <span className="font-medium">{row.symbol}</span>
           )}
         </Td>
-        <Td className="whitespace-nowrap" title={row.opened_at}>
+        <Td className="whitespace-nowrap">
           {dateTime(row.opened_at)}
         </Td>
         <Td numeric>{quantity(row.qty)}</Td>
         <Td numeric>{money(row.entry_price, symbol)}</Td>
-        {/* The timestamp moves into the `title` now that a live price carries no
-            tag (F4.18): the freshness still has to be reachable, and the cell is
-            where it belongs. */}
-        <Td numeric title={row.last_price_as_of ?? undefined}>
+        {/* The timestamp lives in the `title` because a live price carries no
+            tag: the freshness still has to be reachable, and the cell is where it
+            belongs. */}
+        <Td numeric title={row.last_price_as_of ? dateTime(row.last_price_as_of) : undefined}>
           {money(row.last_price, symbol)}
           <PriceSource row={row} />
         </Td>
@@ -388,7 +383,7 @@ function ClosedPositionTableRow({ row, symbol }: { row: PositionRow; symbol: str
             <span className="font-medium">{row.symbol}</span>
           )}
         </Td>
-        <Td className="whitespace-nowrap" title={row.closed_at ?? undefined}>
+        <Td className="whitespace-nowrap">
           {dateTime(row.closed_at)}
         </Td>
         <Td numeric>{quantity(row.qty)}</Td>
@@ -398,7 +393,7 @@ function ClosedPositionTableRow({ row, symbol }: { row: PositionRow; symbol: str
           {signedMoney(row.realized_pnl, symbol)}
         </Td>
         <Td>
-          <code className="text-caption">{rule ?? "—"}</code>
+          {rule ? exitRuleLabel(rule) : <span className="text-text-muted">—</span>}
         </Td>
       </Row>
 

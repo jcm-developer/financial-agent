@@ -22,6 +22,7 @@ import { quantity, money, dateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 import { useTitle } from "@/layout/useTitle";
+import { ruleLabel } from "@/lib/labels";
 
 const LIMIT = 50;
 
@@ -29,7 +30,7 @@ const LIMIT = 50;
 const COLUMNS = 4;
 
 /**
- * Risk Manager events (F4.7).
+ * Risk Manager events.
  *
  * The rejections are the evidence that the barrier works, and **which limit the
  * model hits most often is one of the experiment's questions**, not a detail of
@@ -98,17 +99,19 @@ export function Risk() {
             {byRule.map(([rule, times]) => (
               <li key={rule}>
                 <Badge>
-                  {rule} <span className="tabular font-semibold">{times}</span>
+                  {ruleLabel(rule)} <span className="tabular font-semibold">{times}</span>
                 </Badge>
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-caption text-text-muted">
-            Contado sobre las {query.data?.items.length ?? 0} filas de esta página, no
-            sobre el histórico completo.
-            {verdict === "" &&
-              " Con «Todos», la regla de un aprobado dice qué límite fijó el tamaño, no qué lo bloqueó."}
-          </p>
+          {/* Counted over the page, because the API has no per-rule aggregate:
+              when the page is not the whole history, the line says so. */}
+          {query.data && query.data.total > query.data.items.length && (
+            <p className="mt-2 text-caption text-text-muted">
+              Sobre los {query.data.items.length} eventos de esta página, de{" "}
+              {query.data.total}.
+            </p>
+          )}
         </section>
       )}
 
@@ -118,7 +121,7 @@ export function Risk() {
             {page.items.length === 0 ? (
               <Empty>{emptyText(verdict)}</Empty>
             ) : (
-              <Table title="Veredictos del Risk Manager, agrupados por jornada y por ciclo">
+              <Table title="Veredictos de riesgo, agrupados por jornada y por ciclo">
                 <TableHead>
                   <Th>Símbolo</Th>
                   <Th>Veredicto</Th>
@@ -155,34 +158,17 @@ export function Risk() {
 /**
  * The empty state, worded per verdict.
  *
- * An empty table means three different things here, and telling them apart is
- * most of what the screen is for: the Risk Manager has not evaluated anything
- * yet, it has blocked nothing, or it has let nothing through. A single generic
- * line would send you to the database to find out which of the three it is —
- * and the third one is the only one worth worrying about.
+ * An empty table means three different things here —nothing evaluated yet,
+ * nothing blocked, nothing let through— and a single generic line would send
+ * you to the database to find out which.
  *
  * @param verdict - The filter in force; the empty string is «Todos».
  * @return The wording for that case.
  */
 function emptyText(verdict: string): string {
-  if (verdict === "rejected") {
-    return (
-      "El Risk Manager no ha rechazado nada todavía. Con pocas propuestas es lo " +
-      "esperable; si sigue así con muchas, conviene comprobar que los límites están " +
-      "donde se cree."
-    );
-  }
-  if (verdict === "approved") {
-    return (
-      "Ninguna propuesta ha pasado el Risk Manager todavía. Si en «Todos» hay " +
-      "rechazos, su regla dice qué límite está frenando al modelo."
-    );
-  }
-  return (
-    "El Risk Manager no ha emitido ningún veredicto todavía: no ha llegado a " +
-    "evaluar ninguna propuesta. Los primeros aparecen en cuanto un ciclo proponga " +
-    "una operación."
-  );
+  if (verdict === "rejected") return "No hay ninguna propuesta rechazada.";
+  if (verdict === "approved") return "No hay ninguna propuesta aprobada.";
+  return "Todavía no hay veredictos de riesgo.";
 }
 
 /**
@@ -231,7 +217,7 @@ function RiskEventTableRow({ row, symbol }: { row: RiskEventRow; symbol: string 
   return (
     <>
       <Row expanded={Boolean(reason) && open}>
-        <Td title={row.created_at}>
+        <Td title={dateTime(row.created_at)}>
           {reason ? (
             <LinkButton
               variant="subtle"
@@ -240,7 +226,7 @@ function RiskEventTableRow({ row, symbol }: { row: RiskEventRow; symbol: string 
                 row.symbol ? "font-medium" : "text-text-muted",
               )}
               aria-expanded={open}
-              title={open ? "Ocultar el motivo" : "Ver el motivo del veredicto"}
+              title={open ? "Ocultar el motivo" : "Ver el motivo"}
               onClick={() => setOpen((value) => !value)}
             >
               <ChevronRight
@@ -268,7 +254,7 @@ function RiskEventTableRow({ row, symbol }: { row: RiskEventRow; symbol: string 
           </span>
         </Td>
         <Td>
-          <code className="text-caption">{row.rule ?? "—"}</code>
+          <span className="text-caption">{row.rule ? ruleLabel(row.rule) : "—"}</span>
         </Td>
         <Td numeric>
           {quantity(row.approved_qty)}

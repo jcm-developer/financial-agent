@@ -54,16 +54,10 @@ export function Calibration({
   return (
     <Chart
       title="Calibración de la convicción"
-      explanation={
-        <>
-          Acierto real según la convicción declarada al entrar. Si no sube de izquierda a
-          derecha, la convicción del modelo no informa de nada.
-          {few && " Los tramos atenuados tienen menos de cinco operaciones: no concluyas de ellos."}
-        </>
-      }
+      note={few ? `Atenuados: menos de ${MIN_SAMPLE} operaciones.` : undefined}
       empty={
         data.length === 0
-          ? "Hace falta al menos una operación cerrada que venga de una decisión de entrada. Con un ciclo al día, esto tarda semanas en decir algo."
+          ? "Aún no hay operaciones cerradas."
           : undefined
       }
       table={
@@ -142,8 +136,7 @@ export function ConvictionHistogram({ buckets }: { buckets: ConvictionBucket[] }
   return (
     <Chart
       title="Convicción declarada"
-      explanation="Cuántas decisiones cayeron en cada tramo. Si se concentra en uno solo, el modelo no está discriminando entre oportunidades."
-      empty={data.length === 0 ? "El analista no ha registrado decisiones todavía." : undefined}
+      empty={data.length === 0 ? "Aún no hay decisiones." : undefined}
       table={
         <SimpleTable
           columns={["Convicción", "Compras", "Mantener", "Ventas", "Total"]}

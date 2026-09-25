@@ -25,10 +25,8 @@ import { cn } from "@/lib/utils";
  * every experiment and the other changes completely depending on which is
  * selected.
  *
- * The groups now carry **written headings** rather than a bare rule between
- * them. The distinction was documented here and invisible on screen, which made
- * it a rule nobody could follow while reading the sidebar; a chip-styled caption
- * costs one line each and says it out loud.
+ * Each group carries a one-word caption, so the distinction is visible and not
+ * only documented here.
  */
 
 const PROFILE_LINKS = [

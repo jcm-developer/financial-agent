@@ -11,10 +11,9 @@ import type { ProfileSummary } from "@/api/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Checkbox } from "@/components/Checkbox";
 import { Button, Input } from "@/components/pieces";
-import { statusMeaning } from "@/components/ProfileStatus";
 
 /**
- * What can be done to an experiment (F5.4).
+ * What can be done to an experiment.
  *
  * **Which actions each state offers, and why not all of them always:** a button
  * that is always there and sometimes fails teaches people to ignore the row.
@@ -109,7 +108,9 @@ export function ProfileActions({ profile }: Props) {
         Duplicar
       </Button>
 
-      <Button variant="destructive" onClick={() => setPending("delete")}>
+      {/* Quiet in the row, pushed to the far end: a red button on every card
+          would shout louder than the figures. The dialog is the destructive one. */}
+      <Button variant="ghost" className="ml-auto" onClick={() => setPending("delete")}>
         Borrar
       </Button>
 
@@ -122,22 +123,15 @@ export function ProfileActions({ profile }: Props) {
         onConfirm={() => setStatus("paused")}
         onCancel={close}
       >
-        <p>
-          Deja de ejecutar ciclos. El histórico, las posiciones abiertas y el capital se
-          conservan enteros, y se puede volver a activar cuando quieras.
-        </p>
-        <p>
-          {/* This is the part nobody expects: pausing does not close anything.
-              A paused experiment holding four positions is exposed to the market
-              with nobody watching the stops, because stop and target are only
-              checked when a cycle runs. */}
-          <strong className="font-semibold text-warning">
-            No cierra las posiciones abiertas.
-          </strong>{" "}
-          {profile.metrics.open_positions
-            ? `Quedan ${profile.metrics.open_positions} abiertas, y sus stops y objetivos dejarán de comprobarse: eso solo pasa dentro de un ciclo.`
-            : "Ahora mismo no hay ninguna abierta."}
-        </p>
+        <p>Deja de ejecutar ciclos. El histórico y el capital se conservan.</p>
+        {/* Pausing does not close anything, and stops are only checked inside
+            a cycle: that is the one consequence worth a warning. */}
+        {(profile.metrics.open_positions ?? 0) > 0 && (
+          <p className="font-medium text-warning">
+            No cierra las {profile.metrics.open_positions} posiciones abiertas: sus stops
+            dejan de vigilarse.
+          </p>
+        )}
       </ConfirmDialog>
 
       <ConfirmDialog
@@ -149,11 +143,7 @@ export function ProfileActions({ profile }: Props) {
         onConfirm={() => setStatus("archived")}
         onCancel={close}
       >
-        <p>{statusMeaning("archived")}</p>
-        <p>
-          Desaparece de este listado salvo que marques «ver archivados». No se borra nada:
-          sus ciclos, decisiones y operaciones siguen ahí y sirven para comparar.
-        </p>
+        <p>Sale de este listado. No se borra nada.</p>
       </ConfirmDialog>
 
       <ConfirmDialog
@@ -179,14 +169,12 @@ export function ProfileActions({ profile }: Props) {
                 changes: { screener_mode: "random" },
               });
             } catch (cause) {
-              // The copy exists; only the one change that makes it a control
-              // failed. Saying so is the difference between fixing one field and
-              // starting over — and worse, between knowing and not knowing that
-              // the "control" on screen is not one.
+              // The copy exists; only the change that makes it a control
+              // failed, and the "control" on screen would not be one.
               setError(
-                `La copia «${created}» se creó, pero no se pudo ponerla en modo control: ${
+                `La copia «${created}» se creó, pero no quedó como grupo de control: ${
                   cause instanceof Error ? cause.message : "error desconocido"
-                }. Cámbialo en sus Ajustes antes de usarla para comparar.`,
+                }.`,
               );
               return;
             }
@@ -196,25 +184,15 @@ export function ProfileActions({ profile }: Props) {
         }}
         onCancel={close}
       >
-        <p>
-          Copia los parámetros y el universo, <strong className="font-semibold">no el
-          histórico</strong>: heredar los ciclos del original es justo lo que haría que los
-          dos dejaran de ser comparables.
-        </p>
-        <p>
-          Nace como borrador. Al terminar se abre en sus Ajustes, que es donde se cambia el
-          parámetro que se quiere medir.
-        </p>
+        <p>Copia los parámetros y el universo, no el histórico. Nace como borrador.</p>
         <Input
           label="Nombre de la copia"
           value={copyName}
           maxLength={80}
           onChange={(e) => setCopyName(e.target.value)}
         />
-
-        {/* F5.7. It goes here and not in a button of its own because a control
-            profile IS a duplicate with one parameter changed — the same gesture,
-            with the parameter already decided. */}
+        {/* A control profile IS a duplicate with one parameter changed, so it is
+            the same gesture with the parameter already decided. */}
         <Checkbox
           checked={asControl}
           onChange={(e) => {
@@ -223,20 +201,14 @@ export function ProfileActions({ profile }: Props) {
               setCopyName(`${profile.name}-control`);
             }
           }}
-          label={
-            <>
-              Hacerlo <strong className="font-semibold">grupo de control</strong>: el
-              screener elige al azar en vez de puntuar.
-            </>
-          }
-          hint="Es contra lo que se mide si el criterio del modelo aporta algo. Mismo universo, mismo riesgo, mismos descartes duros: lo único que cambia es que los candidatos no están elegidos. Si el agente rinde igual, el filtro no estaba aportando nada."
+          label="Grupo de control: candidatos elegidos al azar"
         />
       </ConfirmDialog>
 
       <ConfirmDialog
         open={pending === "delete"}
         title={`Borrar ${profile.name}`}
-        confirmLabel="Borrar el experimento y su histórico"
+        confirmLabel="Borrar definitivamente"
         danger
         busy={remove.isPending}
         confirmDisabled={typedName !== profile.name}
@@ -253,19 +225,13 @@ export function ProfileActions({ profile }: Props) {
         onCancel={close}
       >
         <p>
-          Se borra el experimento entero y con él{" "}
-          {profile.metrics.cycles} ciclos, {profile.metrics.decisions} decisiones y sus
-          posiciones y órdenes. <strong className="font-semibold">No se puede deshacer.</strong>
+          Se borran {profile.metrics.cycles} ciclos, {profile.metrics.decisions} decisiones y
+          sus posiciones y órdenes.{" "}
+          <strong className="font-semibold text-foreground">No se puede deshacer.</strong>
         </p>
-        <p className="text-text-muted">
-          {/* The API demands the name in `?confirm=`, so this field is not the
-              screen being cautious on its own: it is the only way the call
-              succeeds. Explaining that stops it reading as a hurdle. */}
-          Repite el nombre exacto para confirmar. Lo exige la API, no esta pantalla: es la
-          única llamada que destruye datos que costaron semanas.
-        </p>
+        {/* The API demands the name in `?confirm=`: without it the call fails. */}
         <Input
-          label="Nombre del experimento"
+          label={`Escribe «${profile.name}» para confirmar`}
           value={typedName}
           autoComplete="off"
           placeholder={profile.name}

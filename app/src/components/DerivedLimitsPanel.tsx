@@ -3,7 +3,7 @@ import { Card, SectionTitle, Stat } from "@/components/pieces";
 import { money, percent } from "@/lib/format";
 
 /**
- * What the limits in force are, in numbers (F6.8).
+ * What the limits in force are, in numbers.
  *
  * **The arithmetic is not repeated here.** The eleven limits come from the API,
  * which calls the same `resolve_limits` the Risk Manager uses. A second
@@ -46,7 +46,7 @@ interface Props {
   source: "sliders" | "effective";
 }
 
-const HAND_SET = "Fijado a mano en los límites duros de abajo.";
+const HAND_SET = "Fijado a mano.";
 
 /**
  * The panel showing the eleven limits in force.
@@ -77,12 +77,13 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
 
   return (
     <Card padding="p-6" className={stale ? "opacity-60 transition-opacity" : undefined}>
-      <SectionTitle className="mb-3">Con estos ajustes</SectionTitle>
-      {source === "effective" && (
-        <p className="mb-3 text-caption text-text-muted">Valores guardados, con los fijados a mano.</p>
-      )}
+      {/* The title says which question the figures answer: with manual limits
+          on, they are the stored ones and not the slider's preview. */}
+      <SectionTitle className="mb-4">
+        {source === "effective" ? "Límites en vigor" : "Límites resultantes"}
+      </SectionTitle>
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-body-sm sm:grid-cols-3">
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-body-sm sm:grid-cols-3">
         <Stat
           label="Riesgo por operación"
           value={percent(limits.risk_per_trade_pct)}
@@ -91,11 +92,7 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
         <Stat
           label="Posición"
           value={`${percent(limits.min_position_pct)} – ${percent(limits.max_position_pct)}`}
-          title={
-            origin("max_position_pct") ??
-            origin("min_position_pct") ??
-            "Banda de tamaño: el analista elige dentro, y el suelo es lo que evita que la cartera se quede a medio invertir."
-          }
+          title={origin("max_position_pct") ?? origin("min_position_pct")}
         />
         <Stat
           label="Exposición total"
@@ -105,17 +102,14 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
         <Stat
           label="Posiciones abiertas"
           value={`máx. ${limits.max_open_positions}`}
-          title={
-            origin("max_open_positions") ??
-            "Sale del tamaño: la exposición total en posiciones mínimas. Más riesgo, menos posiciones y más grandes."
-          }
+          title={origin("max_open_positions")}
         />
         <Stat
-          label="Kill switch diario"
+          label="Pérdida diaria máxima"
           value={`−${percent(limits.max_daily_loss_pct)}`}
           title={
             origin("max_daily_loss_pct") ??
-            "Pérdida diaria a partir de la cual el ciclo se detiene sin operar."
+            "Pérdida del día a partir de la cual el ciclo no opera."
           }
         />
         <Stat
@@ -128,11 +122,11 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
           value={`${limits.stop_atr_multiple}× ATR · ${limits.stop_sigmas}σ`}
           title={
             origin("stop_atr_multiple") ??
-            `A ${limits.stop_sigmas} sigmas del horizonte de ${limits.horizon_days} días: el riesgo decide cuántas sigmas y el horizonte cuánto vale una.`
+            `Sigmas sobre un horizonte de ${limits.horizon_days} días.`
           }
         />
         <Stat
-          label="Reward/risk mínimo"
+          label="Beneficio/riesgo mínimo"
           value={String(limits.min_reward_risk)}
           title={origin("min_reward_risk")}
         />
@@ -141,13 +135,12 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
           value={`${limits.min_target_sigma}σ`}
           title={
             origin("min_target_sigma") ??
-            "Recorrido mínimo que tiene que prometer el objetivo, en sigmas del horizonte."
+            "Recorrido mínimo del objetivo, en sigmas del horizonte."
           }
         />
         <Stat
           label="Orden mínima"
           value={money(limits.min_order_notional, symbol)}
-          title="Fricción de ejecución, no apetito de riesgo: no se mueve con el deslizador."
         />
       </dl>
     </Card>

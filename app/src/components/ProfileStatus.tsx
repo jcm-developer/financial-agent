@@ -1,31 +1,22 @@
 import { Chip, type ChipVariant } from "@/components/pieces";
 import { Tooltip } from "@/components/Tooltip";
 import type { ProfileSummary } from "@/api/types";
+import { profileStatusLabel } from "@/lib/labels";
 
 /**
  * What an experiment's four states mean, said in words.
  *
- * The colour never carries it on its own (F4.9): the badge already says the
- * state, and the `title` says what it implies, which is the part that decides
- * whether you have to do something about it. "paused" and "draft" both mean "it
- * is not running", and they are very different problems.
+ * The colour never carries it on its own: the chip says the state, and the
+ * tooltip says what it implies. "paused" and "draft" both mean "it is not
+ * running", and they are very different problems.
  */
 type Status = ProfileSummary["status"];
 
-const LABEL: Record<Status, string> = {
-  draft: "borrador",
-  active: "activo",
-  paused: "pausado",
-  archived: "archivado",
-};
-
 const MEANING: Record<Status, string> = {
-  draft:
-    "Creado pero sin activar: el planificador no lo toca y el ingestor no sigue sus símbolos.",
-  active: "En marcha: el planificador lanza sus ciclos y el ingestor sigue sus símbolos.",
-  paused:
-    "Detenido a propósito: conserva su histórico y sus posiciones, pero no corre ningún ciclo.",
-  archived: "Retirado del listado. Su histórico sigue entero y se puede volver a activar.",
+  draft: "Creado pero sin activar: no corre ciclos.",
+  active: "En marcha: corre sus ciclos a las horas fijadas.",
+  paused: "Detenido: conserva su histórico y sus posiciones.",
+  archived: "Retirado del listado; su histórico se conserva.",
 };
 
 const TONE: Record<Status, ChipVariant> = {
@@ -48,20 +39,7 @@ const TONE: Record<Status, ChipVariant> = {
 export function ProfileStatus({ status }: { status: Status }) {
   return (
     <Tooltip content={MEANING[status]}>
-      <Chip variant={TONE[status]}>{LABEL[status]}</Chip>
+      <Chip variant={TONE[status]}>{profileStatusLabel(status)}</Chip>
     </Tooltip>
   );
-}
-
-/**
- * What that status means, as a full sentence.
- *
- * Exported so a screen can spell it out where there is room for it, instead of
- * leaving four letters and a `title` nobody hovers.
- *
- * @param status - The profile's status.
- * @return The sentence, in the interface language.
- */
-export function statusMeaning(status: Status): string {
-  return MEANING[status];
 }

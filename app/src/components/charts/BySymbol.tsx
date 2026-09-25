@@ -13,6 +13,7 @@ import {
 import type { RejectionCount, SymbolPerformance } from "@/api/types";
 import { COLORS, AXIS, Chart, ChartTooltip, SimpleTable } from "@/components/charts/base";
 import { money, integer, dateTime, percent } from "@/lib/format";
+import { ruleLabel } from "@/lib/labels";
 
 /**
  * Realised P&L per asset.
@@ -39,10 +40,9 @@ export function PnlBySymbol({
   return (
     <Chart
       title="P&L realizado por activo"
-      explanation="Solo operaciones cerradas. Las abiertas no cuentan hasta que se cierran."
       empty={
         data.length === 0
-          ? "Ninguna posición cerrada todavía, así que no hay nada realizado que repartir."
+          ? "Aún no hay operaciones cerradas."
           : undefined
       }
       table={
@@ -85,8 +85,8 @@ export function PnlBySymbol({
 /**
  * Which limit the model keeps hitting.
  *
- * Horizontal bars because the labels are rule names (`max_position_pct`,
- * `min_conviction`) and vertically they would overlap or have to be rotated,
+ * Horizontal bars because the labels are rule names («tamaño máximo por posición»,
+ * «convicción mínima») and vertically they would overlap or have to be rotated,
  * which is worse. A single magnitude, so a single tone.
  *
  * @param props - Chart props.
@@ -95,21 +95,22 @@ export function PnlBySymbol({
  * @return The rendered chart.
  */
 export function RejectionsByRule({ rows }: { rows: RejectionCount[] }) {
-  const data = [...rows].sort((a, b) => b.rejections - a.rejections);
+  const data = [...rows]
+    .sort((a, b) => b.rejections - a.rejections)
+    .map((r) => ({ ...r, label: ruleLabel(r.rule) }));
 
   return (
     <Chart
-      title="Rechazos del Risk Manager"
-      explanation="Si casi todos son de la misma regla, o el modelo insiste en algo que no cabe o ese límite está mal puesto."
+      title="Rechazos por regla"
       empty={
         data.length === 0
-          ? "El Risk Manager no ha rechazado nada. Con pocas propuestas es lo esperable."
+          ? "No hay ninguna propuesta rechazada."
           : undefined
       }
       table={
         <SimpleTable
           columns={["Regla", "Rechazos", "Último"]}
-          rows={data.map((r) => [r.rule, r.rejections, dateTime(r.last_seen)])}
+          rows={data.map((r) => [r.label, r.rejections, dateTime(r.last_seen)])}
         />
       }
     >
@@ -121,7 +122,7 @@ export function RejectionsByRule({ rows }: { rows: RejectionCount[] }) {
         >
           <CartesianGrid stroke={COLORS.grid} horizontal={false} />
           <XAxis type="number" {...AXIS} allowDecimals={false} />
-          <YAxis type="category" dataKey="rule" {...AXIS} width={140} />
+          <YAxis type="category" dataKey="label" {...AXIS} width={170} />
           <Tooltip
             content={<ChartTooltip format={(v) => integer(v)} />}
             cursor={{ fill: COLORS.cursor }}

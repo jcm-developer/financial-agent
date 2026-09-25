@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useNavigate } from "react-router";
 
 import { ApiError } from "@/api/client";
@@ -17,25 +17,18 @@ import { Select } from "@/components/Select";
 import { integer, money } from "@/lib/format";
 
 /**
- * Creating an experiment, in one form (F5.3).
+ * Creating an experiment, in one form.
  *
- * **In one screen and not two**, which is the whole point of the task: name,
- * market, capital, universe size and the strategy and model decisions are taken
- * together because together they are what an experiment *is*. Splitting them
- * would mean creating something and then deciding what it was.
+ * Name, market, capital, risk and model are decided together because together
+ * they are what an experiment *is*.
  *
- * ⚠️ **It is two API calls even so, and that is deliberate.** The creation goes
- * through `create_market_profile`, which applies the market's rules —universe
- * file, `profile_universe`, benchmark, liquidity floor (FE.11)— and stuffing the
- * 41 settings fields into that call would duplicate the validation. So the
- * sequence is create → patch settings → activate, and the order matters: **the
- * profile is born a `draft` and is only activated once the patch has landed.**
- * If the patch fails, what is left is a visible, deletable draft rather than an
- * experiment running with parameters nobody chose.
- *
- * The market's own numbers —currency, hours, universe size, liquidity floor—
- * come from `/api/markets` and are not wired here: that registry is exactly what
- * D8 pulled them out of.
+ * ⚠️ **It is three API calls even so, and that is deliberate.** Creation goes
+ * through `create_market_profile`, which applies the market's rules (universe,
+ * benchmark, liquidity floor), and stuffing the settings into that call would
+ * duplicate its validation. So the sequence is create → patch settings →
+ * activate: **the profile is born a `draft` and is only activated once the patch
+ * has landed.** If the patch fails, what is left is a visible, deletable draft
+ * rather than an experiment running with parameters nobody chose.
  */
 interface Props {
   /** Called when the user gives up, so the caller can fold the form away. */
@@ -164,34 +157,33 @@ export function NewProfileForm({ onCancel }: Props) {
 
   return (
     <Card as="section" padding="p-6">
-      <BlockTitle as="h2" className="text-h4">
+      <BlockTitle as="h2" className="text-h3">
         Nuevo experimento
       </BlockTitle>
 
-      <form className="mt-4 flex flex-col gap-6" onSubmit={submit}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input
-            label="Nombre"
-            value={name}
-            required
-            maxLength={80}
-            autoFocus
-            placeholder="europa-01"
-            onChange={(e) => setName(e.target.value)}
-            hint="Va en la URL del experimento, así que conviene que se lea."
-          />
-          <Input
-            label="Descripción"
-            value={description}
-            maxLength={200}
-            placeholder="Qué se quiere medir con este experimento"
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </div>
+      <form className="mt-6 flex flex-col gap-6" onSubmit={submit}>
+        <FormGroup title="Identidad">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input
+              label="Nombre"
+              value={name}
+              required
+              maxLength={80}
+              autoFocus
+              placeholder="europa-01"
+              onChange={(e) => setName(e.target.value)}
+            />
+            <Input
+              label="Descripción"
+              value={description}
+              maxLength={200}
+              placeholder="Opcional"
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+        </FormGroup>
 
-        <fieldset className="flex flex-col gap-4 border-t border-border pt-4">
-          <legend className="sr-only">Mercado y capital</legend>
-
+        <FormGroup title="Mercado y capital">
           {markets.isPending && <Loading text="Cargando mercados…" />}
           {markets.error && <Alert>{markets.error.message}</Alert>}
 
@@ -204,41 +196,38 @@ export function NewProfileForm({ onCancel }: Props) {
                 options={markets.data.map((m) => [m.code, m.label] as const)}
               />
               <Input
-                label="Capital inicial"
+                label={chosen ? `Capital inicial (${chosen.currency})` : "Capital inicial"}
                 type="number"
                 min={1}
                 step="any"
                 required
                 value={budget}
                 onChange={(e) => setBudget(e.target.value)}
-                hint={chosen && `En ${chosen.currency}: el proyecto no convierte divisa.`}
               />
               <Input
-                label="Símbolos a seguir en vivo"
+                label="Símbolos en vivo"
                 type="number"
                 min={0}
                 max={500}
                 value={watch}
                 placeholder={chosen ? String(chosen.universe_size) : "0"}
                 onChange={(e) => setWatch(e.target.value)}
-                hint="Vacío = todo el universo. Son peticiones por minuto a Yahoo."
+                hint="Vacío: todo el universo."
               />
             </div>
           )}
 
-          {chosen && <MarketNote market={chosen} />}
-        </fieldset>
+          {chosen && <MarketFacts market={chosen} />}
+        </FormGroup>
 
-        <fieldset className="flex flex-col gap-4 border-t border-border pt-4">
-          <legend className="sr-only">Estrategia</legend>
+        <FormGroup title="Estrategia">
           <div className="grid gap-6 sm:grid-cols-2">
             <Slider
               label="Perfil de riesgo"
               value={risk}
-              low="1 · muy conservador"
-              high="10 · muy agresivo"
+              low="Conservador"
+              high="Agresivo"
               onChange={(e) => setRisk(Number(e.target.value))}
-              hint="Decide tamaño y número de posiciones, exposición, convicción mínima, stop, objetivo y kill switch."
             />
             <Input
               label="Horizonte (días)"
@@ -248,18 +237,11 @@ export function NewProfileForm({ onCancel }: Props) {
               required
               value={horizon}
               onChange={(e) => setHorizon(e.target.value)}
-              hint="Plazo al que se juzga cada idea, en días naturales. Fija el tamaño del objetivo y la distancia del stop."
             />
           </div>
-          <p className="text-caption text-text-muted">
-            Los once límites duros salen del perfil de riesgo y del horizonte: el riesgo decide
-            el tamaño, la concentración y cuánto margen tiene cada posición, y el horizonte cuánto
-            vale ese margen. Se pueden fijar a mano después, en Ajustes.
-          </p>
-        </fieldset>
+        </FormGroup>
 
-        <fieldset className="flex flex-col gap-4 border-t border-border pt-4">
-          <legend className="sr-only">Modelo</legend>
+        <FormGroup title="Modelo">
           <div className="grid gap-4 sm:grid-cols-3">
             <Select
               label="Proveedor"
@@ -281,15 +263,11 @@ export function NewProfileForm({ onCancel }: Props) {
               type="password"
               value={apiKey}
               autoComplete="off"
+              placeholder={provider === "nvidia" ? "Clave del entorno" : "Obligatoria"}
               onChange={(e) => setApiKey(e.target.value)}
-              hint={
-                provider === "nvidia"
-                  ? "Vacío = se usa NVIDIA_API_KEY del entorno."
-                  : "Obligatoria: NVIDIA_API_KEY no vale para OpenAI."
-              }
             />
           </div>
-        </fieldset>
+        </FormGroup>
 
         {failure && (
           <Alert>
@@ -298,20 +276,19 @@ export function NewProfileForm({ onCancel }: Props) {
               <>
                 <br />
                 <span className="text-text-muted">
-                  Ha quedado el borrador «{orphan}» en la lista. Se puede completar desde
-                  sus Ajustes o borrarlo; no está corriendo.
+                  Queda el borrador «{orphan}» en la lista, sin activar.
                 </span>
               </>
             )}
           </Alert>
         )}
 
-        <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-          <Button type="submit" variant="primary" disabled={busy}>
-            {busy ? "Creando…" : "Crear y activar"}
-          </Button>
+        <div className="flex flex-wrap justify-end gap-3 border-t border-border pt-6">
           <Button variant="ghost" onClick={onCancel} disabled={busy}>
             Cancelar
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy}>
+            {busy ? "Creando…" : "Crear y activar"}
           </Button>
         </div>
       </form>
@@ -320,33 +297,64 @@ export function NewProfileForm({ onCancel }: Props) {
 }
 
 /**
- * What choosing this market decides, said before it is chosen.
+ * One block of the form: its heading on the left, its fields on the right.
  *
- * It is here because the market **cannot be changed afterwards** (decision of
- * 2026-08-08): hours, calendar, currency, benchmark and liquidity floor all come
- * from it, so changing it mid-experiment would reinterpret the history already
- * recorded. A decision that cannot be undone has to show its consequences while
- * it is still being taken.
+ * A `role="group"` labelled by the heading rather than a `<fieldset>` with a
+ * `<legend>`: legends do not take part in a grid, and the two-column layout is
+ * the point of the block.
  *
- * @param props - Note props.
- * @param props.market - The chosen market, straight from `/api/markets`.
- * @return The rendered note.
+ * @param props - Group props.
+ * @param props.title - The block's heading.
+ * @param props.children - The fields.
+ * @return The rendered block.
  */
-function MarketNote({ market }: { market: MarketInfo }) {
+function FormGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  const id = useId();
   return (
-    <p className="text-caption leading-relaxed text-text-muted">
-      Sesión {market.session_open}–{market.session_close} ({market.timezone}), ventana
-      operativa {market.operating_open}–{market.operating_close}. Divisa {market.currency}.
-      Benchmark {market.benchmark}. Universo {market.universe_file} con{" "}
-      {integer(market.universe_size)} símbolos y suelo de liquidez{" "}
-      {money(market.min_turnover, market.currency_symbol)} al día.
-      <br />
-      <strong className="font-semibold text-text-secondary">
-        El mercado no se puede cambiar después:
-      </strong>{" "}
-      de él salen el horario, el calendario, la divisa y el benchmark, así que cambiarlo a
-      mitad de experimento reinterpretaría el histórico ya grabado.
-    </p>
+    <div
+      role="group"
+      aria-labelledby={id}
+      className="grid gap-4 border-t border-border pt-6 md:grid-cols-[10rem_1fr] md:gap-8"
+    >
+      <h3 id={id} className="text-h4 text-foreground">
+        {title}
+      </h3>
+      <div className="flex min-w-0 flex-col gap-4">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * The chosen market's fixed facts, shown while it is still being chosen.
+ *
+ * The market cannot be changed afterwards (decision of 2026-08-08): hours,
+ * calendar, currency and benchmark all come from it, so the one sentence kept
+ * here is that warning.
+ *
+ * @param props - Facts props.
+ * @param props.market - The chosen market, straight from `/api/markets`.
+ * @return The rendered facts.
+ */
+function MarketFacts({ market }: { market: MarketInfo }) {
+  const facts: [string, string][] = [
+    ["Sesión", `${market.session_open}–${market.session_close}`],
+    ["Divisa", market.currency],
+    ["Benchmark", market.benchmark],
+    ["Universo", `${integer(market.universe_size)} símbolos`],
+    ["Liquidez mínima", `${money(market.min_turnover, market.currency_symbol)}/día`],
+  ];
+  return (
+    <div className="flex flex-col gap-2">
+      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-body-sm">
+        {facts.map(([label, value]) => (
+          <div key={label} className="flex gap-1.5">
+            <dt className="text-text-muted">{label}</dt>
+            <dd className="tabular text-text-secondary">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-caption text-warning">El mercado no se puede cambiar después.</p>
+    </div>
   );
 }
 

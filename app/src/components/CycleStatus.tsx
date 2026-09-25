@@ -35,14 +35,14 @@ export function CycleStatus({ cycle }: { cycle: CycleRow }) {
     >
       {cycleStatusLabel(cycle.status)}
       {noModel && (
-        <Tag title="Ninguna llamada al modelo obtuvo respuesta: este ciclo no analizó nada">
+        <Tag title="Ninguna llamada al modelo obtuvo respuesta">
           SIN MODELO
         </Tag>
       )}
       {!noModel && failures > 0 && (
         <Tag
           tone="warning"
-          title={`${failures} de ${calls} llamadas al modelo se quedaron sin respuesta: a esos símbolos no se les llegó a mirar`}
+          title={`${failures} de ${calls} llamadas sin respuesta`}
         >
           {failures}/{calls} SIN RESPUESTA
         </Tag>

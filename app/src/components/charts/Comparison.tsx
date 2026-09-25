@@ -109,12 +109,21 @@ function Overlaid({ series }: Props) {
   return (
     <Chart
       title="Rentabilidad comparada"
-      explanation={
-        <>
-          En % sobre el presupuesto asignado, no en dinero: el proyecto no convierte divisa y
-          dos presupuestos distintos no se comparan en euros.{" "}
-          {series.length === 2 && "Cada experimento conserva su color al filtrar."}
-        </>
+      note={
+        // The legend: with two curves the hue is the only thing tying a line to
+        // its experiment outside the tooltip, so the names have to be on screen.
+        <span className="flex flex-wrap gap-x-4 gap-y-1">
+          {series.map((s, index) => (
+            <span key={s.name} className="inline-flex items-center gap-1.5">
+              <span
+                aria-hidden
+                className="inline-block h-0.5 w-4 rounded-full"
+                style={{ background: HUES[index] }}
+              />
+              {s.name}
+            </span>
+          ))}
+        </span>
       }
       table={<SimpleTable {...tableOf(series)} />}
     >
@@ -169,15 +178,6 @@ function SmallMultiples({ series }: Props) {
     <Chart
       title={`Rentabilidad comparada · ${series.length} experimentos`}
       height="h-96"
-      explanation={
-        <>
-          En % sobre el presupuesto asignado. Con más de dos experimentos se dibuja uno por
-          gráfica y no todos encima: la paleta validada tiene dos tonos categóricos —el verde
-          está reservado a las variaciones y el ámbar a los avisos— y un tercero se confunde
-          con el azul en daltonismo (ΔE 3,7 en deuteranopía, contra un mínimo de 8). Todas
-          comparten escala vertical.
-        </>
-      }
       table={<SimpleTable {...tableOf(series)} />}
     >
       <div className="grid h-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">

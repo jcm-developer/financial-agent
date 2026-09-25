@@ -5,13 +5,12 @@ import { useActiveProfile } from "@/profile/useActiveProfile";
 import { profileStatusLabel } from "@/lib/labels";
 
 /**
- * Global profile selector (F5.5).
+ * Global profile selector.
  *
  * Changing profile **navigates**, keeping the section: if you are on
  * `/p/europa-01/positions` and pick another experiment you end up on
- * `/p/other/positions`, not back at the summary. Comparing the same screen
- * across two experiments is the gesture F5.6 calls central, and sending you home
- * on every jump would turn it into four clicks.
+ * `/p/other/positions`, not back at the summary: comparing the same screen
+ * across two experiments is a central gesture.
  *
  * The dropdown is the shared `<Select>` (`components/pieces.tsx`), in its
  * label-to-the-left variant: there is no height to spend in the header.
@@ -32,7 +31,7 @@ export function ProfileSelector() {
   // The name is unique and it is what travels in the URL, so it serves as both
   // value and key.
   const options: [string, string][] = [
-    ...(ref ? [] : ([["", "— elige uno —"]] as [string, string][])),
+    ...(ref ? [] : ([["", "Elegir experimento"]] as [string, string][])),
     ...profiles.map(
       (row): [string, string] => [
         row.name,

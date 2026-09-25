@@ -4,14 +4,14 @@ import { useProfiles } from "@/api/hooks";
 import type { ProfileSummary } from "@/api/types";
 import { NewProfileForm } from "@/components/NewProfileForm";
 import { Checkbox } from "@/components/Checkbox";
-import { Block, Button, Card, PageTitle } from "@/components/pieces";
+import { Button, Card, PageTitle } from "@/components/pieces";
 import { ProfileActions } from "@/components/ProfileActions";
 import { ProfileCard } from "@/components/ProfileCard";
 import { Section } from "@/components/Section";
 import { useTitle } from "@/layout/useTitle";
 
 /**
- * The experiment list, in cards with the figures that matter (F5.2).
+ * The experiment list, in cards with the figures that matter.
  *
  * **The order is deliberate and not the API's.** `/api/profiles` returns them by
  * creation date, which after a few weeks buries the running one under three
@@ -46,20 +46,19 @@ export function Profiles() {
         </div>
       )}
 
-      {/* The toggle goes with the archive action, not after it: archiving takes
-          an experiment out of this list, and without a way back the button would
-          look like it deleted something. */}
+      {/* Archiving takes an experiment out of this list; without a way back the
+          button would look like it deleted something. */}
       <Checkbox
         className="mb-6"
         checked={showArchived}
         onChange={(e) => setShowArchived(e.target.checked)}
-        label="Ver también los archivados"
+        label="Mostrar archivados"
       />
 
       <Section query={profiles}>
         {(data: ProfileSummary[]) =>
           data.length === 0 ? <NoProfiles onCreate={() => setCreating(true)} /> : (
-            <ul className="flex flex-col gap-3">
+            <ul className="flex flex-col gap-4">
               {sorted(data).map((profile) => (
                 <li key={profile.id}>
                   <ProfileCard
@@ -102,13 +101,7 @@ function sorted(profiles: ProfileSummary[]): ProfileSummary[] {
 
 /**
  * The empty state, which on this screen is the first thing a new installation
- * sees.
- *
- * It is worded as instructions and not as "no hay nada" because at this point
- * nothing is wrong: the application has just been installed and the next step is
- * to create something. The console command stays alongside the button because it
- * is the one that works before the interface is reachable —a fresh clone, a
- * container that has not come up— and it is what the README documents.
+ * sees, so it carries the button to create one.
  *
  * @param props - Empty-state props.
  * @param props.onCreate - Opens the creation form.
@@ -116,18 +109,11 @@ function sorted(profiles: ProfileSummary[]): ProfileSummary[] {
  */
 function NoProfiles({ onCreate }: { onCreate: () => void }) {
   return (
-    <Card padding="p-6" dashed>
-      <p className="text-body-sm text-text-secondary">
-        No hay ningún experimento todavía. Un experimento es un mercado, un capital, un
-        criterio de riesgo y un modelo; todo lo demás se mide contra eso.
-      </p>
-      <div className="mt-4">
-        <Button onClick={onCreate}>Crear el primero</Button>
-      </div>
-      <p className="mt-4 text-body-sm text-text-muted">O desde la consola:</p>
-      <Block className="mt-2">
-        python run.py new-profile --name europa-01 --market eu --watch 89
-      </Block>
+    <Card padding="p-6" dashed className="flex flex-wrap items-center justify-between gap-4">
+      <p className="text-body-sm text-text-secondary">Todavía no hay ningún experimento.</p>
+      <Button variant="primary" onClick={onCreate}>
+        Crear el primero
+      </Button>
     </Card>
   );
 }

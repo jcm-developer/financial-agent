@@ -18,7 +18,7 @@ import {
 } from "@/components/Table";
 import { groupByDayAndCycle } from "@/lib/grouping";
 import { quantity, money, dateTime } from "@/lib/format";
-import { orderStatusLabel } from "@/lib/labels";
+import { actionLabel, orderStatusLabel } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 import { useTitle } from "@/layout/useTitle";
@@ -29,7 +29,7 @@ const LIMIT = 50;
 const COLUMNS = 6;
 
 /**
- * Orders sent, and also the ones that were NOT sent (F4.7).
+ * Orders sent, and also the ones that were NOT sent.
  *
  * The unexecuted ones are the interesting half: an order in `canceled` or
  * `dry_run` means the agent decided to trade and could not —market closed, or
@@ -83,7 +83,7 @@ export function Orders() {
               <Empty>
                 {symbolFilter
                   ? `Ninguna orden de ${symbolFilter}.`
-                  : "No se ha enviado ninguna orden todavía. Aquí aparecerán también las que el agente aprobó pero no pudo ejecutar."}
+                  : "Todavía no hay órdenes."}
               </Empty>
             ) : (
               <Table title="Órdenes enviadas y no enviadas, agrupadas por jornada y por ciclo">
@@ -168,13 +168,13 @@ function OrderTableRow({ row, symbol }: { row: OrderRow; symbol: string }) {
   return (
     <>
       <Row expanded={Boolean(error) && open}>
-        <Td title={row.submitted_at}>
+        <Td title={dateTime(row.submitted_at)}>
           {error ? (
             <LinkButton
               variant="subtle"
               className="inline-flex items-center gap-1 font-medium"
               aria-expanded={open}
-              title={open ? "Ocultar el motivo" : "Ver por qué no se ejecutó"}
+              title={open ? "Ocultar el motivo" : "Ver el motivo"}
               onClick={() => setOpen((value) => !value)}
             >
               <ChevronRight
@@ -192,14 +192,16 @@ function OrderTableRow({ row, symbol }: { row: OrderRow; symbol: string }) {
         </Td>
         <Td>
           <span className={row.side === "buy" ? "text-positive-ink" : "text-negative-ink"}>
-            {row.side === "buy" ? "compra" : "venta"}
+            {actionLabel(row.side)}
           </span>
         </Td>
         <Td numeric>{quantity(row.qty)}</Td>
         <Td numeric>{quantity(row.filled_qty)}</Td>
         <Td numeric>{money(row.filled_avg_price, symbol)}</Td>
         <Td>
-          <span className={cn("font-medium", statusClass(row.status))}>{orderStatusLabel(row.status)}</span>
+          <span className={cn("font-medium", statusClass(row.status))}>
+            {orderStatusLabel(row.status)}
+          </span>
         </Td>
       </Row>
 
@@ -207,7 +209,7 @@ function OrderTableRow({ row, symbol }: { row: OrderRow; symbol: string }) {
         <DetailRow columns={COLUMNS}>
           <p className="text-caption leading-snug text-text-secondary">{error}</p>
           <p className="mt-1 text-caption text-text-muted">
-            enviada {dateTime(row.submitted_at)}
+            Enviada el {dateTime(row.submitted_at)}
           </p>
         </DetailRow>
       )}

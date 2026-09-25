@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 
 import {
   useLimitsPreview,
@@ -23,42 +24,31 @@ import { useTitle } from "@/layout/useTitle";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 
 /**
- * The experiment's parameters (F6.8, reorganised on 2026-09-25).
+ * The experiment's parameters.
  *
  * **What defines the experiment is on screen, and the rest is folded away.**
  * The risk slider and the horizon decide the eleven hard limits —the panel beside
- * them says what those limits are while the slider moves—, and next to them sit
- * the other few things that make one experiment different from the next: the
- * model, the cycle's clock and whether it reads news. Everything else —model
- * tuning, screener filters, execution friction, the hard limits by hand— lives
- * under "Configuración avanzada", closed by default, with the values the risk
- * level or the market gave it.
+ * them shows those limits while the slider moves—, and next to them sit the few
+ * other things that make one experiment different from the next: the model, the
+ * cycle's clock and whether it reads news. Everything else lives under
+ * "Configuración avanzada", closed by default.
  *
- * ⚠️ **One slider, not two.** Diversification decided the number of positions
- * on its own axis; since 2026-09-25 that number follows from the risk level
- * (`src/risk_presets.py`). The column is still there and the API still carries
- * it, but this screen no longer shows it or sends it.
+ * ⚠️ **One slider, not two.** The number of positions follows from the risk
+ * level (`src/risk_presets.py`); the diversification column is still there and
+ * the API still carries it, but this screen no longer shows it or sends it.
  *
- * ⚠️ **And five fields are gone from the screen because nothing reads them**:
- * the benchmark, the cash reserve, the excluded sectors, "allow shorts" and the
- * analyst's persona. The first four said so in a hint since F10.11; the persona
- * did not even say it, and typing "value investor" into it changed nothing. A
- * field that looks like it configures the experiment and does not is worse than
- * a missing one. They come back when something reads them: the benchmark with
- * F9.29, the sectors with F9.30.
+ * ⚠️ **Five fields are gone because nothing reads them**: the benchmark, the
+ * cash reserve, the excluded sectors, "allow shorts" and the analyst's persona.
+ * A field that looks like it configures the experiment and does not is worse
+ * than a missing one. They come back when something reads them.
  *
  * **Nothing is derived in the browser.** The limits come from the API, which
- * runs the same `resolve_limits` as the cycle. A copy of that arithmetic in
- * TypeScript would disagree the day an anchor is tweaked and the screen would
- * promise limits the agent does not apply. ⚠️ Which endpoint, though, depends on
- * advanced mode, and getting that wrong was a real bug until 2026-08-11: see the
- * comment where `DerivedLimitsPanel` is rendered.
+ * runs the same `resolve_limits` as the cycle; a TypeScript copy would disagree
+ * the day an anchor is tweaked.
  *
- * ⚠️ **Only what changed is sent.** `update_settings` ignores a field arriving
- * with the value it already had, and `agent_settings_history` records real
- * changes only (F6.2). Sending every field on every save would not corrupt
- * anything, but it would fill the history with rows saying "5 → 5" and the
- * history is what makes an experiment readable afterwards.
+ * ⚠️ **Only what changed is sent.** `agent_settings_history` records real
+ * changes only, and sending every field on every save would fill it with rows
+ * saying "5 → 5".
  *
  * @return The rendered screen.
  */
@@ -94,9 +84,9 @@ const ADVANCED_SUMMARY = "Configuración avanzada";
 /** Reasoning effort options. The empty one is "not sent": the provider decides. */
 const REASONING_OPTIONS: [string, string][] = [
   ["", "Por defecto del proveedor"],
-  ["low", "low"],
-  ["medium", "medium"],
-  ["high", "high"],
+  ["low", "Bajo"],
+  ["medium", "Medio"],
+  ["high", "Alto"],
 ];
 
 /** The subset of settings this form edits as free values, keyed as they are sent. */
@@ -207,12 +197,12 @@ function SettingsForm({
     <form className="flex flex-col gap-8" onSubmit={submit}>
       <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr] lg:items-start">
         <Card padding="p-6" className="flex flex-col gap-6">
-          <SectionTitle>El perfil de riesgo</SectionTitle>
+          <SectionTitle>Riesgo</SectionTitle>
           <Slider
             label="Perfil de riesgo"
             value={risk}
-            low="1 · muy conservador"
-            high="10 · muy agresivo"
+            low="Conservador"
+            high="Agresivo"
             onChange={(e) => {
               setSaved(null);
               setRisk(Number(e.target.value));
@@ -227,14 +217,11 @@ function SettingsForm({
           />
         </Card>
 
-        {/* ⚠️ **Cuál de los dos, y no siempre el mismo.** Con el modo avanzado
-            apagado manda el deslizador, así que la vista previa por posición
-            del deslizador es la respuesta correcta y es lo que F6.8 pedía.
-            Encendido, mandan los números escritos a mano y la vista previa
-            contesta a otra pregunta: enseñarla ahí era poner en pantalla dos
-            juegos de límites a la vez, con el rótulo «Con estos ajustes» sobre el
-            que no se aplica. `effective` ya viene resuelto por la misma
-            `resolve_limits` del ciclo. */}
+        {/* Which of the two, and not always the same one. With manual limits
+            off the slider rules, so its preview is the right answer. With them
+            on, the typed numbers rule and the preview answers another question:
+            showing it would put two sets of limits on screen at once. `effective`
+            is already resolved by the cycle's own `resolve_limits`. */}
         {advanced ? (
           <DerivedLimitsPanel limits={effective} symbol={symbol} source="effective" />
         ) : (
@@ -256,8 +243,8 @@ function SettingsForm({
           value={value("bar_interval")}
           onChange={(next) => set("bar_interval", next)}
           options={[
-            ["1h", "1h — precio de la última hora"],
-            ["1d", "1d — precio del cierre de ayer"],
+            ["1h", "1 hora"],
+            ["1d", "1 día"],
           ]}
         />
         <Input
@@ -296,9 +283,9 @@ function SettingsForm({
           autoComplete="off"
           placeholder={
             settings.llm_api_key
-              ? "Hay una clave guardada"
+              ? "Clave guardada"
               : settings.llm_provider === "nvidia"
-                ? "Se usa NVIDIA_API_KEY del entorno"
+                ? "Clave del entorno"
                 : "Sin clave"
           }
           value={(draft.llm_api_key as string) ?? ""}
@@ -307,11 +294,14 @@ function SettingsForm({
       </Group>
 
       <details className="group">
-        <summary className="cursor-pointer text-h3">
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-h3 text-foreground [&::-webkit-details-marker]:hidden">
+          <ChevronRight
+            className="size-5 shrink-0 text-text-muted transition-transform duration-150 group-open:rotate-90"
+            aria-hidden
+          />
           {ADVANCED_SUMMARY}
         </summary>
-        <div className="mt-4 flex flex-col gap-8">
-
+        <div className="mt-6 flex flex-col gap-8">
           <Group title="Modelo, en detalle">
             <NumberField label="Temperatura" field="llm_temperature" value={value} set={set} step="0.1" />
             <NumberField
@@ -327,7 +317,7 @@ function SettingsForm({
               onChange={(next) => set("llm_reasoning_effort", next)}
               options={REASONING_OPTIONS}
             />
-            <NumberField label="Timeout (s)" field="llm_timeout_seconds" value={value} set={set} />
+            <NumberField label="Tiempo de espera (s)" field="llm_timeout_seconds" value={value} set={set} />
             <NumberField label="Reintentos" field="llm_max_retries" value={value} set={set} step="1" />
           </Group>
 
@@ -354,8 +344,8 @@ function SettingsForm({
               value={value("screener_mode")}
               onChange={(next) => set("screener_mode", next)}
               options={[
-                ["score", "score — puntuación por tendencia y volumen"],
-                ["random", "random — grupo de control"],
+                ["score", "Por puntuación"],
+                ["random", "Al azar (grupo de control)"],
               ]}
             />
             <NumberField label="Candidatos al modelo" field="screener_top_n" value={value} set={set} step="1" />
@@ -407,7 +397,7 @@ function SettingsForm({
               set={set}
             />
             <Check
-              label="Dry run: analiza y registra pero no ordena"
+              label="Simulación: analiza sin enviar órdenes"
               field="dry_run"
               settings={settings}
               draft={draft}
@@ -431,10 +421,6 @@ function SettingsForm({
                 setAdvanced(e.target.checked);
               }}
               label="Fijar los límites a mano"
-              /* This is the master switch of F6.5, and its wording matters: with
-                 it off the slider wins *even if the columns still hold numbers
-                 from a previous session*. Without saying so, turning it off looks
-                 like it did nothing. */
             />
             {advanced && (
               <>
@@ -456,14 +442,14 @@ function SettingsForm({
                   value={value}
                   set={set}
                 />
-                <NumberField label="Reward/risk mínimo" field="min_reward_risk" value={value} set={set} />
+                <NumberField label="Beneficio/riesgo mínimo" field="min_reward_risk" value={value} set={set} />
                 <NumberField
                   label="Objetivo mínimo (σ del horizonte)"
                   field="min_target_sigma"
                   value={value}
                   set={set}
                 />
-                <NumberField label="Notional mínimo" field="min_order_notional" value={value} set={set} />
+                <NumberField label="Orden mínima" field="min_order_notional" value={value} set={set} />
               </>
             )}
           </Group>
@@ -472,18 +458,19 @@ function SettingsForm({
 
       {save.error && <Alert>{save.error.message}</Alert>}
 
-      {saved !== null && !save.error && (
-        <p role="status" className="text-body-sm text-text-secondary">
-          {saved.length === 0
-            ? "No había nada que cambiar."
-            : `Guardado: ${saved.join(", ")}.`}
-        </p>
-      )}
-
-      <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+      <div className="flex flex-wrap items-center gap-4 border-t border-border pt-6">
         <Button type="submit" variant="primary" disabled={save.isPending}>
           {save.isPending ? "Guardando…" : "Guardar cambios"}
         </Button>
+        {saved !== null && !save.error && (
+          <p role="status" className="text-body-sm text-text-secondary">
+            {saved.length === 0
+              ? "No había nada que cambiar."
+              : saved.length === 1
+                ? "1 cambio guardado."
+                : `${saved.length} cambios guardados.`}
+          </p>
+        )}
       </div>
     </form>
   );
@@ -579,10 +566,8 @@ function Check({
   const checked = Boolean(draft[field as string] ?? settings[field]);
   return (
     <Checkbox
-      // `self-end` sube la caja a la altura de los campos de al lado, y con
-      // `hint` eso ya no vale: la linea de debajo tiene que caber. Sin nota se
-      // mantiene el ajuste de antes, porque en la fila de «Dry run» la casilla
-      // sigue alineandose contra un campo con etiqueta.
+      // `self-end` lines the box up with the labelled fields beside it; with a
+      // hint the line underneath has to fit, so the alignment is dropped.
       className={hint ? undefined : "self-end pb-2.5"}
       checked={checked}
       onChange={(e) => set(field as string, e.target.checked)}

@@ -38,7 +38,7 @@ import { dateTime } from "@/lib/format";
 export function PriceSource({ row }: { row: PositionRow }) {
   if (!row.price_source) {
     return (
-      <Tag tone="bad" title="Sin precio: la posición se valora a su precio de entrada">
+      <Tag tone="bad" title="Valorada a su precio de entrada">
         SIN PRECIO
       </Tag>
     );
@@ -49,7 +49,7 @@ export function PriceSource({ row }: { row: PositionRow }) {
   return (
     <Tag
       tone="warning"
-      title={`El precio que vio el analista en su último ciclo (${dateTime(row.last_price_as_of)})`}
+      title={`Precio del último ciclo, ${dateTime(row.last_price_as_of)}`}
     >
       CICLO
     </Tag>

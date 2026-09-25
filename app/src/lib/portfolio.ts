@@ -166,6 +166,32 @@ export function splitExitReason(text: string | null | undefined): ExitReason {
 }
 
 /**
+ * Screen words for the exit rules, the same ones `src/cycle.py` prints in the
+ * cycle log (`_EXIT_RULE_LABELS`).
+ *
+ * It lives here and not in `labels.ts` because it only makes sense next to
+ * `splitExitReason`, which is what pulls the rule out of the stored text. An
+ * unknown rule falls through unchanged, so one added to the backend later still
+ * shows up instead of vanishing.
+ */
+const EXIT_RULES: Record<string, string> = {
+  stop_loss_hit: "stop",
+  take_profit_hit: "objetivo",
+  llm_exit: "decisión del analista",
+  experiment_closed: "cierre del experimento",
+};
+
+/**
+ * The screen word for an exit rule.
+ *
+ * @param rule - The rule as `splitExitReason` returned it.
+ * @return Its Spanish label, or the rule itself when it is not a known one.
+ */
+export function exitRuleLabel(rule: string): string {
+  return EXIT_RULES[rule] ?? rule;
+}
+
+/**
  * Two decimals, which is where the API rounds too.
  *
  * Without it a sum of floats shows up as `159,73000000000002` the moment a

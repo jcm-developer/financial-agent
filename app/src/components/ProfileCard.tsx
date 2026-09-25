@@ -8,26 +8,18 @@ import { dateTime, money, percent, signClass } from "@/lib/format";
 import { cycleStatusLabel } from "@/lib/labels";
 
 /**
- * One experiment, with the figures that say whether it is worth opening (F5.2).
+ * One experiment, with the figures that say whether it is worth opening.
  *
- * **The card is not a `<Link>`, and the name inside it is.** The obvious version
- * —the whole card navigating— is what the minimal list did, and it cannot hold
- * the actions of F5.4: a `<button>` inside an `<a>` is invalid HTML, and the
- * browsers that do render it make the click ambiguous. The name being the link
- * also gives the screen reader something to announce that is not "link,
- * europa-01 activo mercado EU 10.240,00 € …".
+ * **The card is not a `<Link>`, and the name inside it is**: the action row holds
+ * buttons, and a `<button>` inside an `<a>` is invalid HTML.
  *
  * **Which six figures**, out of the twelve `metrics` carries: the ones that
- * answer "is this experiment alive and is it working". Capital and total return
- * say how it is going, the day's P&L whether it moved today, open positions
- * whether it is holding anything, the win rate whether it is getting them right
- * —with the count beside it, because a 100 % over two trades is not a win rate—
- * and the last cycle whether it is still running at all. The rest is a click
- * away in the summary.
+ * answer "is this experiment alive and is it working". The win rate always
+ * travels with its count, because a 100 % over two trades is not a win rate.
  */
 interface Props {
   profile: ProfileSummary;
-  /** The actions of F5.4, rendered by whoever owns the mutations. */
+  /** The action row, rendered by whoever owns the mutations. */
   actions?: ReactNode;
 }
 
@@ -45,28 +37,31 @@ export function ProfileCard({ profile, actions }: Props) {
   const closed = m.closed_trades ?? 0;
 
   return (
-    <Card as="article" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 className="text-h4 font-semibold">
-          <Link
-            to={`/p/${encodeURIComponent(profile.name)}/summary`}
-            className={LINK_CLASSES}
-          >
-            {profile.name}
-          </Link>
-          {/* F5.7: which experiment is the control has to be readable from the
-              list. A control you cannot identify is the same as not having one,
-              and its numbers are meant to be worse — without the label they read
-              as a failed experiment. */}
-          {profile.screener_mode === "random" && (
-            <Tag
-              tone="neutral"
-              title="Grupo de control: el screener elige los candidatos al azar en vez de puntuarlos. Es contra lo que se mide si el criterio del modelo aporta algo."
+    <Card as="article" className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h3 className="text-h4 font-semibold">
+            <Link
+              to={`/p/${encodeURIComponent(profile.name)}/summary`}
+              className={LINK_CLASSES}
             >
-              control
-            </Tag>
-          )}
-        </h3>
+              {profile.name}
+            </Link>
+            {/* The control's numbers are meant to be worse; without the label
+                they read as a failed experiment. */}
+            {profile.screener_mode === "random" && (
+              <Tag tone="neutral" title="Grupo de control: candidatos elegidos al azar.">
+                control
+              </Tag>
+            )}
+          </h3>
+          <p className="text-body-sm text-text-muted">
+            {profile.market.toUpperCase()} · {profile.currency} · {profile.llm_provider}/
+            {profile.llm_model}
+            {(profile.watched_symbols ?? 0) > 0 &&
+              ` · ${profile.watched_symbols} símbolos en vivo`}
+          </p>
+        </div>
         <ProfileStatus status={profile.status} />
       </div>
 
@@ -74,17 +69,7 @@ export function ProfileCard({ profile, actions }: Props) {
         <p className="text-body-sm text-text-secondary">{profile.description}</p>
       )}
 
-      <p className="text-body-sm text-text-muted">
-        {/* The market comes first because it decides the currency, and the
-            currency is what stops two budgets being compared as if they were the
-            same unit (FE.8). */}
-        {profile.market.toUpperCase()} · {profile.currency} ·{" "}
-        {profile.llm_provider}/{profile.llm_model}
-        {(profile.watched_symbols ?? 0) > 0 &&
-          ` · ${profile.watched_symbols} símbolos en vivo`}
-      </p>
-
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-body-sm sm:grid-cols-3 lg:grid-cols-6">
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-4 border-t border-border pt-4 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Capital" value={money(m.equity, symbol)}>
           de {money(m.initial_budget, symbol)}
         </Stat>
@@ -92,7 +77,6 @@ export function ProfileCard({ profile, actions }: Props) {
           label="Rentabilidad"
           value={percent(m.total_return_pct, { sign: true })}
           valueClass={signClass(m.total_return_pct)}
-          title="Contra el presupuesto asignado, no contra el primer día."
         />
         <Stat
           label="P&L del día"
@@ -107,28 +91,16 @@ export function ProfileCard({ profile, actions }: Props) {
             ? "text-text-muted"
             : undefined}
         >
-          {/* The count travels with the rate, always. A 100 % over two trades
-              and a 100 % over thirty are the same number and not the same
-              claim, and the list is exactly where two experiments get compared
-              on it. */}
-          {closed === 0 ? "sin cerrar ninguna" : `sobre ${closed} cerradas`}
+          {closed === 0 ? "sin operaciones cerradas" : `de ${closed} cerradas`}
         </Stat>
-        <Stat
-          label="Último ciclo"
-          value={dateTime(m.last_cycle_at)}
-          title={
-            m.last_cycle_status
-              ? `El último ciclo terminó en estado «${cycleStatusLabel(m.last_cycle_status)}».`
-              : "Este experimento no ha ejecutado ningún ciclo todavía."
-          }
-        >
+        <Stat label="Último ciclo" value={dateTime(m.last_cycle_at)}>
           <span className={m.last_cycle_status === "failed" ? "text-delta-bad" : undefined}>
-            {m.last_cycle_status ?? "ninguno"}
+            {m.last_cycle_status ? cycleStatusLabel(m.last_cycle_status) : "ninguno"}
           </span>
         </Stat>
       </dl>
 
-      {actions && <div className="flex flex-wrap gap-2 border-t border-border pt-3">{actions}</div>}
+      {actions && <div className="flex flex-wrap gap-2 border-t border-border pt-4">{actions}</div>}
     </Card>
   );
 }

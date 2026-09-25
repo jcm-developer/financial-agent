@@ -41,7 +41,7 @@ export function Section<T>({ title, query, children }: Props<T>) {
 }
 
 /**
- * The alert shown when a query fails, with the hint that most often explains it.
+ * The alert shown when a query fails.
  *
  * @param props - Alert props.
  * @param props.error - The error, whose message is already written for the screen.
@@ -49,12 +49,6 @@ export function Section<T>({ title, query, children }: Props<T>) {
  */
 export function ErrorAlert({ error }: { error: Error }) {
   return (
-    <Alert>
-      {error.message}
-      <br />
-      <span className="text-text-muted">
-        En desarrollo hace falta la API escuchando: <code>python run.py api</code>
-      </span>
-    </Alert>
+    <Alert>{error.message}</Alert>
   );
 }

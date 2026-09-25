@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { PositionRow } from "@/api/types";
-import { splitExitReason, summarizeOpen } from "@/lib/portfolio";
+import { exitRuleLabel, splitExitReason, summarizeOpen } from "@/lib/portfolio";
 
 /**
  * The totals of the open book, which are checked here because they are exactly
@@ -191,5 +191,17 @@ describe("splitExitReason", () => {
   it("survives a position that was closed without a reason", () => {
     expect(splitExitReason(null)).toEqual({ rule: null, detail: "" });
     expect(splitExitReason("   ")).toEqual({ rule: null, detail: "" });
+  });
+});
+
+describe("exitRuleLabel", () => {
+  it("translates the rules the backend writes", () => {
+    expect(exitRuleLabel("stop_loss_hit")).toBe("stop");
+    expect(exitRuleLabel("take_profit_hit")).toBe("objetivo");
+    expect(exitRuleLabel("llm_exit")).toBe("decisión del analista");
+  });
+
+  it("lets an unknown rule through unchanged", () => {
+    expect(exitRuleLabel("new_rule")).toBe("new_rule");
   });
 });

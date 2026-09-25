@@ -11,6 +11,7 @@ import { ProfileStatus } from "@/components/ProfileStatus";
 import { Section } from "@/components/Section";
 import { TableHead, Row, Table, Td, Th } from "@/components/Table";
 import { dateTime, money, percent, signClass, signedMoney } from "@/lib/format";
+import { profileStatusLabel } from "@/lib/labels";
 import { useTitle } from "@/layout/useTitle";
 
 /**
@@ -22,24 +23,16 @@ const Comparison = lazy(() =>
 );
 
 /**
- * Comparing experiments (F5.6).
+ * Comparing experiments.
  *
- * **This is what makes the project an experiment and not a bot**, and the shape
- * follows from that: the interesting comparison is one profile against its own
- * duplicate with a single parameter changed (F5.4), so the screen has to put the
- * curves and the figures of several experiments beside each other without
- * making them look more alike than they are.
+ * The interesting comparison is one profile against its own duplicate with a
+ * single parameter changed, so the screen puts the curves and the figures of
+ * several experiments side by side without making them look more alike than
+ * they are.
  *
- * ⚠️ **The chart is in %, the table is in each one's own currency.** Those are
- * two different answers to the same problem: the project converts currency
- * nowhere (D8), so a shared axis can only carry an indexed figure, while a table
- * has a column per experiment and each cell can wear its own symbol. Putting
- * euros and dollars on one axis is FE.8's mistake drawn to scale.
- *
- * ⚠️ **Two experiments at once is a real limit today** (F6.10): `cycle_times`
- * lives in the schema and nobody reads it, so the scheduler runs one set of
- * hours for every active profile. Comparing histories that already exist works
- * fine; running two experiments on different schedules does not yet.
+ * ⚠️ **The chart is in %, the table is in each one's own currency.** The project
+ * converts currency nowhere, so a shared axis can only carry an indexed figure,
+ * while a table cell can wear its own symbol.
  *
  * @return The rendered screen.
  */
@@ -57,9 +50,7 @@ export function Compare() {
           all.length < 2 ? (
             <Card padding="p-6" dashed>
               <p className="text-body-sm text-text-secondary">
-                Hace falta más de un experimento para comparar. El gesto normal es duplicar
-                uno y cambiarle un solo parámetro: así las dos curvas se diferencian en eso y
-                no en cinco cosas a la vez.
+                Hace falta más de un experimento para comparar.
               </p>
             </Card>
           ) : (
@@ -91,10 +82,8 @@ function Picked({
 }) {
   const selected = all.filter((p) => chosen.includes(p.name));
 
-  // One request per experiment, in parallel and cached by TanStack. It is the
-  // decision in F4's header: several typed endpoints beat one untyped bundle,
-  // and here it also means picking a fourth experiment does not refetch the
-  // three already on screen.
+  // One request per experiment, in parallel and cached by TanStack: picking a
+  // fourth experiment does not refetch the three already on screen.
   //
   // `refetchInterval` is repeated here instead of reusing `useAnalytics`,
   // because the number of queries depends on how many experiments are ticked and
@@ -123,7 +112,7 @@ function Picked({
     <>
       <fieldset className="mb-6">
         <legend className="sr-only">Experimentos a comparar</legend>
-        <SectionTitle className="mb-3">Qué comparar</SectionTitle>
+        <SectionTitle className="mb-4">Experimentos</SectionTitle>
         <div className="flex flex-wrap gap-x-6 gap-y-2">
           {all.map((profile) => (
             <Checkbox
@@ -151,8 +140,7 @@ function Picked({
       {chosen.length === 0 ? (
         <Card padding="p-6" dashed>
           <p className="text-body-sm text-text-secondary">
-            Elige dos experimentos para ver sus curvas una encima de otra. Con más de dos se
-            dibuja uno por gráfica, compartiendo escala.
+            Elige los experimentos que quieres comparar.
           </p>
         </Card>
       ) : (
@@ -168,7 +156,7 @@ function Picked({
             </div>
           )}
 
-          <SectionTitle className="mb-3">Métricas lado a lado</SectionTitle>
+          <SectionTitle className="mb-4">Métricas</SectionTitle>
           <SideBySide profiles={selected} />
         </>
       )}
@@ -220,27 +208,21 @@ function SideBySide({ profiles }: { profiles: ProfileSummary[] }) {
       label: "Mercado",
       cell: (p) => ({ text: `${p.market.toUpperCase()} · ${p.currency}` }),
     },
-    { label: "Estado", cell: (p) => ({ text: p.status }) },
+    { label: "Estado", cell: (p) => ({ text: profileStatusLabel(p.status) }) },
     {
       label: "Selección de candidatos",
-      // The row that decides how the comparison is read: the control is meant
-      // to do worse, and without this line its numbers look like a failed
-      // experiment instead of the baseline (R7).
+      // The control is meant to do worse; without this row its numbers read as
+      // a failed experiment instead of the baseline.
       cell: (p) => ({
-        text: p.screener_mode === "random" ? "aleatoria (control)" : "por puntuación",
-        title:
-          p.screener_mode === "random"
-            ? "Grupo de control: los candidatos no están elegidos. Es contra lo que se mide si el criterio del modelo aporta algo."
-            : undefined,
+        text: p.screener_mode === "random" ? "al azar (control)" : "por puntuación",
       }),
     },
     { label: "Modelo", cell: (p) => ({ text: `${p.llm_provider}/${p.llm_model}` }) },
     { label: "Criterio de riesgo", cell: (p) => ({ text: p.risk_summary, title: p.risk_summary }) },
     {
       label: "Presupuesto",
-      // Each cell wears its own symbol. That is FE.8, and on this screen it is
-      // not a nicety: two columns side by side is exactly where a euro figure
-      // gets read as dollars.
+      // Each cell wears its own symbol: two columns side by side is exactly
+      // where a euro figure gets read as dollars.
       cell: (p) => ({ text: money(p.metrics.initial_budget, p.currency_symbol) }),
     },
     { label: "Capital", cell: (p) => ({ text: money(p.metrics.equity, p.currency_symbol) }) },
@@ -265,7 +247,7 @@ function SideBySide({ profiles }: { profiles: ProfileSummary[] }) {
         text: String(p.metrics.closed_trades ?? 0),
         title:
           (p.metrics.closed_trades ?? 0) < 30
-            ? "Menos de 30: todavía no hay con qué leer la calibración."
+            ? "Menos de 30: muestra todavía pequeña."
             : undefined,
       }),
     },
@@ -273,7 +255,6 @@ function SideBySide({ profiles }: { profiles: ProfileSummary[] }) {
       label: "Aciertos",
       cell: (p) => ({
         text: `${percent(p.metrics.win_rate_pct)} (${p.metrics.closed_trades ?? 0})`,
-        title: "El porcentaje va con el número de operaciones: sin él no significa nada.",
       }),
     },
     { label: "Ciclos", cell: (p) => ({ text: String(p.metrics.cycles ?? 0) }) },

@@ -46,14 +46,9 @@ export function EquityCurve({ points, symbol, budget }: Props) {
   return (
     <Chart
       title="Curva de capital"
-      explanation={
-        budget
-          ? `La referencia es el presupuesto asignado (${money(budget, symbol)}), no el primer punto: es contra lo que se mide el experimento.`
-          : undefined
-      }
       empty={
         data.length === 0
-          ? "Todavía no hay curva: se dibuja un punto por ciclo ejecutado."
+          ? "Todavía no ha corrido ningún ciclo."
           : undefined
       }
       table={
@@ -119,12 +114,8 @@ export function Drawdown({ points, symbol }: Omit<Props, "budget">) {
   return (
     <Chart
       title="Caída desde máximos"
-      explanation={
-        data.length
-          ? `Cuánto habría dolido en el peor momento. La peor hasta ahora: ${percent(worst)}.`
-          : undefined
-      }
-      empty={data.length === 0 ? "Sin ciclos todavía." : undefined}
+      note={`Peor caída: ${percent(worst)}`}
+      empty={data.length === 0 ? "Todavía no ha corrido ningún ciclo." : undefined}
       table={
         <SimpleTable
           columns={["Momento", "Capital", "Caída"]}

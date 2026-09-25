@@ -1,12 +1,14 @@
 import { useIngestStatus, useMarkets, useQuotes } from "@/api/hooks";
 import { realAge, useQuotesReceivedAt } from "@/api/stream";
 import type { MarketInfo, QuoteRow } from "@/api/types";
-import { Card, BlockTitle, PageTitle } from "@/components/pieces";
+import { Card, BlockTitle, PageTitle, Stat } from "@/components/pieces";
 import { Section } from "@/components/Section";
-import { TableHead, Row, Table, Td, Th } from "@/components/Table";
+import { TableHead, Row, Table, Td, Th, Empty } from "@/components/Table";
 import { useTitle } from "@/layout/useTitle";
-import { percent, signClass } from "@/lib/format";
+import { duration, percent, signClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+const EMPTY_QUOTES = "Todavía no hay cotizaciones.";
 
 /**
  * State of the ingestion and of the exchanges.
@@ -44,26 +46,26 @@ export function Diagnostics() {
                   data.healthy ? "text-delta-good" : "text-delta-bad",
                 )}
               >
-                {data.healthy ? "Sano" : "Con problemas"}
+                {data.healthy ? "Operativo" : "Con problemas"}
               </span>
               {" — "}
               {data.message}
             </p>
-            <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-body-sm sm:grid-cols-4">
-              <Item label="Símbolos seguidos" value={data.symbols_tracked ?? 0} />
-              <Item
+            <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+              <Stat label="Símbolos seguidos" value={String(data.symbols_tracked ?? 0)} />
+              <Stat
                 label="Barras guardadas"
                 value={(data.bars_stored ?? 0).toLocaleString("es-ES")}
               />
-              <Item
+              <Stat
                 label="Latencia media"
                 value={
                   data.avg_latency_ms === null || data.avg_latency_ms === undefined
-                    ? "n/d"
+                    ? "—"
                     : `${Math.round(data.avg_latency_ms)} ms`
                 }
               />
-              <Item label="Fallos seguidos" value={data.consecutive_failures ?? 0} />
+              <Stat label="Fallos seguidos" value={String(data.consecutive_failures ?? 0)} />
             </dl>
           </Card>
         )}
@@ -72,10 +74,7 @@ export function Diagnostics() {
       <Section title="Cotizaciones" query={quotes}>
         {(data: QuoteRow[]) =>
           data.length === 0 ? (
-            <p className="text-body-sm text-text-muted">
-              Todavía no hay cotizaciones. El ingestor las escribe en horario de mercado, y
-              solo de los símbolos de los perfiles activos.
-            </p>
+            <Empty>{EMPTY_QUOTES}</Empty>
           ) : (
             <Table title="Último precio conocido de cada símbolo, con su antigüedad">
               <TableHead>
@@ -112,23 +111,6 @@ export function Diagnostics() {
 }
 
 /**
- * A label and its value inside a definition list.
- *
- * @param props - Item props.
- * @param props.label - Label, in the interface language.
- * @param props.value - Value, already formatted.
- * @return The rendered pair.
- */
-function Item({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div>
-      <dt className="text-text-muted">{label}</dt>
-      <dd className="tabular">{value}</dd>
-    </div>
-  );
-}
-
-/**
  * One market's card: session, calendar, universe and liquidity floor.
  *
  * @param props - Card props.
@@ -156,8 +138,8 @@ function MarketCard({ market }: { market: MarketInfo }) {
         <dd className="tabular text-right">
           {market.session_open}–{market.session_close}
         </dd>
-        {/* The operating window is not the session (FE.13): in Europe the work
-            runs 09:15 to 17:45 over a session of 09:00 to 17:30. */}
+        {/* The operating window is not the session: in Europe the work runs
+            09:15 to 17:45 over a session of 09:00 to 17:30. */}
         <dt className="text-text-muted">Ventana</dt>
         <dd className="tabular text-right">
           {market.operating_open}–{market.operating_close}
@@ -210,7 +192,7 @@ function QuoteTableRow({
           age !== null && age > 300 ? "font-medium text-warning" : "text-text-muted"
         }
       >
-        {age === null ? "n/d" : `${Math.round(age)} s`}
+        {age === null ? "—" : duration(age)}
       </Td>
     </Row>
   );

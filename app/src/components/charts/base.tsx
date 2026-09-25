@@ -59,7 +59,8 @@ export const AXIS = {
  *
  * @param props - Chart frame props.
  * @param props.title - Chart heading.
- * @param props.explanation - What the chart answers, when the title cannot say it.
+ * @param props.note - A short line of data under the title (a legend, the worst
+ *     figure), never an explanation of the method: the title has to carry that.
  * @param props.empty - Empty-state wording. When given, nothing is drawn.
  * @param props.table - The same data as a table, for the alternative view.
  * @param props.children - The chart itself.
@@ -67,14 +68,14 @@ export const AXIS = {
  */
 export function Chart({
   title,
-  explanation,
+  note,
   empty,
   height = "h-56",
   table,
   children,
 }: {
   title: string;
-  explanation?: ReactNode;
+  note?: ReactNode;
   /** Empty-state text. When present, nothing is drawn. */
   empty?: string;
   /**
@@ -106,8 +107,8 @@ export function Chart({
           </LinkButton>
         )}
       </div>
-      {explanation && (
-        <p className="mb-4 text-caption font-normal text-text-secondary">{explanation}</p>
+      {note && !empty && (
+        <p className="mb-4 text-caption font-normal text-text-secondary">{note}</p>
       )}
 
       {empty ? (

@@ -88,11 +88,10 @@ function ProfileNotFound({ name }: { name: string }) {
         No hay ningún experimento llamado «{name}»
       </BlockTitle>
       <p className="mt-3 text-body text-text-secondary">
-        Puede que lo hayas renombrado o borrado. La URL lleva el nombre del perfil, así que
-        un enlace guardado deja de valer cuando el nombre cambia.
+        Puede que se haya renombrado o borrado.
       </p>
       <Link to="/profiles" className={buttonClasses("primary", "mt-6")}>
-        Ver los experimentos que hay
+        Ver experimentos
       </Link>
     </Card>
   );

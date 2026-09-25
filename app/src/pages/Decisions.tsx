@@ -20,7 +20,7 @@ import {
 } from "@/components/Table";
 import { groupByDayAndCycle, groupCyclesByDay } from "@/lib/grouping";
 import { money, dateTime, time, longDate, sentence } from "@/lib/format";
-import { actionLabel, orderStatusLabel } from "@/lib/labels";
+import { actionLabel, orderStatusLabel, ruleLabel } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 import { useTitle } from "@/layout/useTitle";
@@ -43,6 +43,10 @@ const CYCLE_DECISIONS = 200;
 
 /** Columns, so the group headers and the unfolded thesis span the table. */
 const COLUMNS = 6;
+
+const EMPTY_DECISIONS = "Todavía no hay decisiones: no ha corrido ningún ciclo.";
+const EMPTY_CYCLE = "Este ciclo no registró ninguna decisión.";
+const EMPTY_FILTERED = "Ninguna decisión cumple estos filtros.";
 
 /**
  * What the analyst proposed and what the Risk Manager said (F4.7).
@@ -101,7 +105,7 @@ export function Decisions() {
     <>
       <PageTitle>Decisiones</PageTitle>
 
-      <div className="mb-5 flex flex-wrap items-end gap-3">
+      <div className="mb-6 flex flex-wrap items-end gap-4">
         <Input
           label="Símbolo"
           type="search"
@@ -228,14 +232,9 @@ function BySession({
           <>
             {days.length === 0 ? (
               // Worded for what was actually checked, which since the tree is
-              // driven by the cycle list is "no cycles", not "no decisions": a
-              // cycle that ran and decided nothing does reach here, and it
-              // appears below as a fold saying so.
-              <Empty>
-                Todavía no ha corrido ningún ciclo para este experimento, así que no hay
-                ninguna decisión que agrupar. Cada ciclo guarda una por candidato
-                evaluado, incluidas las de mantener.
-              </Empty>
+              // driven by the cycle list is "no cycles": a cycle that ran and
+              // decided nothing does reach the tree, as a fold saying so.
+              <Empty>{EMPTY_DECISIONS}</Empty>
             ) : (
               <Table title="Decisiones del analista, agrupadas por jornada y por ciclo">
                 <DecisionsHead />
@@ -423,13 +422,8 @@ function CycleDecisions({
   if (items.length === 0) {
     return (
       <DetailRow columns={COLUMNS}>
-        {/* Not "no hay decisiones": a cycle with none either found the market
-            closed or lost every analyst call, and both are recorded on Ciclos.
-            Saying so stops an empty fold from reading as a loading failure. */}
-        <p className="pt-2 text-caption leading-snug text-text-secondary">
-          Este ciclo no registró ninguna decisión. En la pantalla de Ciclos está si
-          encontró el mercado cerrado o si se quedó sin respuestas del modelo.
-        </p>
+        {/* Said explicitly so an empty fold does not read as a loading failure. */}
+        <p className="pt-2 text-caption text-text-secondary">{EMPTY_CYCLE}</p>
       </DetailRow>
     );
   }
@@ -480,7 +474,7 @@ function Filtered({
       {(page) => (
         <>
           {page.items.length === 0 ? (
-            <Empty>Ninguna decisión cumple estos filtros.</Empty>
+            <Empty>{EMPTY_FILTERED}</Empty>
           ) : (
             <Table title="Decisiones que cumplen los filtros, agrupadas por jornada y por ciclo">
               <DecisionsHead />
@@ -544,7 +538,7 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
   return (
     <>
       <Row expanded={hasDetail && open}>
-        <Td title={row.created_at}>
+        <Td title={dateTime(row.created_at)}>
           {hasDetail ? (
             <LinkButton
               variant="subtle"
@@ -569,13 +563,9 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
               on whether entering was being evaluated or an open position reviewed. */}
           <Tag
             tone="neutral"
-            title={
-              row.kind === "entry"
-                ? "Se evaluaba entrar en el activo"
-                : "Se revisaba una posición ya abierta"
-            }
+            title={row.kind === "entry" ? "Evaluación de entrada" : "Revisión de una posición abierta"}
           >
-            {row.kind}
+            {row.kind === "entry" ? "entrada" : "revisión"}
           </Tag>
         </Td>
         <Td>
@@ -604,12 +594,12 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
                 {row.verdict === "approved" ? "aprobada" : "rechazada"}
               </span>
               {row.rule && (
-                <p className="mt-0.5 text-caption text-text-muted">{row.rule}</p>
+                <p className="mt-0.5 text-caption text-text-muted">{ruleLabel(row.rule)}</p>
               )}
             </>
           ) : (
             // A hold decision does not go through the Risk Manager: there is
-            // nothing to size. Saying so stops it from looking like a gap.
+            // nothing to size.
             <span className="text-caption text-text-muted">
               {row.action === "hold" ? "no aplica" : "sin veredicto"}
             </span>
@@ -640,12 +630,11 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
           )}
           {reason && (
             <p className="mt-1 text-caption leading-snug text-text-secondary">
-              <span className="font-medium">Riesgo dijo:</span> {reason}
+              <span className="font-medium">Veredicto:</span> {reason}
             </p>
           )}
-          {/* F9.4: the headlines the analyst cited, as its prompt showed them. The
-              ref is kept because it is how the thesis refers to them, and a
-              citation that did not resolve simply does not appear here. */}
+          {/* The headlines the analyst cited, as its prompt showed them. The ref
+              is kept because it is how the thesis refers to them. */}
           {news.length > 0 && (
             <div className="mt-1 text-caption leading-snug text-text-secondary">
               <span className="font-medium">Noticias citadas:</span>
@@ -675,9 +664,9 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
           <p className="mt-1 text-caption text-text-muted">
             {dateTime(row.created_at)}
             {row.reference_price !== null && row.reference_price !== undefined
-              ? ` · ref. ${money(row.reference_price, symbol)}`
+              ? ` · precio de referencia ${money(row.reference_price, symbol)}`
               : ""}
-            {row.horizon_days ? ` · ${row.horizon_days} d` : ""}
+            {row.horizon_days ? ` · horizonte ${row.horizon_days} d` : ""}
             {` · ${row.llm_model ?? "modelo desconocido"}`}
           </p>
         </DetailRow>
