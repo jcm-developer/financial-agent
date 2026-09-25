@@ -72,7 +72,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends curl ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 USER bot
-RUN curl -fsSL https://claude.ai/install.sh | bash -s 2.1.185
+RUN curl -fsSL https://claude.ai/install.sh | bash -s 2.1.283
 ENV PATH="/home/bot/.local/bin:${PATH}" \
     DISABLE_AUTOUPDATER=1
 USER root

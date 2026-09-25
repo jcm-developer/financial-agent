@@ -40,6 +40,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -58,6 +59,11 @@ _OVERRIDING_CREDENTIALS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
 #: Phrases of the CLI's quota errors. A spent window lasts hours, so retrying it
 #: within the cycle only burns the backoff.
 _QUOTA_MARKERS = ("usage limit", "session limit", "weekly limit", "hit your")
+
+#: The API's status as the CLI reports it: «API Error: 400 …». A 4xx other than
+#: 429 is a request that will be refused again —measured on the 2026-09-26 with
+#: «Claude Code 2.1.185 does not support this model», retried to no purpose.
+_API_STATUS = re.compile(r"API Error:\s*(\d{3})")
 
 
 class ClaudeCliError(RuntimeError):
@@ -180,9 +186,21 @@ def parse_result(stdout: str, stderr: str, returncode: int) -> dict[str, Any]:
                 f"Se ha agotado el cupo de la suscripción de Claude: {detail[:300]}",
                 retryable=False,
             )
-        raise ClaudeCliError(f"Claude Code devolvió un error: {detail[:400]}", retryable=True)
+        raise ClaudeCliError(
+            f"Claude Code devolvió un error: {detail[:400]}",
+            retryable=_is_transient(detail),
+        )
 
     return result
+
+
+def _is_transient(text: str) -> bool:
+    """Whether trying again can help: a 429, a 5xx, or no status at all."""
+    match = _API_STATUS.search(text)
+    if match is None:
+        return True
+    status = int(match.group(1))
+    return status == 429 or status >= 500
 
 
 def _is_quota(text: str) -> bool:

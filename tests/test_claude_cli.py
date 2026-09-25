@@ -126,6 +126,21 @@ def test_an_error_result_is_retryable():
     assert caught.value.retryable
 
 
+def test_a_refused_request_is_not_retried():
+    """A 400 will be refused again: the model the CLI version does not know."""
+    with pytest.raises(ClaudeCliError) as caught:
+        parse_result(_result(is_error=True, result=(
+            "API Error: 400 Claude Code 2.1.185 does not support this model; "
+            "version 2.1.280 or newer is required.")), "", 1)
+    assert not caught.value.retryable
+
+
+def test_a_rate_limit_is_retried():
+    with pytest.raises(ClaudeCliError) as caught:
+        parse_result(_result(is_error=True, result="API Error: 429 rate_limit_error"), "", 1)
+    assert caught.value.retryable
+
+
 def test_a_spent_quota_is_not_retried():
     """A window lasts hours: retrying it only burns the backoff."""
     with pytest.raises(ClaudeCliError, match="cupo") as caught:
