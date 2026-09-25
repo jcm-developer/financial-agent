@@ -710,7 +710,7 @@ def command_import_profile(infra: Infra, *, name: str, env_file: str | None) -> 
     print("\n  Los limites de riesgo se han importado en MODO AVANZADO, con los")
     print("  numeros exactos que traia el .env, para no cambiar el comportamiento")
     print("  del agente al mover la configuracion de sitio. Para pasarte a los")
-    print("  deslizadores de F6.5, apaga advanced_overrides.")
+    print("  deslizadores, apaga advanced_overrides.")
     print("\n  Ya puedes ejecutar:  python run.py cycle")
     return 0
 

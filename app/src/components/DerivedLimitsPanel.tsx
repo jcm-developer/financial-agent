@@ -94,7 +94,7 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
           title={
             origin("max_position_pct") ??
             origin("min_position_pct") ??
-            "Banda de tamaño: el analista elige dentro, y el suelo es lo que evita que la cartera se quede a medio invertir (F9.21)."
+            "Banda de tamaño: el analista elige dentro, y el suelo es lo que evita que la cartera se quede a medio invertir."
           }
         />
         <Stat
@@ -141,7 +141,7 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
           value={`${limits.min_target_sigma}σ`}
           title={
             origin("min_target_sigma") ??
-            "Recorrido mínimo que tiene que prometer el objetivo, en sigmas del horizonte declarado (F9.16)."
+            "Recorrido mínimo que tiene que prometer el objetivo, en sigmas del horizonte."
           }
         />
         <Stat

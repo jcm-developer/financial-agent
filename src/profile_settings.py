@@ -58,7 +58,7 @@ def select_profile(db: Database, *, name: str = "") -> str:
     # without this precedence the startup message never appeared.
     if not profiles:
         raise ConfigError(
-            "No hay ningun perfil en la base de datos, y desde F6.4 el ciclo toma\n"
+            "No hay ningun perfil en la base de datos, y el ciclo toma\n"
             "  sus parametros del perfil y no del .env.\n"
             "  Crea uno con:\n"
             "      python run.py new-profile --name europa-01 --market eu --watch 89\n"

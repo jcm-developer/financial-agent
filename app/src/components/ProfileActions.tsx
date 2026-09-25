@@ -229,7 +229,7 @@ export function ProfileActions({ profile }: Props) {
               screener elige al azar en vez de puntuar.
             </>
           }
-          hint="Es contra lo que se mide si el criterio del modelo aporta algo (R7). Mismo universo, mismo riesgo, mismos descartes duros: lo único que cambia es que los candidatos no están elegidos. Si el agente rinde igual, el filtro no estaba aportando nada."
+          hint="Es contra lo que se mide si el criterio del modelo aporta algo. Mismo universo, mismo riesgo, mismos descartes duros: lo único que cambia es que los candidatos no están elegidos. Si el agente rinde igual, el filtro no estaba aportando nada."
         />
       </ConfirmDialog>
 

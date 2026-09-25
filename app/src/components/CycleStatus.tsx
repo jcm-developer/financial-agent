@@ -34,7 +34,7 @@ export function CycleStatus({ cycle }: { cycle: CycleRow }) {
     >
       {cycle.status}
       {noModel && (
-        <Tag title="Ninguna llamada al modelo obtuvo respuesta: este ciclo no analizó nada (F6.9)">
+        <Tag title="Ninguna llamada al modelo obtuvo respuesta: este ciclo no analizó nada">
           SIN MODELO
         </Tag>
       )}

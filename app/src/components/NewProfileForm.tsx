@@ -221,7 +221,7 @@ export function NewProfileForm({ onCancel }: Props) {
                 value={watch}
                 placeholder={chosen ? String(chosen.universe_size) : "0"}
                 onChange={(e) => setWatch(e.target.value)}
-                hint="Vacío = todo el universo. Son peticiones por minuto a Yahoo (R2)."
+                hint="Vacío = todo el universo. Son peticiones por minuto a Yahoo."
               />
             </div>
           )}

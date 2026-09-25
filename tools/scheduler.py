@@ -269,7 +269,7 @@ def main() -> int:
     first_pass = True
 
     log.info(
-        "Planificador en marcha. Los horarios salen del perfil (F6.10); "
+        "Planificador en marcha. Los horarios salen del perfil; "
         "la lista se relee cada %.0fs, asi que activar o pausar un experimento "
         "desde la interfaz surte efecto sin reiniciar nada.", refresh,
     )

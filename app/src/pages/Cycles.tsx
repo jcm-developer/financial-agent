@@ -421,7 +421,7 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }) {
                 settings it ran with". */}
             {cycle.settings === null || cycle.settings === undefined ? (
               <p className="mt-3 text-body-sm text-text-muted">
-                Sin copia de los parámetros: es un ciclo anterior a que se guardaran (F6.3).
+                Sin copia de los parámetros: es un ciclo anterior a que se guardaran.
               </p>
             ) : (
               <details className="mt-3">

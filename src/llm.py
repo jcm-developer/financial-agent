@@ -92,7 +92,7 @@ PROVIDERS: dict[str, Provider] = {
 # truth, instead of "unknown provider", which confuses.
 PLANNED_PROVIDERS = {
     "anthropic": (
-        "El proveedor 'anthropic' no esta implementado todavia (queda en F9.1). "
+        "El proveedor 'anthropic' no esta implementado todavia. "
         "Su API tiene otra forma que la de NIM y OpenAI y necesita su SDK "
         "oficial, que hoy no es una dependencia del proyecto. "
         f"Proveedores disponibles: {', '.join(sorted(PROVIDERS))}."
