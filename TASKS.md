@@ -4462,6 +4462,9 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
         esfuerzo va con el de defecto del CLI, como Sol con el suyo; `llm_reasoning_effort`
         se pasaría como `--effort` si algún día se quiere gastar menos.
       - Los tres ciclos van en serie: ~5 + ~4 + ~10 min, lejos de la barra de las 11:15.
+      - **El selector de Proveedor no conocía a Claude**, así que Ajustes enseñaba «Elegir…»
+        en `eu-claude-base`: se añade «Claude (suscripción)» ahí y en el alta, con
+        `claude-sonnet-5` como modelo por defecto.
 
 ---
 

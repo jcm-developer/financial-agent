@@ -35,10 +35,11 @@ interface Props {
   onCancel: () => void;
 }
 
-/** Providers `src/llm.py` actually implements, plus the one it refuses on purpose. */
+/** The providers `src/llm.py` implements; Claude goes through the `claude` command (F9.35). */
 const PROVIDERS = [
   ["nvidia", "NVIDIA NIM (capa gratuita)"],
   ["openai", "OpenAI"],
+  ["anthropic", "Claude (suscripción)"],
 ] as const;
 
 /**
@@ -56,6 +57,7 @@ const PROVIDERS = [
 const DEFAULT_MODEL: Record<string, string> = {
   nvidia: "nvidia/nemotron-3-super-120b-a12b",
   openai: "gpt-4o-mini",
+  anthropic: "claude-sonnet-5",
 };
 
 /**
