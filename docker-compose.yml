@@ -105,7 +105,6 @@ services:
 
   # ---------------------------------------------------------------------------
   # Planificador: lanza `run.py cycle` a las horas de CYCLE_TIMES.
-  # Si faltan credenciales, sale con un mensaje claro en lugar de reintentar.
   # ---------------------------------------------------------------------------
   scheduler:
     <<: *app
@@ -126,7 +125,12 @@ services:
       # true = un ciclo de cada experimento activo al arrancar el contenedor, sin
       # esperar a su hora.
       RUN_ON_START: "${RUN_ON_START:-false}"
-    restart: on-failure
+    # unless-stopped y no on-failure, como la API y el ingestor. on-failure solo
+    # relanza un proceso que muere con error: tras reiniciar el ordenador o Docker
+    # Desktop el planificador se quedaba parado y ningun experimento corria, sin
+    # que nada fallara a la vista. La razon de on-failure --no reintentar sin
+    # credenciales-- dejo de existir cuando la clave paso a vivir en cada perfil.
+    restart: unless-stopped
     # Margen para que un ciclo en curso termine antes del SIGKILL.
     stop_grace_period: 90s
 
