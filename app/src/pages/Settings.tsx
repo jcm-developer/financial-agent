@@ -195,7 +195,7 @@ function SettingsForm({
 
   return (
     <form className="flex flex-col gap-8" onSubmit={submit}>
-      <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr] lg:items-start">
+      <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
         <Card padding="p-6" className="flex flex-col gap-6">
           <SectionTitle>Riesgo</SectionTitle>
           <Slider
