@@ -610,6 +610,160 @@ class TradingCycle:
 
     # ------------------------------------------------------------------
 
+    def check_stops(self) -> CycleReport:
+        """Checks the stop and target of every open position, without the model (F9.36).
+
+        The analysing cycle runs once a day (decision nº 11) and the mandatory
+        exits were only checked inside it, so a position that fell through its
+        stop at 11:00 was not sold until 10:20 the next day. A real stop order is
+        watched by the broker all session; this brings the simulation closer to
+        that, at the resolution of the hourly bar.
+
+        **Step 6 of the cycle and nothing else.** No screener, no analyst, no
+        entries, no stop raised: those need the model's judgement, and asking it
+        several times a day was what decision nº 11 ruled out. What runs here is
+        the rule that does not need judging —a stop hit is not negotiable— so it
+        costs no quota.
+
+        **It writes nothing unless something fires.** Seven checks a day per
+        profile would otherwise fill `cycles` with empty rows and the equity
+        curve with points of nothing; a check that finds every position inside
+        its levels returns `skipped` and leaves only a log line. When an exit
+        does fire it is recorded as one more cycle —the orders and positions
+        need a `cycle_id`—, with `llm_model` NULL and `cycle_kind` in the
+        settings copy, so it can be told apart from an analysing cycle.
+        """
+        settings = self.settings
+        report = CycleReport(currency_symbol=self.currency_symbol)
+
+        allowed, reason = market_calendar.should_run(
+            settings.bar_interval, market=settings.market
+        )
+        if settings.skip_when_market_closed and not allowed:
+            report.status = "skipped"
+            report.halted_reason = reason
+            log.info("Comprobación de stops omitida: %s", reason)
+            return report
+
+        portfolio_id = self.portfolio_id or self.db.ensure_portfolio(
+            name=settings.portfolio_name,
+            mode=settings.mode,
+            initial_budget=settings.initial_budget,
+        )
+
+        blocked = self._check_no_other_cycle_running(portfolio_id)
+        if blocked is not None:
+            # The running cycle checks the same levels in its own step 6.
+            report.status = "skipped"
+            report.halted_reason = blocked
+            log.info("Comprobación de stops omitida: %s", blocked)
+            return report
+
+        open_symbols = tuple(sorted(self.db.get_open_positions(portfolio_id)))
+        if not open_symbols:
+            report.status = "skipped"
+            report.halted_reason = "No hay posiciones abiertas."
+            log.info("Comprobación de stops: no hay posiciones abiertas.")
+            return report
+
+        snapshots = self.market_data.fetch_positions(open_symbols)
+        self._prime_broker(snapshots)
+
+        account = self.broker.get_account_state()
+        market_open = self.broker.is_market_open()
+        report.market_open = market_open
+        report.equity_start = account.equity
+        report.equity_end = account.equity
+
+        if not self._can_execute(market_open):
+            why = (
+                f"está activo el {_DRY_RUN_REASON}" if settings.dry_run
+                else "el mercado está cerrado"
+            )
+            report.status = "skipped"
+            report.halted_reason = f"No se comprueban stops: {why}."
+            log.info("Comprobación de stops omitida: %s", why)
+            return report
+
+        tracked = self.db.get_open_positions(portfolio_id)
+        broker_positions = {p.symbol: p for p in account.positions}
+        levels = {
+            symbol: {
+                "stop_price": _opt_float(row.get("stop_price")),
+                "target_price": _opt_float(row.get("target_price")),
+            }
+            for symbol, row in tracked.items()
+        }
+        signals = self.risk.mandatory_exits(broker_positions, levels)
+        if not signals:
+            report.status = "skipped"
+            report.halted_reason = (
+                f"Ningún stop ni objetivo alcanzado en {len(open_symbols)} posiciones."
+            )
+            log.info("Comprobación de stops: %s", report.halted_reason)
+            return report
+
+        cycle_id = self.db.start_cycle(
+            portfolio_id=portfolio_id,
+            equity_start=account.equity,
+            cash_start=account.cash,
+            market_open=market_open,
+            symbols=[signal.symbol for signal in signals],
+            llm_model=None,
+            settings={**settings.snapshot(), "cycle_kind": "stop_check"},
+        )
+        report.cycle_id = cycle_id
+        log.info(
+            "COMPROBACIÓN DE STOPS %s: %d salidas obligatorias.", cycle_id, len(signals)
+        )
+
+        try:
+            for signal in signals:
+                if self._execute_exit(
+                    report, portfolio_id, cycle_id, signal, tracked,
+                    broker_positions, market_open=market_open,
+                ):
+                    report.exits_forced += 1
+                    broker_positions.pop(signal.symbol, None)
+        except (BrokerError, MarketDataError, DatabaseError) as exc:
+            report.status = "failed"
+            report.errors.append(str(exc))
+            log.exception("La comprobación de stops ha fallado: %s", exc)
+        except Exception as exc:  # noqa: BLE001 - queremos cerrar el ciclo siempre
+            report.status = "failed"
+            report.errors.append(f"Error inesperado: {exc}")
+            log.exception("Error inesperado al comprobar los stops.")
+
+        try:
+            final_account = self.broker.get_account_state()
+            report.equity_end = final_account.equity
+            self.db.save_equity_snapshot(
+                portfolio_id=portfolio_id,
+                cycle_id=cycle_id,
+                equity=final_account.equity,
+                cash=final_account.cash,
+                positions_value=final_account.positions_value,
+                open_positions=len(final_account.positions),
+                day_pnl=final_account.day_pnl,
+                day_pnl_pct=final_account.day_pnl_pct,
+            )
+        except (BrokerError, DatabaseError) as exc:
+            report.errors.append(f"No se pudo guardar la curva de capital: {exc}")
+
+        try:
+            self.db.finish_cycle(
+                cycle_id,
+                status=report.status,
+                equity_end=report.equity_end,
+                error="; ".join(report.errors) if report.errors else None,
+            )
+        except DatabaseError as exc:
+            log.error("No se pudo marcar la comprobación de stops como finalizada: %s", exc)
+
+        return report
+
+    # ------------------------------------------------------------------
+
     def _grade_analyst(self, report: CycleReport) -> None:
         """Tells "the model said no" apart from "there was no model".
 

@@ -46,7 +46,7 @@ símbolos se siguen en vivo.**
 |---|---|---|
 | `api` | Sirve la interfaz y la API REST. **No puede escribir en el histórico** | continuo |
 | `ingestor` | Descarga cotizaciones y las guarda | **cada minuto**, en ventana de mercado |
-| `scheduler` | Lanza los ciclos de cada experimento activo a sus horas | relee el plan cada minuto |
+| `scheduler` | Lanza los ciclos de cada experimento activo a sus horas, y entre ciclo y ciclo comprueba los stops sin modelo | relee el plan cada minuto |
 | `bot` | Comandos puntuales (`check`, `report`, tests) | a mano |
 
 Están separados a propósito: si Yahoo se cuelga, ni la interfaz ni el agente se
@@ -149,16 +149,31 @@ sigue eligiendo dentro de la banda, que era el punto de F9.13; lo que no puede e
 dejar el experimento sin jugar.
 
 **Los pasos 5, 6 y 9 no gastan modelo**, y eso importa: las salidas obligatorias
-—stop perforado, objetivo alcanzado— se comprueban **en cada ciclo y gratis**. Ahí
-está el valor de tener varios ciclos al día en vez de uno: no en preguntarle varias
-veces al modelo, sino en mirar los stops varias veces.
+—stop perforado, objetivo alcanzado— se pueden comprobar **gratis**, sin pasar por
+el resto del ciclo. Es lo que separa mirar los stops varias veces al día de
+preguntarle varias veces al modelo.
 
-⚠️ **Cuántos ciclos depende de lo ancho que sea el stop, y por eso bajaron de ocho a
-cuatro el 2026-08-11.** Con el stop a 1,2× ATR (−2,6 %) mirarlo cada hora compraba
-algo real. Con el del experimento del mes, 3× ATR (−6,4 %) y un horizonte de 45
-días, el ruido de una hora no lo alcanza, mientras el coste seguía entero: 25
-candidatos × 8 ciclos son 200 llamadas al modelo al día sobre los mismos nombres.
-Quedan **10:20, 12:20, 14:20 y 16:20**.
+**Un ciclo al día, y los stops cada hora** (decisión nº 11 y F9.36). El ciclo que
+analiza corre a las **10:20**: con indicadores diarios y seis meses de horizonte, a
+las 16:20 el modelo vería lo mismo salvo el precio, y preguntar cuatro veces
+añade sesgo —de cuatro respuestas con ruido basta que una diga `buy`—. Pero con
+un solo ciclo, un stop perforado a las 11:00 no se vendía hasta el día siguiente.
+Por eso el planificador lanza **`run.py check-stops` cada hora, de 11:20 a 17:20**:
+solo el paso 6, sin screener, sin modelo y sin entradas, y bajando solo las
+posiciones abiertas. Al minuto del ciclo porque es el que se eligió para la barra:
+a :20 ya ha llegado, con los 15 minutos de retraso del feed, la barra que cerró a
+:00. Tres cosas que conviene saber:
+
+- **No escribe nada si no salta nada.** Siete comprobaciones al día llenarían
+  `cycles` de filas vacías; una que no encuentra nada deja una línea en el log del
+  planificador y ya. Si salta, queda como un ciclo más —la orden y la posición
+  necesitan un `cycle_id`—, con `llm_model` NULL y `cycle_kind: stop_check` en
+  `settings_json`.
+- **No sale en el log en vivo de Ciclos**, a propósito: lo sobrescribiría siete
+  veces al día y taparía el del ciclo de las 10:20.
+- **La resolución es la de la barra horaria**: se compara el cierre de la última
+  hora completa con el stop. Un stop real lo vigila el broker tick a tick, así que
+  esto sigue siendo más grueso que la realidad, pero ya no un día entero.
 
 **Una posición abierta se revisa siempre, aunque el screener no la mire.** Entra
 en cada ciclo como símbolo obligatorio, y **sin gastar una de las 20 plazas**: se
@@ -512,8 +527,9 @@ es el final del experimento— y queda registrado como un ciclo más con la regl
 
 - **no cierra las posiciones abiertas**, así que el resultado que se lee es **no
   realizado**: la cartera valorada a mercado, no un resultado cerrado;
-- **deja de comprobar stops y objetivos**, porque eso solo pasa dentro de un ciclo.
-  Un experimento pausado con posiciones vivas está expuesto sin vigilancia;
+- **deja de comprobar stops y objetivos**: el planificador deja de lanzarle tanto
+  los ciclos como las comprobaciones de cada hora. Un experimento pausado con
+  posiciones vivas está expuesto sin vigilancia;
 - si era el único activo, **deja al ingestor sin símbolos** y los precios de
   valoración se congelan en el último conocido.
 
@@ -545,7 +561,8 @@ Para no volver a preguntárselo:
 1. Un perfil activo = un experimento con su cartera y sus parámetros.
 2. El **ingestor** guarda precio cada minuto → pantalla e histórico. **No llega al
    agente.**
-3. El **planificador** lanza un ciclo a cada hora configurada del perfil.
+3. El **planificador** lanza un ciclo a cada hora configurada del perfil y, entre
+   uno y otro, comprueba los stops cada hora sin consultar al modelo (F9.36).
 4. Cada ciclo: screener determinista criba 89 → 20; el modelo opina sobre esos 20
    —**en orden de puntuación**, que es el orden en que se gasta la caja— y sobre
    cada posición abierta; el risk manager decide; el broker ejecuta, hasta

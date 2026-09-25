@@ -193,6 +193,37 @@ class UniverseMarketData:
         )
         return snapshots
 
+    def fetch_positions(
+        self, symbols: tuple[str, ...] | list[str]
+    ) -> dict[str, MarketSnapshot]:
+        """Snapshots for the held symbols only, from the same caches as the cycle.
+
+        For the stop check (F9.36): the universe is not refreshed and nothing is
+        screened, so it is one small request per cache instead of the 89-symbol
+        refresh a cycle does. The same caches and the same `build_snapshot` as
+        `fetch_snapshots`, so the price a stop is checked against is the one the
+        next cycle will see.
+        """
+        required = sorted(set(symbols))
+        if not required:
+            return {}
+        self.screen_cache.refresh(required, lookback_days=self.lookback_days)
+        if self.price_cache is not self.screen_cache:
+            self.price_cache.refresh(required, lookback_days=self.lookback_days)
+
+        bars_needed = max(self.lookback_days, 260)
+        snapshots: dict[str, MarketSnapshot] = {}
+        for symbol in required:
+            bars = self.price_cache.get_bars(symbol, limit=bars_needed)
+            context = self.screen_cache.get_bars(symbol, limit=bars_needed)
+            if not bars or not context:
+                log.warning("%s no tiene barras en la caché; se omite.", symbol)
+                continue
+            snapshot = build_snapshot(symbol, bars, indicator_bars=context)
+            if snapshot is not None:
+                snapshots[symbol] = snapshot
+        return snapshots
+
     def describe_selection(self) -> str:
         """Summary of the last sift, for the cycle's log."""
         if self.last_report is None:

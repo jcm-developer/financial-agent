@@ -692,7 +692,7 @@ class Database:
         cash_start: float,
         market_open: bool,
         symbols: list[str],
-        llm_model: str,
+        llm_model: str | None,
         settings: dict[str, Any] | None = None,
     ) -> str:
         """`settings` is the copy of the parameters the cycle runs with.

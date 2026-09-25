@@ -25,6 +25,11 @@ same time — and they were also the reason a profile's own columns were mute.
 
 Each cycle runs as a separate subprocess on purpose: if a call to the model hangs
 or the process dies, the scheduler survives and the next run is still standing.
+
+**Between cycles it also runs stop checks** (F9.36): every hour, at the minute of
+the profile's cycle, from the first cycle of the day to the end of the operating
+window. They are `run.py check-stops`, which does not call the model, so they
+cost no quota; see `stop_check_times` for why those hours and no others.
 """
 
 from __future__ import annotations
@@ -36,7 +41,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, time as clock, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -101,13 +106,68 @@ class Plan:
     tz: ZoneInfo
     market: str
     bar_interval: str
+    #: The stop checks between cycles (F9.36), in the same zone as `times`.
+    check_times: tuple[tuple[int, int], ...] = ()
 
     def describe(self) -> str:
         schedule = ", ".join(f"{h:02d}:{m:02d}" for h, m in self.times)
+        checks = ", ".join(f"{h:02d}:{m:02d}" for h, m in self.check_times)
         return (
             f"{self.profile}: {schedule} ({self.tz_name}), "
             f"mercado {self.market}, barras {self.bar_interval}"
+            + (f"; stops a las {checks}" if checks else "")
         )
+
+
+def stop_check_times(
+    times: tuple[tuple[int, int], ...] | list[tuple[int, int]],
+    *,
+    tz: ZoneInfo,
+    market: str,
+    bar_interval: str,
+    today: date | None = None,
+) -> tuple[tuple[int, int], ...]:
+    """The hours at which the stops are checked without the model (F9.36).
+
+    Every hour at the minute of the profile's cycle, because that minute was
+    chosen for the bar: at :20 the hourly bar that closed at :00 has arrived
+    through the feed's 15-minute delay, and the next one is almost an hour away.
+
+    **Only after the first cycle of the day.** Before it, the last complete bar
+    is yesterday's, which the evening checks already saw; the overnight gap
+    shows up in the first bar of the session, and the cycle reads that one.
+
+    **Only inside the operating window**, converted from the market's zone to the
+    profile's: a European profile scheduled in Madrid and an American one would
+    otherwise get their windows mixed. Computed for `today` because the two
+    zones need not change to summer time on the same day.
+
+    **None with daily bars**: the price the stop is compared with does not move
+    until the session closes, and the cycle after the close already reads it.
+    """
+    if bar_interval == "1d" or not times:
+        return ()
+    from src.market_calendar import get_market
+
+    try:
+        spec = get_market(market)
+    except Exception:  # noqa: BLE001 - un mercado desconocido ya se avisa al resolver
+        return ()
+
+    day = today or datetime.now(tz).date()
+
+    def in_profile_zone(moment: clock) -> datetime:
+        return datetime.combine(day, moment, tzinfo=spec.tz).astimezone(tz)
+
+    window_start = in_profile_zone(spec.operating_open)
+    window_end = in_profile_zone(spec.operating_close)
+    first_hour, minute = min(times)
+    return tuple(
+        (hour, minute)
+        for hour in range(first_hour + 1, 24)
+        if (hour, minute) not in times
+        and window_start <= datetime.combine(day, clock(hour, minute), tzinfo=tz) <= window_end
+    )
 
 
 def load_plans(db) -> list[Plan]:
@@ -147,6 +207,10 @@ def load_plans(db) -> list[Plan]:
             tz=tz,
             market=settings["market"],
             bar_interval=settings["bar_interval"],
+            check_times=stop_check_times(
+                times, tz=tz, market=settings["market"],
+                bar_interval=settings["bar_interval"],
+            ),
         ))
     return plans
 
@@ -233,6 +297,25 @@ def run_cycle(profile: str) -> int:
     return result.returncode
 
 
+def run_stop_check(profile: str) -> int:
+    """Launches one stop check (F9.36), as a subprocess like a cycle.
+
+    A subprocess for the same reason: a hung Yahoo download must not take the
+    scheduler down. It logs less than a cycle because it runs seven times a day
+    and almost always finds nothing; `check-stops` prints what it did.
+    """
+    result = subprocess.run(
+        [sys.executable, "run.py", "check-stops", "--profile", profile],
+        cwd=str(APP_DIR), check=False,
+    )
+    if result.returncode != 0:
+        log.error(
+            "La comprobación de stops de %r terminó con código %d.",
+            profile, result.returncode,
+        )
+    return result.returncode
+
+
 def _sleep_a_little(seconds: float) -> None:
     """Sleeps in slices so a stop signal is noticed within seconds."""
     remaining = seconds
@@ -268,6 +351,8 @@ def main() -> int:
     # a plan that has not changed does not have its next time recomputed —which
     # would push it forward every minute and mean it never fires.
     upcoming: dict[str, datetime] = {}
+    #: The same for the stop checks, kept apart so a check never pushes a cycle.
+    upcoming_checks: dict[str, datetime] = {}
     known: dict[str, Plan] = {}
     first_pass = True
 
@@ -296,11 +381,16 @@ def main() -> int:
                     "  siguiente ciclo de %r: %s",
                     name, upcoming[name].strftime("%Y-%m-%d %H:%M %Z"),
                 )
+                if plan.check_times:
+                    upcoming_checks[name] = next_run(datetime.now(plan.tz), plan.check_times)
+                else:
+                    upcoming_checks.pop(name, None)
 
         for name in list(known):
             if name not in current:
                 log.info("El experimento %r ya no está activo: se deja de planificar.", name)
                 upcoming.pop(name, None)
+                upcoming_checks.pop(name, None)
         known = current
 
         if not current:
@@ -333,6 +423,15 @@ def main() -> int:
                     name, upcoming[name].strftime("%Y-%m-%d %H:%M %Z"),
                 )
 
+        # The stop checks, after the cycles and one after another like them.
+        for name, plan in current.items():
+            if _stopping:
+                break
+            due = upcoming_checks.get(name)
+            if due is not None and datetime.now(plan.tz) >= due:
+                run_stop_check(name)
+                upcoming_checks[name] = next_run(datetime.now(plan.tz), plan.check_times)
+
         if _stopping:
             break
 
@@ -340,9 +439,9 @@ def main() -> int:
         # noticed even if the next cycle is eight hours away.
         wait = refresh
         for name, plan in current.items():
-            due = upcoming.get(name)
-            if due is not None:
-                wait = min(wait, max(0.0, (due - datetime.now(plan.tz)).total_seconds()))
+            for due in (upcoming.get(name), upcoming_checks.get(name)):
+                if due is not None:
+                    wait = min(wait, max(0.0, (due - datetime.now(plan.tz)).total_seconds()))
         _sleep_a_little(max(1.0, wait))
 
     log.info("Planificador detenido.")

@@ -66,6 +66,17 @@ class MarketDataProvider(Protocol):
     ) -> dict[str, MarketSnapshot]:
         ...
 
+    def fetch_positions(
+        self, symbols: tuple[str, ...] | list[str]
+    ) -> dict[str, MarketSnapshot]:
+        """Snapshots for exactly these symbols: no watchlist, no screener.
+
+        For the stop check (F9.36), which only needs the price of what is held
+        and runs seven times a day: screening the universe each time would be
+        89 symbols of Yahoo traffic to look at five.
+        """
+        ...
+
 
 # ----------------------------------------------------------------------
 # Construccion del snapshot, comun a los dos proveedores
@@ -200,7 +211,14 @@ class YahooMarketData:
     def fetch_snapshots(
         self, must_include: tuple[str, ...] | list[str] = ()
     ) -> dict[str, MarketSnapshot]:
-        symbols = sorted(set(self.watchlist) | set(must_include))
+        return self._snapshots_for(sorted(set(self.watchlist) | set(must_include)))
+
+    def fetch_positions(
+        self, symbols: tuple[str, ...] | list[str]
+    ) -> dict[str, MarketSnapshot]:
+        return self._snapshots_for(sorted(set(symbols)))
+
+    def _snapshots_for(self, symbols: list[str]) -> dict[str, MarketSnapshot]:
         if not symbols:
             return {}
 

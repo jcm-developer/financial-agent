@@ -56,10 +56,21 @@ class StubMarketData:
 
     def __init__(self, closes_by_symbol: dict[str, list[float]]) -> None:
         self.closes = closes_by_symbol
+        #: What each call asked for, so a test can tell a screening fetch from a
+        #: positions-only one (F9.36).
+        self.requests: list[tuple[str, tuple[str, ...]]] = []
 
     def fetch_snapshots(self, must_include=()):
+        self.requests.append(("snapshots", tuple(must_include)))
+        return self._snapshots(sorted(set(self.closes) | set(must_include)))
+
+    def fetch_positions(self, symbols):
+        self.requests.append(("positions", tuple(symbols)))
+        return self._snapshots(sorted(set(symbols)))
+
+    def _snapshots(self, symbols):
         snapshots = {}
-        for symbol in sorted(set(self.closes) | set(must_include)):
+        for symbol in symbols:
             closes = self.closes.get(symbol)
             if not closes:
                 continue

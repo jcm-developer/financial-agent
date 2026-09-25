@@ -644,6 +644,36 @@ def command_close_experiment(settings: Settings) -> int:
     return 0 if report.status == "completed" else 1
 
 
+def command_check_stops(settings: Settings) -> int:
+    """Checks stops and targets without the model (F9.36). The scheduler runs it
+    every hour between cycles.
+
+    Not in `MIRRORED_COMMANDS`: the shared log file is the Ciclos screen's live
+    view, and seven checks a day would overwrite the analysing cycle's log with
+    "nothing hit". What an exit does leave is a cycle in the history.
+
+    Like `close-experiment`, `TradingCycle.build` needs an `LLMClient`; one is
+    built and never called.
+    """
+    with LLMClient(
+        api_key=settings.model_api_key,
+        provider=settings.llm_provider,
+        base_url=settings.model_base_url,
+        model=settings.llm_model,
+        timeout=settings.llm_timeout_seconds,
+    ) as llm:
+        cycle = TradingCycle.build(settings, llm)
+        report = cycle.check_stops()
+
+    if report.status == "skipped":
+        print(f"  {report.halted_reason}")
+        return 0
+    print(f"  Salidas obligatorias: {report.exits_forced}")
+    for error in report.errors:
+        print(f"  Error: {error}", file=sys.stderr)
+    return 0 if report.status == "completed" else 1
+
+
 # ----------------------------------------------------------------------
 
 def command_api(dash: DashboardSettings, *, host: str, port: int) -> int:
@@ -816,12 +846,13 @@ def main(argv: list[str] | None = None) -> int:
         "command",
         nargs="?",
         default="check",
-        choices=["check", "status", "cycle", "close-experiment", "report", "api",
+        choices=["check", "status", "cycle", "close-experiment", "check-stops", "report", "api",
                  "profiles", "new-profile", "import-profile", "activate"],
         help="check: diagnóstico (por defecto). status: estado de la cuenta. "
              "cycle: ejecutar un ciclo. "
              "close-experiment: vender todas las posiciones y cerrar el "
-             "experimento. report: analítica en consola. "
+             "experimento. check-stops: comprobar stops y objetivos sin "
+             "consultar al modelo. report: analítica en consola. "
              "api: API REST + interfaz web. "
              "profiles: listar experimentos. "
              "new-profile: crear un perfil para un mercado. "
@@ -931,6 +962,7 @@ def _dispatch(args, infra: Infra) -> int:
         "status": command_status,
         "cycle": command_cycle,
         "close-experiment": command_close_experiment,
+        "check-stops": command_check_stops,
     }
     try:
         return handlers[args.command](settings)

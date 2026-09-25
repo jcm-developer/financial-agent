@@ -18,7 +18,9 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from src.db import Database
-from tools.scheduler import ScheduleError, load_plans, next_run, parse_times
+from datetime import date
+
+from tools.scheduler import ScheduleError, load_plans, next_run, parse_times, stop_check_times
 
 MADRID = ZoneInfo("Europe/Madrid")
 
@@ -192,3 +194,50 @@ def test_the_timezone_is_the_profiles_own(db):
     make_profile(db, "madrid", cycle_times="17:40", cycle_tz="Europe/Madrid")
 
     assert load_plans(db)[0].tz == ZoneInfo("Europe/Madrid")
+
+
+# -- Stop checks between cycles (F9.36) ---------------------------------------
+
+MADRID = ZoneInfo("Europe/Madrid")
+A_MONDAY = date(2026, 9, 28)
+
+
+def test_stops_are_checked_every_hour_after_the_cycle():
+    """At the cycle's minute, from the hour after it to the end of the window."""
+    assert stop_check_times(
+        [(10, 20)], tz=MADRID, market="eu", bar_interval="1h", today=A_MONDAY
+    ) == ((11, 20), (12, 20), (13, 20), (14, 20), (15, 20), (16, 20), (17, 20))
+
+
+def test_no_check_lands_on_a_cycle():
+    checks = stop_check_times(
+        [(10, 20), (14, 20)], tz=MADRID, market="eu", bar_interval="1h", today=A_MONDAY
+    )
+    assert (14, 20) not in checks
+    assert (15, 20) in checks
+
+
+def test_the_window_is_the_markets_converted_to_the_profiles_zone():
+    """An American profile scheduled in Madrid: New York's window, in Madrid."""
+    checks = stop_check_times(
+        [(16, 20)], tz=MADRID, market="us", bar_interval="1h", today=A_MONDAY
+    )
+    assert checks[0] == (17, 20)
+    assert checks[-1] == (21, 20)
+
+
+def test_daily_bars_get_no_checks():
+    """The price a stop is compared with does not move until the close."""
+    assert stop_check_times([(10, 20)], tz=MADRID, market="eu", bar_interval="1d") == ()
+
+
+def test_the_plan_carries_its_checks(db):
+    profile_id = db.create_profile(name="europa-01")
+    db.update_settings(profile_id, {"market": "eu", "bar_interval": "1h", "cycle_times": "10:20"})
+    db.set_profile_universe(profile_id, ["SAN.MC"])
+    db.set_profile_status(profile_id, "active")
+
+    (plan,) = load_plans(db)
+
+    assert (11, 20) in plan.check_times
+    assert "stops a las 11:20" in plan.describe()
