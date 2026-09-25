@@ -1,6 +1,6 @@
 import type { DerivedLimits } from "@/api/types";
 import { Card, SectionTitle, Stat } from "@/components/pieces";
-import { money, percent } from "@/lib/format";
+import { decimal, money, percent } from "@/lib/format";
 
 /**
  * What the limits in force are, in numbers.
@@ -49,6 +49,13 @@ interface Props {
 const HAND_SET = "Fijado a mano.";
 
 /**
+ * For the two figures that are a pair. Split over two lines they made the card
+ * two rows taller than the Riesgo card beside it; kept whole from `sm`, where
+ * each column has room, and allowed to wrap on a phone, where it does not.
+ */
+const KEEP_WHOLE = "sm:whitespace-nowrap";
+
+/**
  * The panel showing the eleven limits in force.
  *
  * @param props - Panel props.
@@ -92,6 +99,7 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
         <Stat
           label="Posición"
           value={`${percent(limits.min_position_pct)} – ${percent(limits.max_position_pct)}`}
+          valueClass={KEEP_WHOLE}
           title={origin("max_position_pct") ?? origin("min_position_pct")}
         />
         <Stat
@@ -119,7 +127,8 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
         />
         <Stat
           label="Stop"
-          value={`${limits.stop_atr_multiple}× ATR · ${limits.stop_sigmas}σ`}
+          value={`${decimal(limits.stop_atr_multiple)}× ATR · ${decimal(limits.stop_sigmas)}σ`}
+          valueClass={KEEP_WHOLE}
           title={
             origin("stop_atr_multiple") ??
             `Sigmas sobre un horizonte de ${limits.horizon_days} días.`
@@ -127,12 +136,12 @@ export function DerivedLimitsPanel({ limits, symbol, stale = false, source }: Pr
         />
         <Stat
           label="Beneficio/riesgo mínimo"
-          value={String(limits.min_reward_risk)}
+          value={decimal(limits.min_reward_risk)}
           title={origin("min_reward_risk")}
         />
         <Stat
           label="Objetivo mínimo"
-          value={`${limits.min_target_sigma}σ`}
+          value={`${decimal(limits.min_target_sigma)}σ`}
           title={
             origin("min_target_sigma") ??
             "Recorrido mínimo del objetivo, en sigmas del horizonte."

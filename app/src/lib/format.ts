@@ -15,6 +15,8 @@ const NUMBER = new Intl.NumberFormat("es-ES", {
 
 const INTEGER = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 });
 
+const RATIO = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 });
+
 /**
  * The sign the **printed** number deserves, which is not always the sign of the
  * number underneath.
@@ -98,6 +100,22 @@ export function percent(
   // into play for the value that rounds to zero, which is the one whose minus
   // has to go.
   return `${NUMBER.format(mark === "" ? Math.abs(value) : value)}%`;
+}
+
+/**
+ * Formats a plain ratio or multiple with a decimal comma and at most two decimals.
+ *
+ * Exists because the limits panel printed `7.94× ATR · 0.7σ` with `String()`
+ * while the summary line above it said `7,94` and `0,7`: the same figure in two
+ * notations on one screen. Trailing zeros are dropped, as in that line —a stop
+ * of 3× reads `3×`, not `3,00×`.
+ *
+ * @param value - Number to format. Null or undefined renders as an em dash.
+ * @return The formatted number, or `—` when there is no value.
+ */
+export function decimal(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  return RATIO.format(value);
 }
 
 /**

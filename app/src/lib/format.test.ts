@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { fileSize, money, percent, sentence, signClass, signedMoney } from "@/lib/format";
+import { decimal, fileSize, money, percent, sentence, signClass, signedMoney } from "@/lib/format";
 
 /**
  * The signs, which had a bug on screen and therefore have tests now.
@@ -115,6 +115,22 @@ describe("sentence", () => {
       "En marcha, lanzado por el planificador",
     );
     expect(sentence("")).toBe("");
+  });
+});
+
+describe("decimal", () => {
+  it("uses a decimal comma, like the summary line above the limits", () => {
+    expect(decimal(7.94)).toBe("7,94");
+    expect(decimal(0.7)).toBe("0,7");
+    expect(decimal(1.29)).toBe("1,29");
+  });
+
+  it("drops trailing zeros", () => {
+    expect(decimal(3)).toBe("3");
+  });
+
+  it("renders a missing value as an em dash", () => {
+    expect(decimal(null)).toBe("—");
   });
 });
 
