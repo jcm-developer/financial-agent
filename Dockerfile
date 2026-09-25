@@ -55,6 +55,28 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Usuario sin privilegios, creado antes de copiar el codigo para que Claude Code
+# se instale en su home y en una capa que no se rehace con cada cambio.
+RUN useradd --create-home --uid 10001 bot
+
+# Claude Code, para los perfiles con `llm_provider='anthropic'` (F9.35): el
+# modelo se llama con el comando `claude` y la suscripcion, no con la API. Va en
+# la imagen y no en un servicio aparte porque el ciclo lo lanzan dos procesos
+# -el planificador y la API, al pulsar «Lanzar»- y los dos usan esta imagen.
+#
+# La version va fijada, y el autoactualizador apagado: un CLI que se actualiza
+# solo cambia sus flags debajo del experimento, y los flags son los que separan
+# 186 tokens de entrada de 8.389 (ver src/claude_cli.py). curl solo hace falta
+# para el instalador.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+USER bot
+RUN curl -fsSL https://claude.ai/install.sh | bash -s 2.1.185
+ENV PATH="/home/bot/.local/bin:${PATH}" \
+    DISABLE_AUTOUPDATER=1
+USER root
+
 COPY . .
 
 # El build de React, en la ruta exacta donde lo busca `APP_DIST` de
@@ -62,10 +84,9 @@ COPY . .
 # frontend" y cuesta un rato averiguar por que.
 COPY --from=frontend /build/dist ./app/dist
 
-# Usuario sin privilegios. El directorio de datos se crea aqui con el dueno
-# correcto para que el volumen sea escribible sin ejecutar como root.
-RUN useradd --create-home --uid 10001 bot \
- && mkdir -p /app/data \
+# El directorio de datos se crea aqui con el dueno correcto para que el
+# volumen sea escribible sin ejecutar como root.
+RUN mkdir -p /app/data \
  && chown -R bot:bot /app
 USER bot
 

@@ -6,12 +6,12 @@ response format, so the difference between them is literally the base URL and th
 key: there are not two implementations, there is one with a table of providers.
 That is why httpx is enough and the project still drags in no SDK.
 
-**Anthropic is deliberately not here.** Its API has another shape —`/v1/messages`,
-different headers, the system prompt outside `messages`,
-`input_tokens`/`output_tokens` instead of `prompt_tokens`/`completion_tokens`— and
-its documentation asks you to use the official SDK rather than speak HTTP by
-hand. That is a new dependency and a genuine second implementation, not a row in
-a table; it is left for F9.1, when there is a reason to pay for a premium model.
+**Claude is the exception, and it does not go over HTTP** (F9.35). Its API has
+another shape and asks for its own SDK (F9.1), and it is billed per token. What
+the project uses instead is the `claude` command line on the owner's
+subscription, in [claude_cli.py](claude_cli.py): the provider row says
+`transport="cli"` and `LLMClient` hands the call over, so the analyst and the
+cycle do not know the difference.
 
 **The response is read as a stream, and it is worth being clear about what that
 does and does not buy** (F9.22), because it was adopted chasing a failure it
@@ -60,6 +60,7 @@ from typing import Any
 
 import httpx
 
+from .claude_cli import ClaudeCli, ClaudeCliError, usage_tokens
 from .formatting import compact
 
 log = logging.getLogger(__name__)
@@ -80,6 +81,7 @@ class Provider:
     name: str
     label: str            # for the error messages, which a person reads
     default_base_url: str
+    transport: str = "http"   # "http": /chat/completions; "cli": claude_cli.py
 
 
 PROVIDERS: dict[str, Provider] = {
@@ -87,19 +89,17 @@ PROVIDERS: dict[str, Provider] = {
         "nvidia", "NVIDIA NIM", "https://integrate.api.nvidia.com/v1"
     ),
     "openai": Provider("openai", "OpenAI", "https://api.openai.com/v1"),
+    # The value the schema's CHECK already admitted, reused rather than adding a
+    # `claude-code` that SQLite could only take by rebuilding `agent_settings`.
+    # Whether it bills is decided by the key, not by the provider: see
+    # claude_cli.py.
+    "anthropic": Provider("anthropic", "Claude", "", transport="cli"),
 }
 
 # Providers the `agent_settings.llm_provider` column admits but that are not
 # implemented yet. They are named so the failure says "not yet", which is the
-# truth, instead of "unknown provider", which confuses.
-PLANNED_PROVIDERS = {
-    "anthropic": (
-        "El proveedor 'anthropic' no está implementado todavía. "
-        "Su API no sigue el formato de NIM y OpenAI y necesita su SDK "
-        "oficial, que hoy no forma parte del proyecto. "
-        f"Proveedores disponibles: {', '.join(sorted(PROVIDERS))}."
-    ),
-}
+# truth, instead of "unknown provider", which confuses. Empty since F9.35.
+PLANNED_PROVIDERS: dict[str, str] = {}
 
 
 def resolve_provider(name: str) -> Provider:
@@ -178,6 +178,16 @@ class LLMClient:
                 "Se configura en los ajustes del perfil o, para NVIDIA NIM, en "
                 "la variable de entorno NVIDIA_API_KEY."
             )
+        self._cli: ClaudeCli | None = None
+        self._client: httpx.Client | None = None
+        if self.provider.transport == "cli":
+            self._cli = ClaudeCli(
+                api_key=api_key,
+                model=model,
+                timeout=timeout,
+                effort=self.reasoning_effort,
+            )
+            return
         self._client = httpx.Client(
             base_url=(base_url or self.provider.default_base_url).rstrip("/"),
             timeout=httpx.Timeout(timeout),
@@ -189,7 +199,10 @@ class LLMClient:
         )
 
     def close(self) -> None:
-        self._client.close()
+        if self._client is not None:
+            self._client.close()
+        if self._cli is not None:
+            self._cli.close()
 
     def __enter__(self) -> LLMClient:
         return self
@@ -211,9 +224,12 @@ class LLMClient:
         Raises `LLMError` if no parsable JSON is obtained after the retries: we
         would rather skip the symbol than trade on a guess.
         """
-        response = self._post_chat(
-            system=system, user=user, max_tokens=max_tokens or self.max_tokens
-        )
+        if self._cli is not None:
+            response = self._run_cli(system=system, user=user)
+        else:
+            response = self._post_chat(
+                system=system, user=user, max_tokens=max_tokens or self.max_tokens
+            )
         if response.parsed is None:
             raise LLMError(
                 f"El modelo {self.model} no devolvió un JSON válido. "
@@ -341,6 +357,51 @@ class LLMClient:
 
         raise LLMError(
             f"No se pudo completar la llamada a {self.provider.label} tras "
+            f"{self.max_retries} intentos: {last_error}"
+        )
+
+    def _run_cli(self, *, system: str, user: str) -> LLMResponse:
+        """The same contract as `_post_chat`, over the `claude` command.
+
+        Neither the temperature nor the token ceiling reach the model: the CLI
+        takes neither, and Sonnet 5 refuses a temperature anyway. That is why
+        the profile carries `llm_temperature` 1, so `cycles.settings_json` does
+        not claim a 0,2 the model never saw.
+        """
+        assert self._cli is not None
+        last_error: Exception | None = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                result, latency_ms = self._cli.complete(system=system, user=user)
+            except ClaudeCliError as exc:
+                if not exc.retryable:
+                    raise LLMError(str(exc)) from exc
+                last_error = exc
+                log.warning("Fallo al llamar a Claude (intento %d de %d): %s",
+                            attempt, self.max_retries, exc)
+                if attempt < self.max_retries:
+                    self._sleep_backoff(attempt)
+                continue
+            text = str(result.get("result") or "")
+            prompt_tokens, completion_tokens = usage_tokens(result)
+            return LLMResponse(
+                content=text,
+                parsed=extract_json_object(text),
+                model=self.model,
+                latency_ms=latency_ms,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                # `total_cost_usd` is what the call would have cost on the API;
+                # on the subscription it is not billed. Kept for debugging, like
+                # the other providers' `raw`: nothing persists it today.
+                raw={
+                    "usage": result.get("usage"),
+                    "model_usage": result.get("modelUsage"),
+                    "total_cost_usd": result.get("total_cost_usd"),
+                },
+            )
+        raise LLMError(
+            f"No se pudo completar la llamada a Claude tras "
             f"{self.max_retries} intentos: {last_error}"
         )
 
