@@ -145,6 +145,18 @@ class LLMClient:
         self.max_retries = max_retries
         self._supports_json_mode = True
         self._supports_usage_in_stream = True
+        #: Name of the output ceiling. OpenAI's reasoning models (GPT-6) refuse
+        #: `max_tokens` with a 400 and ask for `max_completion_tokens`, measured on
+        #: the 2026-09-25 with `gpt-6-sol`: 3 of 3 calls lost. It is negotiated
+        #: like the extras below instead of keyed on the provider, because NIM
+        #: takes the old name and a model string says nothing reliable about
+        #: which one it wants.
+        self._token_field = "max_tokens"
+        #: Reasoning models may also accept only their default temperature.
+        #: Dropping it is logged as a WARNING because it is not neutral: the
+        #: profile's `llm_temperature` is still what `cycles.settings_json` says,
+        #: and from then on it is not what the model ran with.
+        self._supports_temperature = True
         if not api_key:
             raise LLMError(
                 f"Falta la clave de API de {self.provider.label}. "
@@ -199,8 +211,6 @@ class LLMClient:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "temperature": self.temperature,
-            "max_tokens": max_tokens,
             "stream": True,
         }
 
@@ -212,6 +222,9 @@ class LLMClient:
         attempt = 0
         while attempt < self.max_retries:
             body = dict(payload)
+            body[self._token_field] = max_tokens
+            if self._supports_temperature:
+                body["temperature"] = self.temperature
             if self._supports_json_mode:
                 body["response_format"] = {"type": "json_object"}
             if self._supports_usage_in_stream:
@@ -321,8 +334,29 @@ class LLMClient:
         `/chat/completions` and not every deployment takes them. The error body
         usually names the offending one; when it does not, they are dropped in
         order, which costs a round trip and no attempt.
+
+        The token ceiling and the temperature are handled first and **only when
+        the error names them**. They are not extras that can be dropped blind:
+        before this, OpenAI's «Use 'max_completion_tokens' instead» named neither
+        extra, so the fallback switched off the JSON mode —which was not the
+        problem— and then `stream_options`, and the call failed anyway.
         """
         lowered = error_body.lower()
+        if (
+            self._token_field == "max_tokens"
+            and "max_tokens" in lowered
+            and "max_completion_tokens" in lowered
+        ):
+            self._token_field = "max_completion_tokens"
+            return "max_tokens"
+        if "temperature" in lowered and self._supports_temperature:
+            self._supports_temperature = False
+            log.warning(
+                "El modelo %s no acepta temperature=%s: corre con la suya por "
+                "defecto, que no es la que dice el perfil.",
+                self.model, self.temperature,
+            )
+            return "temperature"
         named = [n for n in ("response_format", "stream_options") if n in lowered]
         for name in named or ["response_format", "stream_options"]:
             if name == "response_format" and self._supports_json_mode:

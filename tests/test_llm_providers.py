@@ -217,6 +217,86 @@ def test_a_refused_response_format_is_still_dropped():
     assert "stream_options" in sent_body(seen[1])
 
 
+#: The body `gpt-6-sol` returned on the 2026-09-25, trimmed.
+OPENAI_MAX_TOKENS_400 = {
+    "error": {
+        "message": "Unsupported parameter: 'max_tokens' is not supported with "
+                   "this model. Use 'max_completion_tokens' instead.",
+        "param": "max_tokens",
+        "code": "unsupported_parameter",
+    }
+}
+
+
+def test_a_refused_max_tokens_becomes_max_completion_tokens():
+    """F9.26: GPT-6 lost 3 of 3 calls on this. The ceiling keeps its value,
+    only its name changes, and no attempt is spent."""
+    client, seen = stub(
+        httpx.Response(400, json=OPENAI_MAX_TOKENS_400), ok_stream(), max_retries=1
+    )
+
+    response = client.complete_json(system="s", user="u", max_tokens=1600)
+
+    assert response.parsed == {"action": "hold"}
+    assert "max_tokens" not in sent_body(seen[1])
+    assert sent_body(seen[1])["max_completion_tokens"] == 1600
+
+
+def test_the_token_error_does_not_switch_off_the_json_mode():
+    """The error named neither extra, so before F9.26 the blind fallback
+    dropped `response_format` first -- the one thing that was not wrong."""
+    client, seen = stub(
+        httpx.Response(400, json=OPENAI_MAX_TOKENS_400), ok_stream(), max_retries=1
+    )
+
+    client.complete_json(system="s", user="u")
+
+    assert sent_body(seen[1])["response_format"] == {"type": "json_object"}
+    assert "stream_options" in sent_body(seen[1])
+
+
+def test_the_renamed_ceiling_is_kept_for_the_rest_of_the_session():
+    """Negotiated once per client, like the extras: a cycle is 40 calls and
+    paying a 400 round trip on each would be noise in the latency."""
+    client, seen = stub(httpx.Response(400, json=OPENAI_MAX_TOKENS_400), ok_stream())
+
+    client.complete_json(system="s", user="u")
+    client.complete_json(system="s", user="u")
+
+    assert len(seen) == 3
+    assert "max_completion_tokens" in sent_body(seen[2])
+
+
+def test_a_refused_temperature_is_dropped_and_said(caplog):
+    """Not neutral: from then on the model does not run with the profile's
+    temperature, so it goes to the log that the Cycles screen shows."""
+    client, seen = stub(
+        httpx.Response(400, json={"error": {
+            "message": "Unsupported value: 'temperature' does not support 0.2 "
+                       "with this model. Only the default (1) value is supported.",
+        }}),
+        ok_stream(),
+        max_retries=1,
+    )
+
+    with caplog.at_level("WARNING"):
+        client.complete_json(system="s", user="u")
+
+    assert "temperature" not in sent_body(seen[1])
+    assert "response_format" in sent_body(seen[1])
+    assert "temperature" in caplog.text
+
+
+def test_nim_still_gets_max_tokens():
+    """The provider that did not complain is not moved to the new name."""
+    client, seen = stub(ok_stream())
+
+    client.complete_json(system="s", user="u", max_tokens=1600)
+
+    assert sent_body(seen[0])["max_tokens"] == 1600
+    assert "max_completion_tokens" not in sent_body(seen[0])
+
+
 def test_a_400_that_names_nothing_ends_up_failing():
     """The negotiation is bounded: once both extras are off, a 400 is a real
     error and is not retried for ever."""
