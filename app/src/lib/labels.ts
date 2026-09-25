@@ -67,6 +67,7 @@ const RULE: Record<string, string> = {
   take_profit_hit: "objetivo alcanzado",
   llm_exit: "salida del analista",
   experiment_closed: "experimento cerrado",
+  entry_cap: "sin plaza en el ciclo",
 };
 
 function lookup(table: Record<string, string>, value: string | null | undefined): string {

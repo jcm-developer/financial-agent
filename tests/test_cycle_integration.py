@@ -282,9 +282,65 @@ def test_a_cycle_opens_at_most_the_configured_number_of_new_positions(db):
     report = make_cycle(db, settings, StubLLM(entry=BUY, exit_=HOLD_EXIT), market).run()
 
     assert len(db.query("select * from sim_positions")) == 2
-    # And the third one was not even asked about: the cap cuts before the model
-    # call, so the quota is not spent producing proposals that cannot execute.
-    assert report.analyst_calls == 2
+    # The third one is asked about too since F9.19: the cycle analyses every
+    # candidate first and only then hands out the money.
+    assert report.analyst_calls == 3
+
+
+def test_the_money_goes_to_the_highest_conviction_not_the_first_in_line(db):
+    """F9.19. Analysing and executing in one pass gave the two slots to the first
+    two `buy` of the screener's ranking, whatever the model thought of the rest."""
+    settings = make_settings(
+        watchlist=("AAPL", "MSFT", "NVDA"), max_new_positions_per_cycle=2
+    )
+    market = StubMarketData({s: rising() for s in ("AAPL", "MSFT", "NVDA")})
+    llm = StubLLM(entry=BUY, exit_=HOLD_EXIT, entry_by_symbol={
+        "AAPL": {**BUY, "conviction": 70},
+        "MSFT": {**BUY, "conviction": 60},
+        "NVDA": {**BUY, "conviction": 90},
+    })
+
+    make_cycle(db, settings, llm, market).run()
+
+    held = {row["symbol"] for row in db.query("select symbol from sim_positions")}
+    assert held == {"NVDA", "AAPL"}
+
+
+def test_a_buy_left_without_a_slot_says_so(db):
+    """Analysed and not funded is part of what the model said: it is recorded
+    with its own rule instead of vanishing."""
+    settings = make_settings(
+        watchlist=("AAPL", "MSFT", "NVDA"), max_new_positions_per_cycle=2
+    )
+    market = StubMarketData({s: rising() for s in ("AAPL", "MSFT", "NVDA")})
+    llm = StubLLM(entry=BUY, exit_=HOLD_EXIT, entry_by_symbol={
+        "MSFT": {**BUY, "conviction": 60},
+    })
+
+    report = make_cycle(db, settings, llm, market).run()
+
+    events = db.query(
+        "select symbol, verdict, rule from risk_events where cycle_id = ? and rule = 'entry_cap'",
+        (report.cycle_id,),
+    )
+    assert [(e["symbol"], e["verdict"]) for e in events] == [("MSFT", "rejected")]
+
+
+def test_a_full_book_asks_the_model_nothing(db):
+    """The quota-saving cut stays where it does save: with no free slot there is
+    nothing to choose between."""
+    settings = make_settings(
+        watchlist=("AAPL", "MSFT", "NVDA"),
+        risk=RiskLimits(min_conviction=65, max_open_positions=2),
+    )
+    market = StubMarketData({s: rising() for s in ("AAPL", "MSFT", "NVDA")})
+    llm = StubLLM(entry=BUY, exit_=HOLD_EXIT)
+    make_cycle(db, settings, llm, market).run()
+    llm.calls.clear()
+
+    make_cycle(db, settings, llm, StubMarketData({s: rising(81) for s in ("AAPL", "MSFT", "NVDA")})).run()
+
+    assert "entry" not in llm.calls
 
 
 def test_without_a_cap_a_cycle_fills_as_far_as_the_limits_let_it(db):
@@ -466,10 +522,13 @@ def test_a_stop_asked_for_mid_cycle_is_honoured_and_the_row_is_closed(db, tmp_pa
     assert row["finished_at"] is not None
     assert "Parada solicitada" in row["error"]
 
-    # What it had already done stands, and that is deliberate: the position is
-    # open, with its stop, and undoing it would be trading on nobody's decision.
-    assert report.orders_submitted == 1
-    assert len(db.get_open_positions(_portfolio(db))) == 1
+    # Nothing was bought, and since F9.19 that is the design: the money is handed
+    # out only once every candidate has been analysed, so the first candidate's
+    # `buy` was still an opinion, recorded as a decision, not an order. What a
+    # cycle had already done before a stop —its exits— still stands.
+    assert report.orders_submitted == 0
+    assert len(db.get_open_positions(_portfolio(db))) == 0
+    assert len(db.query("select * from decisions")) == 1
 
     # And the request is gone, so the scheduler's next cycle is not stopped too.
     assert stop_signal.pending(settings.db_path) is None

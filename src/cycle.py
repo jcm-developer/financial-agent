@@ -983,27 +983,31 @@ class TradingCycle:
         log.info("Evaluando %d candidatos a entrada.", len(candidates))
 
         # Cuantas puede abrir este ciclo (F9.18). 0 = sin tope.
-        #
-        # El corte va **antes de llamar al modelo**, no despues de aprobar: una vez
-        # alcanzado el tope, seguir preguntando gasta cuota para producir propuestas
-        # que no se pueden ejecutar, y el ciclo siguiente vuelve a mirar los mismos
-        # simbolos con datos mas frescos. Lo que se pierde es el registro de esas
-        # opiniones; lo que se gana es que el ciclo dure lo que dice durar.
         per_cycle_cap = self.settings.max_new_positions_per_cycle
         opened_this_cycle = 0
 
-        for symbol in candidates:
-            if len(account.positions) >= self.settings.risk.max_open_positions:
-                log.info("Alcanzado el límite de posiciones abiertas; se detiene la búsqueda.")
-                break
-            if per_cycle_cap > 0 and opened_this_cycle >= per_cycle_cap:
-                log.info(
-                    "Alcanzado el tope de %d entradas nuevas por ciclo; los %d candidatos "
-                    "restantes se dejan para el ciclo siguiente.",
-                    per_cycle_cap, len(candidates) - candidates.index(symbol),
-                )
-                break
+        # ⚠️ **Dos pasadas: primero se analiza todo, y solo entonces se reparte**
+        # (F9.19). Hasta el 2026-09-26 el ciclo analizaba y ejecutaba en la misma
+        # pasada, asi que con un tope de dos entradas se llevaban el dinero las dos
+        # primeras `buy` del ranking del screener, y las siguientes ni se
+        # preguntaban. La conviccion del modelo no decidia que se compraba, y eso
+        # es justo lo que tres perfiles con tres modelos intentan comparar.
+        #
+        # Lo que cuesta: con plazas libres se analizan siempre los veinte
+        # candidatos, en vez de cortar al llenar el tope. El corte que ahorra
+        # cuota se queda donde si sirve: con la cartera llena no se pregunta nada.
+        #
+        # Lo que no cuesta, aunque lo pareciera: precio. Todas las ordenes del
+        # ciclo se ejecutan a la apertura de la misma barra, fijada al bajar los
+        # datos, asi que da igual mandar la primera a las 10:21 o a las 10:40. Eso
+        # cambiara con F9.3, al ejecutar a precio vivo.
+        if len(account.positions) >= self.settings.risk.max_open_positions:
+            log.info("Cartera llena: no se evalúan entradas en este ciclo.")
+            return
 
+        # --- 6a. Analizar todos los candidatos ------------------------------
+        buys: list[tuple[Proposal, MarketSnapshot, str | None]] = []
+        for symbol in candidates:
             self._check_stop(cycle_id)
             snapshot = snapshots[symbol]
             proposal = self.analyst.evaluate_entry(
@@ -1019,6 +1023,42 @@ class TradingCycle:
             if proposal.action != "buy":
                 continue
             report.proposals_buy += 1
+            buys.append((proposal, snapshot, decision_id))
+
+        # --- 6b. Repartir, de mas a menos conviccion -------------------------
+        # Por conviccion y no por sigmas de recorrido prometido: es la cifra con
+        # la que el propio modelo dice cuanto se fia, y la que F9.27 calibrara.
+        # `sorted` es estable, asi que a igual conviccion manda el orden del
+        # screener, que es el desempate que ya se tenia.
+        self._check_stop(cycle_id)
+        ranked = sorted(buys, key=lambda item: -item[0].conviction)
+        if len(ranked) > 1:
+            log.info(
+                "Propuestas de compra por convicción: %s",
+                ", ".join(f"{p.symbol} ({p.conviction})" for p, _, _ in ranked),
+            )
+
+        for proposal, snapshot, decision_id in ranked:
+            symbol = proposal.symbol
+            full = len(account.positions) >= self.settings.risk.max_open_positions
+            capped = per_cycle_cap > 0 and opened_this_cycle >= per_cycle_cap
+            if full or capped:
+                # Recorded, not dropped: a `buy` that was analysed and did not get
+                # money is part of what the model said, and the Riesgo screen and
+                # F9.27 need to see why it was not executed.
+                reason = (
+                    "Sin plaza: la cartera ha llegado a su máximo de posiciones."
+                    if full else
+                    f"Sin plaza: el ciclo ya ha abierto {opened_this_cycle} entradas, "
+                    f"su tope. Había propuestas con más convicción."
+                )
+                self._save_risk_event(
+                    cycle_id, portfolio_id, symbol, _rejection("entry_cap", reason),
+                    decision_id,
+                )
+                report.rejected += 1
+                log.info("SIN PLAZA %s (convicción %d)", symbol, proposal.conviction)
+                continue
 
             atr = _opt_float(snapshot.indicators.get("atr_14"))
             verdict = self.risk.evaluate_entry(proposal, account, atr)
@@ -1046,8 +1086,8 @@ class TradingCycle:
                 decision_id, risk_event_id,
             ):
                 opened_this_cycle += 1
-                # Refreshed so the limits for the following candidates account
-                # for the position just opened.
+                # Refreshed so the limits for the following proposals account for
+                # the position just opened.
                 account = self.broker.get_account_state()
                 report.equity_end = account.equity
 

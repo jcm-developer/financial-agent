@@ -110,8 +110,9 @@ modelo.
                    (criba con barras DIARIAS, que son también las de los indicadores)
 6. Salidas obligatorias  stop y objetivo de cada posición abierta   SIN LLM
 7. Revisión de salidas   1 llamada por posición abierta      sell | hold
-8. Entradas             1 llamada por candidato              buy  | hold
-9. Risk manager    aprueba, redimensiona o rechaza cada propuesta   DETERMINISTA
+8. Entradas             1 llamada por candidato, TODOS       buy  | hold
+9. Reparto + risk manager  las `buy` de más a menos convicción:
+                   aprueba, redimensiona o rechaza hasta llenar el tope   DETERMINISTA
 10. Broker         ejecuta lo aprobado
 11. Cierre         equity_snapshot y estado final del ciclo
 ```
@@ -197,7 +198,10 @@ Tres consecuencias que hay que asumir:
   control») en vez de dar el clic por hecho.
 - **Lo que ya hizo, hecho está.** Las órdenes enviadas antes de la parada siguen
   enviadas y las posiciones abiertas, abiertas, con su stop. Deshacerlas sería
-  operar por decisión de nadie.
+  operar por decisión de nadie. Desde F9.19 eso son solo las salidas: el dinero se
+  reparte cuando ya se han analizado todos los candidatos, así que **una parada
+  durante el análisis no compra nada** —las `buy` quedan como decisiones, no como
+  órdenes—.
 - **Es un ciclo parcial en el histórico.** Analizó unos símbolos y no otros, y eso
   se lee en `decisions`: no es una sesión tranquila, es una sesión cortada.
 
@@ -221,17 +225,29 @@ justamente no tenemos sería peor que aguantar.
 
 ---
 
-⚠️ **Un ciclo no puede abrir posiciones sin límite, y el orden en que las abre no
-es alfabético** (F9.18). El paso 8 analiza y **ejecuta en la misma pasada**,
-gastando la caja al pasar, así que el orden de los candidatos era el criterio real
-de asignación del capital — y dos `sorted()` lo dejaban en manos de la inicial del
-ticker. Medido: el primer ciclo del experimento abrió cinco posiciones en nueve
-minutos —ABI, ADS, AENA, CS, GRF— y dejó 110 € de caja para los diecinueve
-análisis siguientes. Ahora los candidatos llegan **en orden de puntuación del
-screener** y `max_new_positions_per_cycle` topa cuántas abre un ciclo. El corte va
-**antes de llamar al modelo**: pasado el tope, preguntar gasta cuota para producir
-propuestas que no se pueden ejecutar. Lo que sigue faltando —elegir entre las 20
-propuestas en vez de coger las dos primeras del ranking— es **F9.19**.
+⚠️ **Un ciclo no puede abrir posiciones sin límite, y el dinero va a las
+propuestas de más convicción, no a las primeras que llegan** (F9.18 y F9.19).
+Hasta F9.18 el paso 8 analizaba y ejecutaba en la misma pasada, gastando la caja
+al pasar, y dos `sorted()` dejaban el reparto en manos de la inicial del ticker:
+el primer ciclo del experimento de agosto abrió cinco posiciones en nueve minutos
+—ABI, ADS, AENA, CS, GRF— y dejó 110 € de caja para los diecinueve análisis
+siguientes. F9.18 puso el orden del screener y el tope
+`max_new_positions_per_cycle`, pero seguía siendo **una sola pasada**: con un tope
+de dos, se llevaban el dinero las dos primeras `buy` del ranking y las demás ni se
+preguntaban, así que la convicción del modelo no decidía qué se compraba.
+
+**Desde el 2026-09-26 son dos pasadas** (F9.19): primero se analizan los veinte
+candidatos, y solo entonces se reparte entre los que dijeron `buy`, **de más a
+menos convicción** —a igual convicción, en el orden del screener—. Las que se
+quedan fuera por el tope quedan registradas con la regla `entry_cap`, «sin plaza en
+el ciclo». Dos consecuencias:
+
+- **Con plazas libres se analizan siempre los veinte**, en vez de cortar al llenar
+  el tope. Con la cartera llena no se pregunta nada, que es donde el corte sí
+  ahorraba.
+- **No cambia el precio de ejecución**: todas las órdenes del ciclo salen a la
+  apertura de la misma barra, fijada al bajar los datos. Con F9.3, a precio vivo,
+  sí importaría cuánto tarda el análisis.
 
 ---
 
@@ -549,7 +565,6 @@ Para no volver a preguntárselo:
 | Aplicar el tope por sector (lo calcula y no lo hace cumplir) | **FE.12** / **F6.5** |
 | Operar en corto | `allow_shorts` existe y está a 0 |
 | Cerrar por horizonte cumplido (`horizon_days` fija la escala del objetivo y del suelo, pero no cierra ninguna posición al expirar) | — |
-| Elegir entre las propuestas de un ciclo: coge las mejor puntuadas por el screener, no las de más convicción | **F9.19** |
 | Usar `cash_reserve_pct`, que está en el esquema y en la interfaz y no lo lee nadie | **F9.17** (apuntado, no arreglado) |
 | Convertir divisa | **nunca**, es una restricción del diseño (D8) |
 | Operar con dinero real | **nunca**, el único broker es el simulador |
@@ -564,9 +579,9 @@ Para no volver a preguntárselo:
 3. El **planificador** lanza un ciclo a cada hora configurada del perfil y, entre
    uno y otro, comprueba los stops cada hora sin consultar al modelo (F9.36).
 4. Cada ciclo: screener determinista criba 89 → 20; el modelo opina sobre esos 20
-   —**en orden de puntuación**, que es el orden en que se gasta la caja— y sobre
-   cada posición abierta; el risk manager decide; el broker ejecuta, hasta
-   `max_new_positions_per_cycle` entradas nuevas.
+   y sobre cada posición abierta; **solo después** se reparte el dinero entre las
+   `buy`, de más a menos convicción; el risk manager decide y el broker ejecuta,
+   hasta `max_new_positions_per_cycle` entradas nuevas (F9.19).
 4 bis. **El plazo del perfil (`horizon_days`) fija el tamaño del objetivo y la
    distancia del stop**: los dos se miden en sigmas de ese plazo (sección 7 bis y
    sección 4). Una sigma a 45 días son 12,1 % del precio; a 180, 24,3 %.

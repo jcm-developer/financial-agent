@@ -31,15 +31,23 @@ class StubLLM:
     """Returns a fixed response depending on whether it is asked about an entry
     or an exit. It tells them apart by the system prompt, as the model would."""
 
-    def __init__(self, *, entry: dict, exit_: dict) -> None:
+    def __init__(
+        self, *, entry: dict, exit_: dict, entry_by_symbol: dict[str, dict] | None = None
+    ) -> None:
         self.entry = entry
         self.exit = exit_
+        #: A different entry answer per symbol, found in the prompt, so a test can
+        #: give each candidate its own conviction (F9.19).
+        self.entry_by_symbol = entry_by_symbol or {}
         self.calls: list[str] = []
 
     def complete_json(self, *, system: str, user: str, max_tokens: int = 1600):
         is_exit = "gestor de riesgo discrecional" in system
         self.calls.append("exit" if is_exit else "entry")
-        parsed = self.exit if is_exit else self.entry
+        parsed = self.exit if is_exit else next(
+            (answer for symbol, answer in self.entry_by_symbol.items() if symbol in user),
+            self.entry,
+        )
         return LLMResponse(
             content=str(parsed), parsed=parsed, model="stub-model",
             latency_ms=12, prompt_tokens=100, completion_tokens=20,
