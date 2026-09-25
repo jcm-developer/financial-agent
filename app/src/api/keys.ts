@@ -38,6 +38,7 @@ export const keys = {
    */
   quotesMeta: () => ["quotes", "meta"] as const,
   ingestStatus: () => ["ingest-status"] as const,
+  databaseSchema: () => ["database", "schema"] as const,
 
   cycleControl: () => ["cycles", "control"] as const,
   cycles: (profile: string) => ["cycles", profile] as const,

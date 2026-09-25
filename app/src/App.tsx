@@ -10,6 +10,7 @@ import {
 } from "@/legacyRoutes";
 import { Compare } from "@/pages/Compare";
 import { Cycles } from "@/pages/Cycles";
+import { Database } from "@/pages/Database";
 import { Decisions } from "@/pages/Decisions";
 import { Diagnostics } from "@/pages/Diagnostics";
 import { Home } from "@/pages/Home";
@@ -58,6 +59,7 @@ export function App() {
           <Route path="profiles" element={<Profiles />} />
           <Route path="compare" element={<Compare />} />
           <Route path="diagnostics" element={<Diagnostics />} />
+          <Route path="database" element={<Database />} />
 
           {/*
             The routes F8.8 renamed (F8.10). They are mapped from the tables in

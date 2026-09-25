@@ -7,6 +7,7 @@ import type {
   Analytics,
   CycleControl,
   CycleDetail,
+  DatabaseSchema,
   DerivedLimits,
   IngestStatus,
   MarketInfo,
@@ -153,6 +154,23 @@ export function useIngestStatus() {
     queryFn: ({ signal }) =>
       api.get<IngestStatus>("/api/ingest-status", undefined, signal),
     staleTime: Infinity,
+  });
+}
+
+/**
+ * The database's tables, columns, relations and weight.
+ *
+ * Not refreshed on its own: the schema changes with a deploy, and the weights
+ * move slowly enough that the page's own reload is the right cadence.
+ *
+ * @return The query for `GET /api/database/schema`.
+ */
+export function useDatabaseSchema() {
+  return useQuery({
+    queryKey: keys.databaseSchema(),
+    queryFn: ({ signal }) =>
+      api.get<DatabaseSchema>("/api/database/schema", undefined, signal),
+    staleTime: 60_000,
   });
 }
 

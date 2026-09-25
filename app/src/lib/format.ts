@@ -111,6 +111,29 @@ export function integer(value: number | null | undefined): string {
   return INTEGER.format(value);
 }
 
+const SIZE_UNITS = ["B", "KB", "MB", "GB"] as const;
+const ONE_DECIMAL = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 1 });
+
+/**
+ * Formats a size in bytes with the largest unit that keeps it above one.
+ *
+ * Binary units (1 KB = 1.024 B), because that is what SQLite's pages are counted
+ * in: a 4.096-byte page reads "4 KB" and not "4,1 KB".
+ *
+ * @param bytes - Size in bytes. Null or undefined renders as an em dash.
+ * @return The size with its unit, or `—` when it is unknown.
+ */
+export function fileSize(bytes: number | null | undefined): string {
+  if (bytes === null || bytes === undefined) return "—";
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < SIZE_UNITS.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${ONE_DECIMAL.format(value)} ${SIZE_UNITS[unit]}`;
+}
+
 /**
  * Formats a share count, keeping decimals only when the position is fractional.
  *

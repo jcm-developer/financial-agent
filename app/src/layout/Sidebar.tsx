@@ -2,6 +2,7 @@ import { NavLink } from "react-router";
 import {
   Activity,
   ClipboardList,
+  Database,
   FlaskConical,
   GitCompare,
   ChartLine,
@@ -48,6 +49,7 @@ const GENERAL_LINKS = [
   // one would suggest it only concerns that one.
   { to: "/compare", text: "Comparar", Icon: GitCompare },
   { to: "/diagnostics", text: "Ingesta", Icon: Radio },
+  { to: "/database", text: "Base de datos", Icon: Database },
 ] as const;
 
 /** Verdana's list row, at the sidebar's scale: 40 px tall, 8×12, 8 px radius. */

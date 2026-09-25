@@ -1250,3 +1250,23 @@ def test_a_key_already_stored_whole_is_masked_on_read(client, db_path, profile):
     historial = client.get(f"/api/profiles/{pid}/settings/history").json()
 
     assert "antiguo" not in str(historial)
+
+
+def test_the_schema_lists_every_table_with_its_relations(client, profile):
+    """The database screen: tables, row counts and the foreign keys the diagram
+    draws. The sizes may come back null where SQLite has no `dbstat` (the Windows
+    build), and that is said rather than guessed."""
+    body = client.get("/api/database/schema").json()
+    tables = {t["name"]: t for t in body["tables"]}
+
+    assert {"profiles", "cycles", "decisions", "news_items"} <= set(tables)
+    assert not any(name.startswith("sqlite_") for name in tables)
+    assert tables["profiles"]["rows"] == 1
+    assert tables["profiles"]["writable_by_api"] is True
+    assert tables["decisions"]["writable_by_api"] is False
+    news_fk = tables["news_items"]["foreign_keys"]
+    assert news_fk == [{
+        "column": "cycle_id", "references_table": "cycles",
+        "references_column": "id", "on_delete": "CASCADE",
+    }]
+    assert body["file_bytes"] > 0

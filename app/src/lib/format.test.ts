@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { money, percent, sentence, signClass, signedMoney } from "@/lib/format";
+import { fileSize, money, percent, sentence, signClass, signedMoney } from "@/lib/format";
 
 /**
  * The signs, which had a bug on screen and therefore have tests now.
@@ -115,5 +115,17 @@ describe("sentence", () => {
       "En marcha, lanzado por el planificador",
     );
     expect(sentence("")).toBe("");
+  });
+});
+
+describe("fileSize", () => {
+  it("picks the unit and counts in binary, like SQLite's pages", () => {
+    expect(fileSize(4096)).toBe("4 KB");
+    expect(fileSize(405 * 1024 * 1024)).toBe("405 MB");
+    expect(fileSize(512)).toBe("512 B");
+  });
+
+  it("says unknown rather than zero", () => {
+    expect(fileSize(null)).toBe("—");
   });
 });

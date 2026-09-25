@@ -14,6 +14,7 @@ by these functions' good manners.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import math
 from datetime import datetime, timezone
 from typing import Any
@@ -860,3 +861,87 @@ def _drawdown_series(curva: list[dict[str, Any]]) -> list[float]:
         pico = equity if pico is None else max(pico, equity)
         output.append(round((equity / pico - 1) * 100, 2) if pico > 0 else 0.0)
     return output
+
+
+def database_schema(db: Database) -> dict[str, Any]:
+    """Every table with its columns, foreign keys, row count and size on disk.
+
+    The size comes from `dbstat`, which counts the pages each table and each
+    index really occupy; a row count times a guessed row width would say nothing
+    about `bars_1m`, whose indexes weigh as much as its data. Internal tables
+    (`sqlite_*`) are left out: they are SQLite's bookkeeping, not the project's.
+
+    Everything here is a read, so it goes through the same `ro` connection as
+    every other screen.
+    """
+    from api.guard import WRITABLE
+
+    tables = [
+        row["name"] for row in db.query(
+            "select name from sqlite_master where type = 'table' "
+            "and name not like 'sqlite_%' order by name"
+        )
+    ]
+    index_owner = {
+        row["name"]: row["tbl_name"] for row in db.query(
+            "select name, tbl_name from sqlite_master where type = 'index'"
+        )
+    }
+    table_bytes: dict[str, int] = {}
+    index_bytes: dict[str, int] = {}
+    # `dbstat` is a compile-time option: the SQLite in the container has it and
+    # the one bundled with Python on Windows does not. Without it the sizes are
+    # unknown and are sent as such, not estimated from the row count.
+    try:
+        pages = db.query("select name, sum(pgsize) as size from dbstat group by name")
+        measured = True
+    except DatabaseError:
+        pages, measured = [], False
+    for row in pages:
+        name, size = row["name"], int(row["size"] or 0)
+        if name in index_owner:
+            owner = index_owner[name]
+            index_bytes[owner] = index_bytes.get(owner, 0) + size
+        else:
+            table_bytes[name] = size
+
+    result = []
+    for name in tables:
+        columns = [
+            {
+                "name": col["name"],
+                "type": col["type"] or "",
+                "not_null": bool(col["notnull"]),
+                "primary_key": bool(col["pk"]),
+                "default": None if col["dflt_value"] is None else str(col["dflt_value"]),
+            }
+            for col in db.query(f'pragma table_info("{name}")')
+        ]
+        foreign_keys = [
+            {
+                "column": fk["from"],
+                "references_table": fk["table"],
+                # An empty `to` means "the referenced table's primary key".
+                "references_column": fk["to"] or "id",
+                "on_delete": fk["on_delete"],
+            }
+            for fk in db.query(f'pragma foreign_key_list("{name}")')
+        ]
+        rows = db.query(f'select count(1) as n from "{name}"')[0]["n"]
+        result.append({
+            "name": name,
+            "rows": int(rows),
+            "table_bytes": table_bytes.get(name, 0) if measured else None,
+            "index_bytes": index_bytes.get(name, 0) if measured else None,
+            "writable_by_api": name in WRITABLE,
+            "columns": columns,
+            "foreign_keys": foreign_keys,
+        })
+    # The file's size from the filesystem and not from `pragma page_count`: the
+    # API's guard only allows the pragmas the data layer needs, and a size is not
+    # worth widening that list. The WAL is added because until a checkpoint the
+    # newest pages live there.
+    path = Path(db.path)
+    wal = path.with_name(path.name + "-wal")
+    file_bytes = path.stat().st_size + (wal.stat().st_size if wal.exists() else 0)
+    return {"tables": result, "file_bytes": file_bytes}

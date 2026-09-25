@@ -774,3 +774,49 @@ class CycleControl(BaseModel):
 class ActionResult(BaseModel):
     ok: bool
     message: str
+
+
+# ----------------------------------------------------------------------
+# Esquema de la base (2026-09-25)
+# ----------------------------------------------------------------------
+
+class SchemaColumn(BaseModel):
+    name: str
+    type: str
+    not_null: bool
+    primary_key: bool
+    default: str | None = None
+
+
+class SchemaForeignKey(BaseModel):
+    """One `references` clause: this table's column points at another's."""
+
+    column: str
+    references_table: str
+    references_column: str
+    #: What happens to this row when the referenced one is deleted. It is the
+    #: part of the schema that decides what a reset or a profile deletion takes
+    #: with it, so it travels with the line.
+    on_delete: str
+
+
+class SchemaTable(BaseModel):
+    name: str
+    rows: int
+    #: Bytes of the table's own pages, measured with `dbstat`: real size on disk,
+    #: not an estimate from the row count. None when this SQLite has no `dbstat`.
+    table_bytes: int | None = None
+    #: Bytes of its indexes, apart: on `bars_1m` they are a large share of the
+    #: weight, and folding them in would hide what an index costs.
+    index_bytes: int | None = None
+    #: Whether the API may write to it (`api/guard.py`). Everything else is
+    #: history the cycle and the ingestor write, and the API only reads.
+    writable_by_api: bool
+    columns: list[SchemaColumn]
+    foreign_keys: list[SchemaForeignKey]
+
+
+class DatabaseSchema(BaseModel):
+    tables: list[SchemaTable]
+    #: The file's size, pages in use and free pages included.
+    file_bytes: int

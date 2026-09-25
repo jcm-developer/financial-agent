@@ -189,6 +189,11 @@ export interface CycleRunRequest {
   dry_run?: boolean;
 }
 
+export interface DatabaseSchema {
+  tables: Array<SchemaTable>;
+  file_bytes: number;
+}
+
 export interface DecisionRow {
   id: string;
   cycle_id: string;
@@ -536,6 +541,34 @@ export interface RiskEventRow {
   target_price?: number | null;
 }
 
+export interface SchemaColumn {
+  name: string;
+  type: string;
+  not_null: boolean;
+  primary_key: boolean;
+  default?: string | null;
+}
+
+/**
+ * One `references` clause: this table's column points at another's.
+ */
+export interface SchemaForeignKey {
+  column: string;
+  references_table: string;
+  references_column: string;
+  on_delete: string;
+}
+
+export interface SchemaTable {
+  name: string;
+  rows: number;
+  table_bytes?: number | null;
+  index_bytes?: number | null;
+  writable_by_api: boolean;
+  columns: Array<SchemaColumn>;
+  foreign_keys: Array<SchemaForeignKey>;
+}
+
 /**
  * What actually changed. Empty means the body changed nothing.
  *
@@ -667,6 +700,8 @@ export interface ApiOperations {
   "POST /api/cycles/stop": ActionResult;
   /** Cycle Detail */
   "GET /api/cycles/{cycle_id}": CycleDetail;
+  /** Schema */
+  "GET /api/database/schema": DatabaseSchema;
   /** Decisions */
   "GET /api/decisions": Page_DecisionRow;
   /** Ingest Status */
