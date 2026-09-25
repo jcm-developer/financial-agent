@@ -31,7 +31,7 @@ def test_daily_runs_right_after_the_close():
     allowed, reason = mc.should_run("1d", et(2026, 8, 10, 16, 15))
 
     assert allowed
-    assert "dia de mercado" in reason
+    assert "día de mercado" in reason
 
 
 def test_the_users_scheduled_time_actually_runs():
@@ -68,14 +68,14 @@ def test_daily_skips_weekends(moment):
     allowed, reason = mc.should_run("1d", moment)
 
     assert not allowed
-    assert "sin sesion" in reason
+    assert "sin sesión" in reason
 
 
 def test_daily_skips_holidays():
     allowed, reason = mc.should_run("1d", et(2026, 11, 26, 12, 0))
 
     assert not allowed
-    assert "sin sesion" in reason
+    assert "sin sesión" in reason
 
 
 # -- Barras horarias ---------------------------------------------------------
@@ -92,7 +92,7 @@ def test_hourly_skips_after_the_close():
     allowed, reason = mc.should_run("1h", et(2026, 8, 10, 16, 15))
 
     assert not allowed
-    assert "sesion viva" in reason
+    assert "sesión abierta" in reason
 
 
 def test_hourly_skips_before_the_open():
@@ -105,7 +105,7 @@ def test_hourly_skips_weekends():
     allowed, reason = mc.should_run("1h", et(2026, 8, 8, 12, 0))
 
     assert not allowed
-    assert "sin sesion" in reason
+    assert "sin sesión" in reason
 
 
 def test_hourly_respects_an_early_close():

@@ -60,6 +60,8 @@ from typing import Any
 
 import httpx
 
+from .formatting import compact
+
 log = logging.getLogger(__name__)
 
 _THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
@@ -92,9 +94,9 @@ PROVIDERS: dict[str, Provider] = {
 # truth, instead of "unknown provider", which confuses.
 PLANNED_PROVIDERS = {
     "anthropic": (
-        "El proveedor 'anthropic' no esta implementado todavia. "
-        "Su API tiene otra forma que la de NIM y OpenAI y necesita su SDK "
-        "oficial, que hoy no es una dependencia del proyecto. "
+        "El proveedor 'anthropic' no está implementado todavía. "
+        "Su API no sigue el formato de NIM y OpenAI y necesita su SDK "
+        "oficial, que hoy no forma parte del proyecto. "
         f"Proveedores disponibles: {', '.join(sorted(PROVIDERS))}."
     ),
 }
@@ -110,7 +112,7 @@ def resolve_provider(name: str) -> Provider:
         raise LLMError(PLANNED_PROVIDERS[key])
     raise LLMError(
         f"Proveedor de modelo desconocido: {name!r}. "
-        f"Validos: {', '.join(sorted(PROVIDERS))}."
+        f"Los válidos son: {', '.join(sorted(PROVIDERS))}."
     )
 
 
@@ -173,8 +175,8 @@ class LLMClient:
         if not api_key:
             raise LLMError(
                 f"Falta la clave de API de {self.provider.label}. "
-                "Ponla en el perfil (llm_api_key) o, para NVIDIA NIM, en "
-                "NVIDIA_API_KEY."
+                "Se configura en los ajustes del perfil o, para NVIDIA NIM, en "
+                "la variable de entorno NVIDIA_API_KEY."
             )
         self._client = httpx.Client(
             base_url=(base_url or self.provider.default_base_url).rstrip("/"),
@@ -214,7 +216,7 @@ class LLMClient:
         )
         if response.parsed is None:
             raise LLMError(
-                f"El modelo {self.model} no devolvio JSON valido. "
+                f"El modelo {self.model} no devolvió un JSON válido. "
                 f"Respuesta (primeros 400 caracteres): {response.content[:400]!r}"
             )
         return response
@@ -273,7 +275,7 @@ class LLMClient:
             except httpx.HTTPError as exc:
                 attempt += 1
                 last_error = exc
-                log.warning("Error de red hablando con %s (intento %d/%d): %s",
+                log.warning("Error de red al llamar a %s (intento %d de %d): %s",
                             self.provider.label, attempt, self.max_retries, exc)
                 self._sleep_backoff(attempt)
                 continue
@@ -284,7 +286,7 @@ class LLMClient:
                 disabled = self._disable_rejected_option(error_body)
                 if disabled is not None:
                     log.info(
-                        "El modelo %s rechazo %s (%d); se desactiva y se reintenta al momento.",
+                        "El modelo %s no admite el parámetro %s (%d); se quita y se reintenta al momento.",
                         self.model, disabled, status,
                     )
                     continue
@@ -293,10 +295,10 @@ class LLMClient:
                 if status == 429 or status >= 500:
                     attempt += 1
                     last_error = LLMError(
-                        f"{self.provider.label} devolvio {status}: {error_body[:200]}"
+                        f"{self.provider.label} respondió con un error {status}: {error_body[:200]}"
                     )
                     log.warning(
-                        "%s devolvio %d (intento %d/%d).",
+                        "%s respondió con un error %d (intento %d de %d).",
                         self.provider.label, status, attempt, self.max_retries,
                     )
                     self._sleep_backoff(attempt, override=retry_after)
@@ -304,7 +306,7 @@ class LLMClient:
 
                 # 401/403/404 no se arreglan reintentando.
                 raise LLMError(
-                    f"{self.provider.label} devolvio {status}: {error_body[:400]}"
+                    f"{self.provider.label} respondió con un error {status}: {error_body[:400]}"
                 )
 
             # A stream that breaks halfway —an `error` event, or a 200 that
@@ -313,13 +315,13 @@ class LLMClient:
             if stream.error or not stream.text:
                 attempt += 1
                 last_error = LLMError(
-                    f"{self.provider.label} corto la respuesta a media generacion: "
-                    f"{stream.error or 'no llego ningun fragmento'}"
+                    f"{self.provider.label} cortó la respuesta a medio generar: "
+                    f"{stream.error or 'no llegó ningún fragmento'}"
                 )
                 log.warning(
-                    "%s corto el stream tras %d ms (intento %d/%d): %s",
-                    self.provider.label, latency_ms, attempt, self.max_retries,
-                    stream.error or "sin fragmentos",
+                    "%s cortó la respuesta tras %s s (intento %d de %d): %s",
+                    self.provider.label, compact(latency_ms / 1000, 1), attempt, self.max_retries,
+                    stream.error or "no llegó ningún fragmento",
                 )
                 self._sleep_backoff(attempt)
                 continue
@@ -373,17 +375,17 @@ class LLMClient:
         ):
             self._supports_reasoning_effort = False
             log.warning(
-                "El modelo %s no acepta reasoning_effort=%s: corre con el suyo por "
-                "defecto, que no es el que dice el perfil.",
+                "El modelo %s no acepta el esfuerzo de razonamiento %s: funciona con "
+                "el suyo por defecto, que no es el que indica el perfil.",
                 self.model, self.reasoning_effort,
             )
             return "reasoning_effort"
         if "temperature" in lowered and self._supports_temperature:
             self._supports_temperature = False
             log.warning(
-                "El modelo %s no acepta temperature=%s: corre con la suya por "
-                "defecto, que no es la que dice el perfil.",
-                self.model, self.temperature,
+                "El modelo %s no acepta la temperatura %s: funciona con la suya por "
+                "defecto, que no es la que indica el perfil.",
+                self.model, compact(self.temperature, 2),
             )
             return "temperature"
         named = [n for n in ("response_format", "stream_options") if n in lowered]
@@ -398,7 +400,7 @@ class LLMClient:
 
     def _sleep_backoff(self, attempt: int, *, override: float | None = None) -> None:
         delay = override if override is not None else min(2.0 ** attempt, 30.0)
-        log.debug("Esperando %.1fs antes de reintentar.", delay)
+        log.debug("Esperando %s s antes de reintentar.", compact(delay, 1))
         time.sleep(delay)
 
 

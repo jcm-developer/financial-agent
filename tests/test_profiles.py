@@ -126,7 +126,7 @@ def test_deleting_a_profile_drags_the_simulated_brokers_ledger_along(db):
 
 def test_an_invalid_status_is_refused(db):
     profile_id = db.create_profile(name="p")
-    with pytest.raises(DatabaseError, match="Estado invalido"):
+    with pytest.raises(DatabaseError, match="Estado no válido"):
         db.set_profile_status(profile_id, "encendido")
 
 
@@ -194,7 +194,7 @@ def test_the_schema_stops_settings_out_of_range(db):
 
 
 def test_settings_of_a_profile_that_does_not_exist(db):
-    with pytest.raises(DatabaseError, match="no tiene parametros"):
+    with pytest.raises(DatabaseError, match="no tiene parámetros"):
         db.get_settings("no-existe")
 
 

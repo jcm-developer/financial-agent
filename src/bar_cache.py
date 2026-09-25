@@ -54,7 +54,7 @@ class BarCache:
     def __init__(self, db: Database, *, interval: str = "1d") -> None:
         if interval not in MAX_DAYS_BY_INTERVAL:
             raise BarCacheError(
-                f"Intervalo no soportado: {interval!r}. Usa 1d o 1h."
+                f"Intervalo no admitido: {interval!r}. Los válidos son 1d y 1h."
             )
         self.db = db
         self.interval = interval
@@ -170,7 +170,7 @@ class BarCache:
                     _time.sleep(BATCH_PAUSE)
 
         log.info(
-            "Cache %s: %d peticiones, %d barras nuevas, %d simbolos con fallo, "
+            "Cache %s: %d peticiones, %d barras nuevas, %d símbolos con fallo y "
             "%d omitidos por fallos repetidos.",
             self.interval, summary["requests"], summary["bars"],
             summary["failures"], summary["skipped"],
@@ -190,7 +190,7 @@ class BarCache:
                 actions=False,
             )
         except Exception as exc:  # noqa: BLE001 - yfinance raises assorted types
-            log.warning("Lote de %d simbolos fallo: %s", len(symbols), exc)
+            log.warning("Falló la descarga de un lote de %d símbolos: %s", len(symbols), exc)
             for symbol in symbols:
                 self._record_failure(symbol, str(exc))
             return 0, len(symbols)
@@ -312,8 +312,8 @@ class BarCache:
         )
         if failures == MAX_FAILURES:
             log.warning(
-                "%s acumula %d fallos seguidos; se deja de pedir. Puede que Yahoo ya "
-                "no lo reconozca (fusion, exclusion del indice o cambio de ticker).",
+                "%s acumula %d fallos seguidos y se deja de pedir. Puede que Yahoo ya "
+                "no lo reconozca (fusión, salida del índice o cambio de ticker).",
                 symbol, failures,
             )
 

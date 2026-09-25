@@ -44,12 +44,12 @@ from .runner import CycleRunner
 log = logging.getLogger(__name__)
 
 DESCRIPTION = """
-API local del agente de trading. Sin autenticacion: escucha en loopback.
+API local del agente de trading. Sin autenticación: escucha en loopback.
 
-* Las escrituras se limitan a las tablas de configuracion (`profiles`,
-  `agent_settings`, `profile_universe`). El historico de operativa es de solo
+* Las escrituras se limitan a las tablas de configuración (`profiles`,
+  `agent_settings`, `profile_universe`). El histórico de operaciones es de solo
   lectura para esta API, y lo garantiza un autorizador de SQLite, no una
-  convencion.
+  convención.
 * Operar es cosa de `run.py cycle`, que corre como proceso aparte.
 """
 
@@ -117,16 +117,16 @@ PLACEHOLDER = """<!doctype html>
  code{background:#1b1f27;padding:.15rem .4rem;border-radius:4px}
  a{color:#7aa2f7}
 </style></head><body>
-<h1>La API esta en marcha</h1>
-<p>El frontend de React todavia no esta construido: no existe <code>app/dist</code>.
-   Es lo que trae F4; hasta entonces esta pagina ocupa su sitio.</p>
+<h1>La API está en marcha</h1>
+<p>La interfaz todavía no está construida: no existe <code>app/dist</code>.
+   Hasta entonces, esta página ocupa su sitio.</p>
 <ul>
-  <li>Documentacion interactiva: <a href="/docs">/docs</a></li>
+  <li>Documentación interactiva: <a href="/docs">/docs</a></li>
   <li>Esquema OpenAPI: <a href="/openapi.json">/openapi.json</a></li>
   <li>Perfiles: <a href="/api/profiles">/api/profiles</a></li>
   <li>Salud del ingestor: <a href="/api/ingest-status">/api/ingest-status</a></li>
 </ul>
-<p>Para construir el frontend cuando exista:
+<p>Para construir la interfaz:
    <code>cd app &amp;&amp; npm install &amp;&amp; npm run build</code></p>
 </body></html>
 """
@@ -185,18 +185,18 @@ def serve(*, host: str = "", port: int = 0, db_path: str = "") -> int:
     application = create_app(config)
 
     print(f"\n  API en http://{host}:{port}")
-    print(f"  Documentacion: http://{host}:{port}/docs")
+    print(f"  Documentación: http://{host}:{port}/docs")
     print(f"  Base de datos: {config.db_path}")
     if config.controls:
-        print("  Lanzar ciclos: ACTIVO")
+        print("  Lanzar ciclos: activo")
         if not is_loopback(host):
             print()
             print("  " + "!" * 66)
             print(f"  AVISO: escuchando en {host}, no solo en localhost, y los")
-            print("  controles estan activos. No hay autenticacion: cualquiera que")
+            print("  controles están activos. No hay autenticación: cualquiera que")
             print("  alcance este puerto puede gastar tu cuota del modelo, mover la")
-            print("  cartera y borrar perfiles. Si el puerto no esta publicado solo")
-            print("  en 127.0.0.1, desactivalos con  API_CONTROLS=false")
+            print("  cartera y borrar perfiles. Si el puerto no está publicado solo")
+            print("  en 127.0.0.1, desactívalos con  API_CONTROLS=false")
             print("  " + "!" * 66)
     else:
         print("  Lanzar ciclos: desactivado (API_CONTROLS=false)")

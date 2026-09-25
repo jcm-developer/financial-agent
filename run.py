@@ -42,6 +42,7 @@ import sys
 from dataclasses import replace
 
 from src import cycle_log, fees
+from src import formatting as fmt
 from src.config import ConfigError, DashboardSettings, Infra, Settings
 from src.cycle import TradingCycle
 from src.llm import LLMClient, LLMError
@@ -71,6 +72,21 @@ def setup_logging(level: str) -> None:
     logging.getLogger("hpack").setLevel(logging.WARNING)
 
 
+STATUS_LABELS = {
+    "draft": "borrador",
+    "active": "activo",
+    "paused": "pausado",
+    "archived": "archivado",
+}
+
+CYCLE_STATUS_LABELS = {
+    "running": "en curso",
+    "completed": "completado",
+    "failed": "fallido",
+    "halted": "detenido",
+}
+
+
 def _print_header(title: str) -> None:
     print(f"\n{title}")
     print("-" * len(title))
@@ -85,7 +101,7 @@ def command_check(settings: Settings) -> int:
     is misconfigured."""
     failures: list[str] = []
 
-    _print_header("Configuracion")
+    _print_header("Configuración")
     print(f"  {settings.describe()}")
     if settings.screener.enabled:
         # Said explicitly: with the funnel the watchlist is not used, and seeing
@@ -100,39 +116,39 @@ def command_check(settings: Settings) -> int:
     else:
         risk = settings.risk
         print(
-            f"  Riesgo: {risk.risk_per_trade_pct}% por operacion, "
-            f"max {risk.max_position_pct}% por posicion, "
-            f"max {risk.max_open_positions} posiciones, "
-            f"kill switch a -{risk.max_daily_loss_pct}%"
+            f"  Riesgo: {fmt.percent(risk.risk_per_trade_pct)} por operación, "
+            f"máximo del {fmt.percent(risk.max_position_pct)} por posición, "
+            f"hasta {risk.max_open_positions} posiciones y sin operar el resto del "
+            f"día si la cartera cae un {fmt.percent(risk.max_daily_loss_pct)}"
         )
-        print("  Parametros leidos del .env: todavia no hay perfil. Crealo con "
+        print("  Parámetros leídos del .env: todavía no hay perfil. Créalo con "
               "python run.py new-profile --market eu")
 
     from src import market_calendar
 
     market = market_calendar.get_market(settings.market)
-    _print_header(f"Calendario de mercado -- {market.label}")
+    _print_header(f"Calendario de mercado: {market.label}")
 
     print(f"  {market_calendar.describe(market=market)}")
-    print(f"  Sesion {market.open_time:%H:%M}-{market.close_time:%H:%M} "
+    print(f"  Sesión de {market.open_time:%H:%M} a {market.close_time:%H:%M}, "
           f"hora local, divisa {market.currency}")
     # The operating window is only named when it differs from the session:
     # repeating the same hours twice in a row only invites misreading them.
     if (market.warmup_minutes or market.drain_minutes):
-        print(f"  Ventana operativa {market.operating_open:%H:%M}-"
-              f"{market.operating_close:%H:%M}  "
-              f"(+{market.warmup_minutes} min tras la apertura, "
-              f"+{market.drain_minutes} tras el cierre)")
+        print(f"  Ventana operativa de {market.operating_open:%H:%M} a "
+              f"{market.operating_close:%H:%M} "
+              f"({market.warmup_minutes} min tras la apertura y "
+              f"{market.drain_minutes} tras el cierre)")
     allowed, reason = market_calendar.should_run(
         settings.bar_interval, market=market
     )
     if allowed:
-        print(f"  Un ciclo ahora SI se ejecutaria: {reason}")
+        print(f"  Un ciclo ahora sí se ejecutaría: {reason}")
     elif settings.skip_when_market_closed:
-        print(f"  Un ciclo ahora se OMITIRIA: {reason}")
+        print(f"  Un ciclo ahora se omitiría: {reason}")
         print("  Para forzarlo de todos modos: SKIP_WHEN_MARKET_CLOSED=false")
     else:
-        print(f"  {reason}, pero SKIP_WHEN_MARKET_CLOSED=false: se ejecutaria.")
+        print(f"  {reason}, pero SKIP_WHEN_MARKET_CLOSED=false: se ejecutaría.")
 
     _print_header("Datos de mercado")
     try:
@@ -144,10 +160,10 @@ def command_check(settings: Settings) -> int:
             from src.screener import load_universe
 
             universe = load_universe(settings.screener.universe_file)
-            print(f"  Universo: {len(universe)} simbolos en "
+            print(f"  Universo: {len(universe)} símbolos en "
                   f"{settings.screener.universe_file}")
-            print(f"  Embudo: top {settings.screener.top_n} por "
-                  f"'{settings.screener.mode}' -> al modelo")
+            print(f"  Embudo: los {settings.screener.top_n} mejores según "
+                  f"«{settings.screener.mode}» pasan al modelo")
             probe = tuple(universe[:3])
             market_data = YahooMarketData(
                 watchlist=probe, lookback_days=settings.lookback_days,
@@ -161,26 +177,26 @@ def command_check(settings: Settings) -> int:
         if not snapshots:
             raise RuntimeError(
                 f"No se obtuvieron barras para {', '.join(probe)}. "
-                "Comprueba la conexion y que los simbolos existan."
+                "Comprueba la conexión y que los símbolos existan."
             )
-        print(f"  OK  fuente=Yahoo Finance (yfinance)  "
-              f"intervalo={settings.bar_interval}")
-        print(f"      {'ACTIVO':<8}{'DECISION':>10}{'EJECUCION':>11}"
-              f"{'RSI':>7}{'ATR':>8}{'BARRAS':>8}  SESION")
+        print(f"  OK  fuente: Yahoo Finance (yfinance), "
+              f"barras de {settings.bar_interval}")
+        print(f"      {'ACTIVO':<8}{'DECISIÓN':>10}{'EJECUCIÓN':>11}"
+              f"{'RSI':>7}{'ATR':>8}{'BARRAS':>8}  SESIÓN")
         for symbol, snapshot in snapshots.items():
             indicators = snapshot.indicators
             print(
-                f"      {symbol:<8}{snapshot.price:>10.2f}"
-                f"{snapshot.execution_price:>11.2f}"
+                f"      {symbol:<8}{fmt.number(snapshot.price):>10}"
+                f"{fmt.number(snapshot.execution_price):>11}"
                 f"{_show(indicators.get('rsi_14')):>7}"
                 f"{_show(indicators.get('atr_14')):>8}"
                 f"{indicators.get('bars_available'):>8}  {snapshot.session or 'n/d'}"
             )
-        unit = "sesion" if settings.bar_interval == "1d" else "hora"
-        print(f"      DECISION = cierre de la ultima {unit} completa (lo que ve el")
-        print(f"      analista). EJECUCION = apertura de la {unit} siguiente,")
+        unit = "sesión" if settings.bar_interval == "1d" else "hora"
+        print(f"      DECISIÓN = cierre de la última {unit} completa (lo que ve el")
+        print(f"      analista). EJECUCIÓN = apertura de la {unit} siguiente,")
         print("      donde se opera. Que sean distintos es lo que evita operar")
-        print("      con informacion del futuro.")
+        print("      con información del futuro.")
     except Exception as exc:  # noqa: BLE001
         print(f"  FALLO  {exc}")
         print("      Si el error viene de yfinance, prueba: pip install -U yfinance")
@@ -214,28 +230,28 @@ def command_check(settings: Settings) -> int:
             )[0]["n"]
 
         print(f"  OK  sin cuenta de broker: la contabilidad es local")
-        print(f"      efectivo={money}{account.cash:,.2f}  "
-              f"equity={money}{account.equity:,.2f}")
-        print(f"      posiciones={len(account.positions)}  ejecuciones registradas={fills}")
+        print(f"      efectivo: {fmt.money(account.cash, money)}, "
+              f"valor de la cartera: {fmt.money(account.equity, money)}")
+        print(f"      posiciones: {len(account.positions)}, ejecuciones registradas: {fills}")
         # The tariff is per leg and depends on the exchange, so a single number
         # would be wrong for a European profile holding Spanish names at 4,11
         # and the rest at 3,00. It is printed grouped, dearest first.
         groups = sorted(fees.tariffs_for_market(settings.market).items(), reverse=True)
         standard = "  ".join(
-            f"{money}{amount:,.2f}"
+            fmt.money(amount, money)
             + (f" ({', '.join(suffixes)})" if 0 < len(suffixes) <= 2
                else " (el resto)" if suffixes else "")
             for amount, suffixes in groups
         )
-        print(f"      deslizamiento={settings.sim_slippage_bps:.0f} pb  "
-              f"comision estandar por orden y por lado: {standard}")
+        print(f"      deslizamiento de {settings.sim_slippage_bps:.0f} pb; "
+              f"comisión estándar por orden y por lado: {standard}")
         if settings.sim_commission:
-            print(f"      recargo del perfil: +{money}{settings.sim_commission:,.2f} "
+            print(f"      recargo del perfil: +{fmt.money(settings.sim_commission, money)} "
                   f"por orden, sobre la tarifa")
         for position in account.positions:
             print(
                 f"        {position.symbol:<6} {position.qty:>8g} @ "
-                f"{position.avg_entry_price:>8.2f}"
+                f"{fmt.number(position.avg_entry_price):>8}"
             )
     except Exception as exc:  # noqa: BLE001
         print(f"  FALLO  {exc}")
@@ -259,8 +275,8 @@ def command_check(settings: Settings) -> int:
                 user='Devuelve exactamente {"ok": true, "modelo": "<tu nombre de modelo>"}.',
                 max_tokens=200,
             )
-        print(f"  OK  modelo={response.model}  latencia={response.latency_ms}ms")
-        print(f"      respuesta={response.parsed}")
+        print(f"  OK  modelo: {response.model}, latencia: {response.latency_ms} ms")
+        print(f"      respuesta: {response.parsed}")
         print(f"      tokens: {response.prompt_tokens} entrada / "
               f"{response.completion_tokens} salida")
     except LLMError as exc:
@@ -289,10 +305,10 @@ def command_check(settings: Settings) -> int:
             cycles = database.query(
                 "select count(*) as n from cycles where portfolio_id = ?", (portfolio_id,)
             )
-        print(f"  OK  fichero={database.path}")
-        print(f"      tablas={tables[0]['n']}  cartera={settings.portfolio_name}")
-        print(f"      ciclos registrados={cycles[0]['n']}  "
-              f"posiciones abiertas={len(open_positions)}")
+        print(f"  OK  fichero: {database.path}")
+        print(f"      tablas: {tables[0]['n']}, cartera: {settings.portfolio_name}")
+        print(f"      ciclos registrados: {cycles[0]['n']}, "
+              f"posiciones abiertas: {len(open_positions)}")
     except Exception as exc:  # noqa: BLE001
         print(f"  FALLO  {exc}")
         print("      Comprueba que DB_PATH apunta a una ruta escribible.")
@@ -300,7 +316,9 @@ def command_check(settings: Settings) -> int:
 
     print()
     if failures:
-        print(f"Fallaron {len(failures)} comprobaciones: {', '.join(failures)}")
+        print(("Falló 1 comprobación" if len(failures) == 1
+               else f"Fallaron {len(failures)} comprobaciones")
+              + f": {', '.join(failures)}")
         return 1
     print("Todas las comprobaciones han pasado. Ya puedes ejecutar: python run.py cycle")
     return 0
@@ -308,7 +326,7 @@ def command_check(settings: Settings) -> int:
 
 def _show(value: object) -> str:
     if isinstance(value, (int, float)):
-        return f"{value:.2f}"
+        return fmt.number(value)
     return "n/d"
 
 
@@ -369,29 +387,30 @@ def command_status(settings: Settings) -> int:
     _print_header(
         f"Cuenta ({settings.portfolio_name}, {settings.mode}, {market.currency})"
     )
-    print(f"  Equity          {money}{account.equity:>14,.2f}")
-    print(f"  Cash            {money}{account.cash:>14,.2f}")
-    print(f"  En posiciones   {money}{account.positions_value:>14,.2f}")
-    print(f"  P&L del dia     {money}{account.day_pnl:>+14,.2f}  "
-          f"({account.day_pnl_pct:+.2f}%)")
+    print(f"  Valor total     {fmt.money(account.equity, money):>16}")
+    print(f"  Efectivo        {fmt.money(account.cash, money):>16}")
+    print(f"  En posiciones   {fmt.money(account.positions_value, money):>16}")
+    print(f"  Resultado hoy   {fmt.signed_money(account.day_pnl, money):>16}  "
+          f"({fmt.percent(account.day_pnl_pct, signed=True)})")
 
     _print_header(f"Posiciones abiertas ({len(account.positions)})")
     if not account.positions:
         print("  (ninguna)")
     else:
-        print(f"  {'SIMBOLO':<8}{'CANT':>7}{'ENTRADA':>10}{'ACTUAL':>10}"
-              f"{'STOP':>10}{'OBJETIVO':>10}{'P&L':>12}")
+        print(f"  {'SÍMBOLO':<8}{'CANT.':>7}{'ENTRADA':>10}{'ACTUAL':>10}"
+              f"{'STOP':>10}{'OBJETIVO':>10}{'RESULTADO':>12}")
         for position in account.positions:
             row = tracked.get(position.symbol, {})
             print(
                 f"  {position.symbol:<8}{position.qty:>7g}"
-                f"{position.avg_entry_price:>10.2f}{position.current_price:>10.2f}"
+                f"{fmt.number(position.avg_entry_price):>10}"
+                f"{fmt.number(position.current_price):>10}"
                 f"{_show(row.get('stop_price')):>10}{_show(row.get('target_price')):>10}"
-                f"{position.unrealized_pl:>+12.2f}"
+                f"{fmt.signed_money(position.unrealized_pl, ''):>12}"
             )
         untracked = account.open_symbols - set(tracked)
         if untracked:
-            print(f"\n  Sin registro en la base de datos (se adoptaran en el proximo "
+            print(f"\n  Sin registro en la base de datos (se adoptarán en el próximo "
                   f"ciclo): {', '.join(sorted(untracked))}")
     return 0
 
@@ -447,41 +466,42 @@ def command_report(dash: DashboardSettings) -> int:
     portfolio, summary = data["portfolio"], data["summary"]
 
     _print_header(f"Cartera: {portfolio['name']} ({portfolio['mode']})")
-    print(f"  Presupuesto asignado       {money}{portfolio['initial_budget']:>13,.2f}")
-    print(f"  Equity del primer ciclo    {money}{_or_zero(summary['equity_start']):>13,.2f}")
-    print(f"  Equity actual              {money}{_or_zero(summary['equity']):>13,.2f}"
+    print(f"  Presupuesto asignado       {fmt.money(portfolio['initial_budget'], money):>16}")
+    print(f"  Valor en el primer ciclo   {fmt.money(_or_zero(summary['equity_start']), money):>16}")
+    print(f"  Valor actual               {fmt.money(_or_zero(summary['equity']), money):>16}"
           f"   ({_signed_pct(summary['total_return_pct'])})")
-    print(f"  Efectivo                   {money}{_or_zero(summary['cash']):>13,.2f}")
-    print(f"  Ultimo ciclo               {str(summary['last_update'])[:19]}")
+    print(f"  Efectivo                   {fmt.money(_or_zero(summary['cash']), money):>16}")
+    print(f"  Último ciclo               {str(summary['last_update'])[:19].replace('T', ' ')}")
 
     _print_header("Resultados")
-    print(f"  P&L realizado              {money}{summary['realized_pnl']:>+13,.2f}"
+    print(f"  Resultado realizado        {fmt.signed_money(summary['realized_pnl'], money):>16}"
           f"   ({summary['closed_trades']} operaciones cerradas)")
-    print(f"  P&L abierto                {money}{summary['unrealized_pnl']:>+13,.2f}"
+    print(f"  Resultado abierto          {fmt.signed_money(summary['unrealized_pnl'], money):>16}"
           f"   ({summary['open_positions']} posiciones)")
-    print(f"  Acierto                    {_pct(summary['win_rate_pct']):>14}"
-          f"   ({summary['wins']} ganadoras / {summary['losses']} perdedoras)")
-    print(f"  Profit factor              {_show(summary['profit_factor']):>14}"
-          f"   (<1 = pierde dinero)")
-    print(f"  Caida maxima               {_pct(summary['max_drawdown_pct']):>14}")
+    print(f"  Acierto                    {_pct(summary['win_rate_pct']):>16}"
+          f"   ({summary['wins']} ganadoras y {summary['losses']} perdedoras)")
+    print(f"  Factor de beneficio        {_show(summary['profit_factor']):>16}"
+          f"   (por debajo de 1 pierde dinero)")
+    print(f"  Caída máxima               {_pct(summary['max_drawdown_pct']):>16}")
 
     _print_header("Actividad del modelo")
-    print(f"  Ciclos ejecutados          {summary['cycles']:>14}")
-    print(f"  Decisiones                 {summary['decisions']:>14}"
+    print(f"  Ciclos ejecutados          {summary['cycles']:>16}")
+    print(f"  Decisiones                 {summary['decisions']:>16}"
           f"   ({_pct(summary['buy_rate_pct'])} fueron compras)")
-    print(f"  Conviccion media           {_show(summary['avg_conviction']):>14}")
-    print(f"  Rechazos de riesgo         {summary['rejections']:>14}")
-    print(f"  Ordenes                    {summary['orders']:>14}")
-    print(f"  Tokens consumidos          {summary['tokens']:>14,}")
+    print(f"  Convicción media           {_show(summary['avg_conviction']):>16}")
+    print(f"  Rechazos de riesgo         {summary['rejections']:>16}")
+    print(f"  Órdenes                    {summary['orders']:>16}")
+    print(f"  Tokens consumidos          {fmt.number(summary['tokens'] or 0, 0):>16}")
 
-    _print_header("Ultimos ciclos")
-    print(f"  {'INICIO':<20}{'ESTADO':<11}{'EQUITY':>12}{'CAMBIO':>10}"
+    _print_header("Últimos ciclos")
+    print(f"  {'INICIO':<20}{'ESTADO':<12}{'VALOR':>12}{'CAMBIO':>10}"
           f"{'DEC':>5}{'APR':>5}{'REC':>5}  MERCADO")
     for row in data["cycles"][:12]:
         print(
-            f"  {str(row['started_at'])[:19]:<20}{row['status']:<11}"
-            f"{_or_zero(row['equity_end']):>12,.2f}"
-            f"{_or_zero(row['equity_delta']):>+10.2f}"
+            f"  {str(row['started_at'])[:19].replace('T', ' '):<20}"
+            f"{CYCLE_STATUS_LABELS.get(row['status'], row['status']):<12}"
+            f"{fmt.number(_or_zero(row['equity_end'])):>12}"
+            f"{fmt.signed_money(_or_zero(row['equity_delta']), ''):>10}"
             f"{row['decisions']:>5}{row['approved']:>5}{row['rejected']:>5}"
             f"  {'abierto' if row['market_open'] else 'cerrado'}"
         )
@@ -490,47 +510,50 @@ def command_report(dash: DashboardSettings) -> int:
     if not data["open_positions"]:
         print("  (ninguna)")
     else:
-        print(f"  {'SIMBOLO':<9}{'CANT':>7}{'ENTRADA':>10}{'ULTIMO':>10}"
-              f"{'STOP':>10}{'OBJETIVO':>10}{'P&L':>12}")
+        print(f"  {'SÍMBOLO':<9}{'CANT.':>7}{'ENTRADA':>10}{'ÚLTIMO':>10}"
+              f"{'STOP':>10}{'OBJETIVO':>10}{'RESULTADO':>12}")
         for row in data["open_positions"]:
             print(
-                f"  {row['symbol']:<9}{row['qty']:>7g}{row['entry_price']:>10.2f}"
+                f"  {row['symbol']:<9}{row['qty']:>7g}{fmt.number(row['entry_price']):>10}"
                 f"{_show(row['last_price']):>10}{_show(row['stop_price']):>10}"
-                f"{_show(row['target_price']):>10}{_or_zero(row['unrealized_pnl']):>+12,.2f}"
+                f"{_show(row['target_price']):>10}"
+                f"{fmt.signed_money(_or_zero(row['unrealized_pnl']), ''):>12}"
             )
 
-    _print_header("Rendimiento por simbolo (posiciones cerradas)")
+    _print_header("Rendimiento por símbolo (posiciones cerradas)")
     performance = data["performance_by_symbol"]
     if not performance:
-        print("  (todavia no hay posiciones cerradas)")
+        print("  (todavía no hay posiciones cerradas)")
     else:
-        print(f"  {'SIMBOLO':<9}{'OPS':>5}{'ACIERTO':>9}{'P&L TOTAL':>12}"
-              f"{'P&L MEDIO':>12}{'DIAS':>7}")
+        print(f"  {'SÍMBOLO':<9}{'OPS.':>5}{'ACIERTO':>9}{'TOTAL':>12}"
+              f"{'MEDIO':>12}{'DÍAS':>7}")
         for row in performance:
             print(
                 f"  {row['symbol']:<9}{row['trades']:>5}"
-                f"{_pct(row['win_rate_pct']):>9}{row['total_pnl']:>+12,.2f}"
-                f"{row['avg_pnl']:>+12,.2f}{_show(row['avg_holding_days']):>7}"
+                f"{_pct(row['win_rate_pct']):>9}"
+                f"{fmt.signed_money(row['total_pnl'], ''):>12}"
+                f"{fmt.signed_money(row['avg_pnl'], ''):>12}"
+                f"{_show(row['avg_holding_days']):>7}"
             )
         total = sum(row["total_pnl"] for row in performance)
         trades = sum(row["trades"] for row in performance)
-        print(f"  {'TOTAL':<9}{trades:>5}{'':>9}{total:>+12,.2f}")
+        print(f"  {'TOTAL':<9}{trades:>5}{'':>9}{fmt.signed_money(total, ''):>12}")
 
-    _print_header("Calibracion de la conviccion del modelo")
-    print("  Si el acierto no sube con la conviccion, el modelo no aporta senal.")
+    _print_header("Calibración de la convicción del modelo")
+    print("  Si el acierto no sube con la convicción, el modelo no aporta señal.")
     calibration = data["calibration"]
     if not calibration:
         print("  (hacen falta posiciones cerradas para medirlo)")
     else:
-        print(f"  {'CONVICCION':<12}{'OPS':>5}{'ACIERTO':>9}{'P&L MEDIO':>12}")
+        print(f"  {'CONVICCIÓN':<12}{'OPS.':>5}{'ACIERTO':>9}{'MEDIO':>12}")
         for row in calibration:
             bucket = f"{row['conviction_bucket']}-{row['conviction_bucket'] + 9}"
             print(
                 f"  {bucket:<12}{row['trades']:>5}{_pct(row['win_rate_pct']):>9}"
-                f"{_or_zero(row['avg_pnl']):>+12,.2f}"
+                f"{fmt.signed_money(_or_zero(row['avg_pnl']), ''):>12}"
             )
 
-    _print_header("Rechazos del Risk Manager")
+    _print_header("Rechazos del control de riesgo")
     if not data["rejections"]:
         print("  (ninguno)")
     else:
@@ -539,7 +562,7 @@ def command_report(dash: DashboardSettings) -> int:
 
     print()
     print(f"  Base de datos: {dash.db_path}")
-    print("  Interfaz web: python run.py api")
+    print("  Interfaz: python run.py api")
     print(f"  Consultas libres: sqlite3 {dash.db_path}")
     return 0
 
@@ -550,13 +573,13 @@ def _or_zero(value: object) -> float:
 
 def _signed_pct(value: object) -> str:
     if isinstance(value, (int, float)):
-        return f"{value:+.2f}%"
+        return fmt.percent(value, signed=True)
     return "n/d"
 
 
 def _pct(value: object) -> str:
     if isinstance(value, (int, float)):
-        return f"{value:.1f}%"
+        return fmt.percent(value, 1)
     return "n/d"
 
 
@@ -615,7 +638,7 @@ def command_close_experiment(settings: Settings) -> int:
         return 0
 
     print(f"  Posiciones liquidadas: {report.exits_forced}")
-    print(f"  Capital: {report.equity_start:,.2f} -> {report.equity_end:,.2f}")
+    print(f"  Capital: de {fmt.number(report.equity_start)} a {fmt.number(report.equity_end)}")
     for error in report.errors:
         print(f"  Error: {error}", file=sys.stderr)
     return 0 if report.status == "completed" else 1
@@ -648,10 +671,10 @@ def command_profiles(infra: Infra) -> int:
     with Database(path=infra.db_path) as database:
         profiles = database.list_profiles(include_archived=True)
         if not profiles:
-            print("\n  No hay ningun perfil todavia.")
+            print("\n  Todavía no hay ningún perfil.")
             print("  Crea uno con:  "
                   "python run.py new-profile --name europa-01 --market eu --watch 89")
-            print("  Si vienes de un .env de la version anterior:  "
+            print("  Si vienes de un .env de la versión anterior:  "
                   "python run.py import-profile --name experimento-01")
             return 0
 
@@ -660,14 +683,14 @@ def command_profiles(infra: Infra) -> int:
             settings = database.get_settings(profile["id"])
             symbols = database.get_profile_universe(profile["id"])
             universe = (
-                settings["universe_file"] or f"{len(symbols)} simbolos propios"
+                settings["universe_file"] or f"{len(symbols)} símbolos propios"
             )
             # The currency comes from the profile's market. Writing '$' in a
             # European profile invites comparing two budgets as if they were the
             # same unit, and with two experiments in parallel that happens by itself.
             market = market_calendar.get_market(settings["market"])
-            print(f"  {profile['name']}  [{profile['status']}]  "
-                  f"mercado={market.code} ({market.currency})")
+            print(f"  {profile['name']}  [{STATUS_LABELS.get(profile['status'], profile['status'])}]  "
+                  f"mercado {market.code} ({market.currency})")
             print(f"      {describe(settings)}")
             # With NVIDIA, an empty column does not mean "no key": it means
             # NVIDIA_API_KEY from the environment is used. Saying "(sin clave)"
@@ -676,11 +699,10 @@ def command_profiles(infra: Infra) -> int:
                 "(NVIDIA_API_KEY del entorno)"
                 if settings["llm_provider"] == "nvidia" else "(sin clave)"
             )
-            print(f"      modelo={settings['llm_provider']}/{settings['llm_model']}"
-                  f"  clave={mask_secret(settings['llm_api_key'], empty=sin_clave)}")
-            print(f"      universo={universe}  "
-                  f"({len(symbols)} en vivo)  presupuesto="
-                  f"{market.currency_symbol}{float(settings['initial_budget']):,.2f}")
+            print(f"      modelo: {settings['llm_provider']}/{settings['llm_model']}, "
+                  f"clave: {mask_secret(settings['llm_api_key'], empty=sin_clave)}")
+            print(f"      universo: {universe} ({len(symbols)} en vivo), presupuesto: "
+                  f"{fmt.money(float(settings['initial_budget']), market.currency_symbol)}")
     return 0
 
 
@@ -705,11 +727,11 @@ def command_import_profile(infra: Infra, *, name: str, env_file: str | None) -> 
 
     from src.risk_presets import describe
 
-    _print_header(f"Perfil {name or env_settings.portfolio_name!r} creado y activado")
+    _print_header(f"Perfil «{name or env_settings.portfolio_name}» creado y activado")
     print(f"  {describe(settings)}")
-    print("\n  Los limites de riesgo se han importado en MODO AVANZADO, con los")
-    print("  numeros exactos que traia el .env, para no cambiar el comportamiento")
-    print("  del agente al mover la configuracion de sitio. Para pasarte a los")
+    print("\n  Los límites de riesgo se han importado en modo avanzado, con los")
+    print("  números exactos que traía el .env, para no cambiar el comportamiento")
+    print("  del agente al mover la configuración de sitio. Para pasarte a los")
     print("  deslizadores, apaga advanced_overrides.")
     print("\n  Ya puedes ejecutar:  python run.py cycle")
     return 0
@@ -751,18 +773,18 @@ def command_new_profile(
 
     market = created.market
 
-    _print_header(f"Perfil {name!r} creado en {market.label}")
-    print(f"  Divisa: {market.currency}   "
-          f"sesion {market.open_time:%H:%M}-{market.close_time:%H:%M} hora local")
-    print(f"  Screener sobre {market.universe_file} "
-          f"({created.universe_size} simbolos)")
-    print(f"  Ingesta en vivo de {created.watched} simbolos")
-    print(f"  Presupuesto inicial: {market.currency_symbol}{budget:,.2f}")
-    print(f"  Benchmark: {market.benchmark}")
+    _print_header(f"Perfil «{name}» creado en {market.label}")
+    print(f"  Divisa: {market.currency}; "
+          f"sesión de {market.open_time:%H:%M} a {market.close_time:%H:%M}, hora local")
+    print(f"  Criba sobre {market.universe_file} "
+          f"({created.universe_size} símbolos)")
+    print(f"  Precios en vivo de {created.watched} símbolos")
+    print(f"  Presupuesto inicial: {fmt.money(budget, market.currency_symbol)}")
+    print(f"  Índice de referencia: {market.benchmark}")
     # The figure is in the market's currency despite the column's name (F8.7):
     # showing it with its symbol stops it being read as dollars.
-    print(f"  Liquidez minima del screener: "
-          f"{market.currency_symbol}{market.min_turnover:,.0f} al dia")
+    print(f"  Liquidez mínima para entrar en la criba: "
+          f"{fmt.money(market.min_turnover, market.currency_symbol, 0)} al día")
     print(f"\n  Actívalo cuando lo tengas revisado:  "
           f"python run.py activate --profile {name}")
     return 0
@@ -776,16 +798,19 @@ def command_activate(infra: Infra, *, name: str) -> int:
         profile_id = select_profile(database, name=name)
         database.set_profile_status(profile_id, "active")
         profile = database.get_profile(profile_id)
-    print(f"  Perfil {profile['name']!r} activado.")
+    print(f"  Perfil «{profile['name']}» activado.")
     return 0
 
 
 # ----------------------------------------------------------------------
 
 def main(argv: list[str] | None = None) -> int:
+    from src.formatting import utf8_console
+
+    utf8_console()
     parser = argparse.ArgumentParser(
         prog="financial-agent",
-        description="Agente de trading con analisis por LLM y control de riesgo determinista.",
+        description="Agente de trading con análisis por LLM y control de riesgo determinista.",
     )
     parser.add_argument(
         "command",
@@ -793,10 +818,10 @@ def main(argv: list[str] | None = None) -> int:
         default="check",
         choices=["check", "status", "cycle", "close-experiment", "report", "api",
                  "profiles", "new-profile", "import-profile", "activate"],
-        help="check: diagnostico (por defecto). status: estado de la cuenta. "
+        help="check: diagnóstico (por defecto). status: estado de la cuenta. "
              "cycle: ejecutar un ciclo. "
              "close-experiment: vender todas las posiciones y cerrar el "
-             "experimento. report: analitica en consola. "
+             "experimento. report: analítica en consola. "
              "api: API REST + interfaz web. "
              "profiles: listar experimentos. "
              "new-profile: crear un perfil para un mercado. "
@@ -805,7 +830,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--profile", default="",
-        help="Nombre del perfil de experimento. Sin esto se usa el unico activo.",
+        help="Nombre del perfil de experimento. Sin esto se usa el único activo.",
     )
     parser.add_argument(
         "--name", default="",
@@ -818,9 +843,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--watch", type=int, default=0,
-        help="Cuantos simbolos del universo seguir minuto a minuto (solo "
+        help="Cuántos símbolos del universo seguir minuto a minuto (solo "
              "new-profile). 0 = todos, permitido solo si el universo es "
-             f"pequeno (<= {MAX_LIVE_SYMBOLS}).",
+             f"pequeño (hasta {MAX_LIVE_SYMBOLS}).",
     )
     parser.add_argument(
         "--budget", type=float, default=10_000.0,
@@ -829,8 +854,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Analiza y registra en la base de datos pero no envia ordenes al broker. "
-             "Solo para esta ejecucion; no toca el parametro del perfil.",
+        help="Analiza y registra en la base de datos, pero no envía órdenes al broker. "
+             "Solo para esta ejecución; no toca el parámetro del perfil.",
     )
     parser.add_argument("--env-file", default=None, help="Ruta a un .env alternativo.")
     parser.add_argument(
@@ -895,7 +920,7 @@ def _dispatch(args, infra: Infra) -> int:
 
         settings = _settings_for(args, infra, allow_env_fallback=args.command == "check")
     except ConfigError as exc:
-        print(f"Error de configuracion: {exc}", file=sys.stderr)
+        print(f"Error de configuración: {exc}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:
         print("\nInterrumpido por el usuario.", file=sys.stderr)

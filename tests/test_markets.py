@@ -287,14 +287,14 @@ def test_the_european_daily_cycle_runs_after_the_close():
     allowed, reason = mc.should_run("1d", eu(2026, 8, 10, 18, 0), market="eu")
 
     assert allowed
-    assert "dia de mercado" in reason
+    assert "día de mercado" in reason
 
 
 def test_the_european_hourly_cycle_does_not_run_at_night():
     allowed, reason = mc.should_run("1h", eu(2026, 8, 10, 21, 0), market="eu")
 
     assert not allowed
-    assert "sesion viva" in reason
+    assert "sesión abierta" in reason
 
 
 def test_the_same_instant_gives_different_answers_per_market():
@@ -480,7 +480,7 @@ def test_the_european_cycle_skips_the_weekend_all_the_same(db, perfil_eu):
     allowed, reason = mc.should_run("1d", eu(2026, 8, 8, 12), market=settings.market)
 
     assert not allowed
-    assert "sin sesion" in reason
+    assert "sin sesión" in reason
 
 
 # -- Importacion de un .env heredado -----------------------------------------
@@ -676,7 +676,7 @@ def test_a_non_positive_liquidity_floor_is_refused_on_validation():
     """A 0 does not blow up: it switches the filter off without saying so."""
     roto = dataclasses.replace(mc.EU, min_turnover=0.0)
 
-    with pytest.raises(ValueError, match="min_turnover"):
+    with pytest.raises(ValueError, match="volumen mínimo negociado"):
         mc._check_markets([roto])
 
 

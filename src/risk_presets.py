@@ -46,6 +46,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from .config import ConfigError, RiskLimits
+from .formatting import compact, percent
 from .risk import SESSIONS_PER_CALENDAR_DAY
 
 # Anchors per risk level: (level 1, level 5, level 10) and the decimals to round
@@ -250,30 +251,35 @@ def is_derived(settings: Mapping[str, Any], field: str) -> bool:
 # ----------------------------------------------------------------------
 
 def describe(settings: Mapping[str, Any]) -> str:
-    """One-line summary of what the current settings imply.
+    """One-line summary of what the current settings imply, as screen text.
 
     It is the text of F6.8: moving a slider without seeing the consequence in
-    concrete numbers is guesswork.
+    concrete numbers is guesswork. It is shown in Ajustes, on the profile card and
+    in the cycle's log, so it is written for a reader and not for a developer —
+    accents, decimal commas and no jargon. "Kill switch" became what it does: the
+    agent stops opening positions for the day.
     """
     limits = resolve_limits(settings)
     risk = settings.get("risk_profile", 5)
     horizon = settings.get("horizon_days") or DEFAULT_HORIZON_DAYS
-    origin = "a mano" if settings.get("advanced_overrides") else "deslizador"
+    sigmas = limits.stop_atr_multiple / math.sqrt(
+        max(1.0, int(horizon) * SESSIONS_PER_CALENDAR_DAY)
+    )
+    manual = "Límites fijados a mano. " if settings.get("advanced_overrides") else ""
     return (
-        f"riesgo {risk}/10 a {horizon} dias ({origin}): "
-        f"max. {limits.max_open_positions} posiciones, "
-        f"{limits.risk_per_trade_pct:g}% de riesgo por operacion, "
-        # La banda entera y no solo el techo (F9.21): con el suelo fuera, esta linea
-        # decia «max. 14% por posicion» sobre un perfil cuyas posiciones no bajan
-        # del 12%, que es la mitad de la informacion y justamente la que explica
-        # cuanto capital se pone a trabajar.
-        f"posiciones del {limits.min_position_pct:g}% al {limits.max_position_pct:g}% y "
-        f"{limits.max_total_exposure_pct:g}% de exposicion, "
-        f"conviccion minima {limits.min_conviction}, "
-        f"stop a {limits.stop_atr_multiple:g}x ATR con R/R minimo "
-        f"{limits.min_reward_risk:g}, "
-        f"objetivo minimo {limits.min_target_sigma:g} sigma del horizonte, "
-        f"kill switch a -{limits.max_daily_loss_pct:g}% diario"
+        f"{manual}Riesgo {risk}/10 a {horizon} días: "
+        f"hasta {limits.max_open_positions} posiciones "
+        # La banda entera y no solo el techo (F9.21): es la mitad que explica cuanto
+        # capital se pone a trabajar.
+        f"de entre el {percent(limits.min_position_pct)} y el {percent(limits.max_position_pct)}, "
+        f"exposición máxima del {percent(limits.max_total_exposure_pct)}, "
+        f"riesgo por operación del {percent(limits.risk_per_trade_pct)}, "
+        f"convicción mínima {limits.min_conviction}, "
+        f"stop a {compact(limits.stop_atr_multiple)} veces el ATR ({compact(sigmas)} σ), "
+        f"objetivo mínimo de {compact(limits.min_target_sigma)} σ, "
+        f"beneficio/riesgo mínimo {compact(limits.min_reward_risk)} "
+        f"y sin operar el resto del día si la cartera cae un "
+        f"{percent(limits.max_daily_loss_pct)}."
     )
 
 

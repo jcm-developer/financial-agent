@@ -5,6 +5,7 @@ import type { ProfileSummary } from "@/api/types";
 import { Card, LINK_CLASSES, Stat, Tag } from "@/components/pieces";
 import { ProfileStatus } from "@/components/ProfileStatus";
 import { dateTime, money, percent, signClass } from "@/lib/format";
+import { cycleStatusLabel } from "@/lib/labels";
 
 /**
  * One experiment, with the figures that say whether it is worth opening (F5.2).
@@ -117,7 +118,7 @@ export function ProfileCard({ profile, actions }: Props) {
           value={dateTime(m.last_cycle_at)}
           title={
             m.last_cycle_status
-              ? `El último ciclo terminó en estado ${m.last_cycle_status}.`
+              ? `El último ciclo terminó en estado «${cycleStatusLabel(m.last_cycle_status)}».`
               : "Este experimento no ha ejecutado ningún ciclo todavía."
           }
         >

@@ -88,4 +88,4 @@ def clear(db_path: str | Path) -> None:
     except OSError as exc:
         # If it cannot be deleted, the next cycle would find it and ignore it by
         # name anyway. Worth a line in the log, not worth an exception.
-        log.warning("No se pudo borrar la peticion de parada: %s", exc)
+        log.warning("No se pudo borrar la petición de parada: %s", exc)

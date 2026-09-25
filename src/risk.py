@@ -20,6 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from . import fees
+from .formatting import compact, money as fmt_money, number, percent
 from .config import RiskLimits
 from .models import AccountState, BrokerPosition, ExitSignal, Proposal, RiskVerdict
 
@@ -143,12 +144,17 @@ class RiskManager:
             return KillSwitch(
                 triggered=True,
                 reason=(
-                    f"Perdida diaria {pnl_pct:.2f}% alcanza el limite de "
-                    f"-{self.limits.max_daily_loss_pct:.2f}%. No se abren posiciones nuevas."
+                    f"Pérdida diaria del {percent(pnl_pct, signed=True)}: alcanza el "
+                    f"límite del {percent(-self.limits.max_daily_loss_pct)} y no se abren "
+                    f"posiciones nuevas."
                 ),
                 day_pnl_pct=pnl_pct,
             )
-        return KillSwitch(False, f"Perdida diaria {pnl_pct:.2f}% dentro del limite.", pnl_pct)
+        return KillSwitch(
+            False,
+            f"Resultado del día del {percent(pnl_pct, signed=True)}, dentro del límite.",
+            pnl_pct,
+        )
 
     # -- Salidas obligatorias ---------------------------------------------
 
@@ -175,7 +181,7 @@ class RiskManager:
                     ExitSignal(
                         symbol=symbol,
                         qty=position.qty,
-                        reason=f"Precio {price:.2f} ha perforado el stop {stop:.2f}.",
+                        reason=f"El precio ({number(price)}) ha perforado el stop ({number(stop)}).",
                         rule="stop_loss_hit",
                         forced=True,
                         price=price,
@@ -188,7 +194,7 @@ class RiskManager:
                     ExitSignal(
                         symbol=symbol,
                         qty=position.qty,
-                        reason=f"Precio {price:.2f} ha alcanzado el objetivo {target:.2f}.",
+                        reason=f"El precio ({number(price)}) ha alcanzado el objetivo ({number(target)}).",
                         rule="take_profit_hit",
                         forced=True,
                         price=price,
@@ -209,48 +215,51 @@ class RiskManager:
         limits = self.limits
         symbol = proposal.symbol
         price = proposal.reference_price
-        money = self.currency_symbol
+        symbol_ccy = self.currency_symbol
+
+        def money(value: float) -> str:
+            return fmt_money(value, symbol_ccy)
 
         if proposal.action != "buy":
-            return _reject("action_not_buy", f"La accion propuesta es {proposal.action!r}, no una compra.")
+            return _reject("action_not_buy", f"La acción propuesta es «{proposal.action}», no una compra.")
 
         if proposal.conviction < limits.min_conviction:
             return _reject(
                 "min_conviction",
-                f"Conviccion {proposal.conviction} por debajo del minimo {limits.min_conviction}.",
+                f"Convicción {proposal.conviction}, por debajo del mínimo de {limits.min_conviction}.",
             )
 
         if price <= 0:
-            return _reject("invalid_price", f"Precio de referencia invalido: {price}.")
+            return _reject("invalid_price", f"Precio de referencia no válido: {number(price)}.")
 
         if symbol in account.open_symbols:
             return _reject(
                 "already_open",
-                f"Ya hay una posicion abierta en {symbol}; no se promedia a la baja ni se amplia.",
+                f"Ya hay una posición abierta en {symbol}; no se promedia a la baja ni se amplía.",
             )
 
         if len(account.positions) >= limits.max_open_positions:
             return _reject(
                 "max_open_positions",
-                f"Ya hay {len(account.positions)} posiciones abiertas, el maximo es "
+                f"Ya hay {len(account.positions)} posiciones abiertas y el máximo es "
                 f"{limits.max_open_positions}.",
             )
 
         if account.equity <= 0:
-            return _reject("no_equity", "El equity de la cuenta es cero o negativo.")
+            return _reject("no_equity", "El valor de la cuenta es cero o negativo.")
 
         # --- Stop: set by the ATR, not by the model ------------------------
         if atr is None or atr <= 0:
             return _reject(
                 "atr_unavailable",
-                "Sin ATR no se puede dimensionar la posicion ni situar el stop.",
+                "Sin ATR no se puede dimensionar la posición ni situar el stop.",
             )
 
         atr_stop = price - atr * limits.stop_atr_multiple
         if atr_stop <= 0:
             return _reject(
                 "stop_below_zero",
-                f"El stop por ATR ({atr_stop:.2f}) cae por debajo de cero; activo demasiado volatil.",
+                f"El stop por ATR ({number(atr_stop)}) cae por debajo de cero: el valor es demasiado volátil.",
             )
 
         stop = atr_stop
@@ -294,8 +303,8 @@ class RiskManager:
         if remaining_exposure <= 0:
             return _reject(
                 "max_total_exposure_pct",
-                f"Exposicion actual {money}{account.positions_value:,.2f} ya cubre el "
-                f"limite de {money}{exposure_cap:,.2f}.",
+                f"La exposición actual ({money(account.positions_value)}) ya cubre el "
+                f"límite de {money(exposure_cap)}.",
             )
         exposure_qty = math.floor(remaining_exposure / price)
         if exposure_qty < qty:
@@ -395,8 +404,9 @@ class RiskManager:
         if qty < 1:
             return _reject(
                 binding_rule if binding_rule != "risk_per_trade" else "qty_below_one",
-                f"El tamano calculado es {qty} acciones (limitado por {binding_rule}); "
-                f"a {money}{price:,.2f} por accion no da para una unidad.",
+                f"El tamaño calculado es de {qty} acciones (limita "
+                f"{_BINDING_LABELS.get(binding_rule, binding_rule)}): a "
+                f"{money(price)} por acción no llega ni a una.",
                 details={
                     "risk_budget": round(risk_budget, 2),
                     "risk_per_share": round(risk_per_share, 4),
@@ -408,8 +418,8 @@ class RiskManager:
         if notional < limits.min_order_notional:
             return _reject(
                 "min_order_notional",
-                f"Valor de la orden {money}{notional:,.2f} por debajo del minimo "
-                f"{money}{limits.min_order_notional:,.2f}.",
+                f"Orden de {money(notional)}, por debajo del mínimo de "
+                f"{money(limits.min_order_notional)}.",
                 details={"qty": qty, "price": round(price, 4)},
             )
 
@@ -455,12 +465,13 @@ class RiskManager:
             # suelo dentro es lo que lo hace legible después en SQL.
             return _reject(
                 "min_target_sigma",
-                f"El objetivo {target:.2f} promete {(target / price - 1) * 100:.2f}% "
-                f"cuando a {self.horizon_days} dias una sigma son "
-                f"{sigma / price * 100:.2f}%: por debajo del suelo de "
-                f"{limits.min_target_sigma:g} sigma ({target_floor:.2f}, "
-                f"{(target_floor / price - 1) * 100:.2f}%) el nivel se alcanza por "
-                f"ruido y no por la tesis.",
+                f"El objetivo ({number(target)}) promete un "
+                f"{percent((target / price - 1) * 100, signed=True)} cuando a "
+                f"{self.horizon_days} días una σ es un {percent(sigma / price * 100)}: "
+                f"por debajo del mínimo de {compact(limits.min_target_sigma)} σ "
+                f"({number(target_floor)}, "
+                f"{percent((target_floor / price - 1) * 100, signed=True)}) el nivel se "
+                f"alcanza por azar y no por la tesis.",
                 details={
                     "target": round(target, 4),
                     "target_floor": round(target_floor, 4),
@@ -478,9 +489,9 @@ class RiskManager:
         if reward_risk < limits.min_reward_risk:
             return _reject(
                 "min_reward_risk",
-                f"Ratio beneficio/riesgo {reward_risk:.2f} por debajo del minimo "
-                f"{limits.min_reward_risk:.2f} contando {money}{round_trip:,.2f} de "
-                f"comisiones de ida y vuelta.",
+                f"Beneficio/riesgo de {number(reward_risk)}, por debajo del mínimo de "
+                f"{number(limits.min_reward_risk)}, contando {money(round_trip)} de "
+                f"comisiones de compra y venta.",
                 details={
                     "target": round(target, 4),
                     "stop": round(stop, 4),
@@ -495,9 +506,12 @@ class RiskManager:
         return RiskVerdict(
             approved=True,
             reason=(
-                f"Aprobadas {qty} acciones de {symbol} por {money}{notional:,.2f} "
-                f"(limita: {binding_rule}). Stop {stop:.2f} ({stop_source}), "
-                f"objetivo {target:.2f} ({target_source}), R/R {reward_risk:.2f}."
+                f"Aprobadas {qty} acciones de {symbol} por {money(notional)} "
+                f"(limita {_BINDING_LABELS.get(binding_rule, binding_rule)}). "
+                f"Stop en {number(stop)} ({_STOP_SOURCE_LABELS.get(stop_source, stop_source)}), "
+                f"objetivo en {number(target)} "
+                f"({_TARGET_SOURCE_LABELS.get(target_source, target_source)}), "
+                f"beneficio/riesgo {number(reward_risk)}."
             ),
             rule=binding_rule,
             qty=float(qty),
@@ -565,6 +579,20 @@ def _target_for_ratio(
     """
     loss = (price - stop) * qty + round_trip
     return price + (minimum * loss + round_trip) / qty
+
+
+#: Screen names for the rule that bound the size. The verdict keeps the machine
+#: key in `rule` (aggregated in SQL); the `reason` is read by a person.
+_BINDING_LABELS = {
+    "risk_per_trade": "el riesgo por operación",
+    "max_position_pct": "el tamaño máximo por posición",
+    "max_total_exposure_pct": "la exposición máxima",
+    "insufficient_cash": "el efectivo disponible",
+    "suggested_weight": "el peso propuesto por el analista",
+    "conviction": "la convicción",
+}
+_STOP_SOURCE_LABELS = {"atr": "por ATR", "llm_wider": "el del analista, más holgado"}
+_TARGET_SOURCE_LABELS = {"llm": "del analista", "derived": "calculado"}
 
 
 def _reject(rule: str, reason: str, details: dict | None = None) -> RiskVerdict:

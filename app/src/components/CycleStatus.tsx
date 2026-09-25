@@ -1,5 +1,6 @@
 import type { CycleRow } from "@/api/types";
 import { Tag } from "@/components/pieces";
+import { cycleStatusLabel } from "@/lib/labels";
 
 /**
  * A cycle's status, with the nuance F6.9 added.
@@ -32,7 +33,7 @@ export function CycleStatus({ cycle }: { cycle: CycleRow }) {
       }
       title={cycle.error ?? undefined}
     >
-      {cycle.status}
+      {cycleStatusLabel(cycle.status)}
       {noModel && (
         <Tag title="Ninguna llamada al modelo obtuvo respuesta: este ciclo no analizó nada">
           SIN MODELO

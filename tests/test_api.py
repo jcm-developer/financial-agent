@@ -849,7 +849,7 @@ class StubRunner:
             self._stop_requested = True
             return True, "Parada pedida."
         if not self._running:
-            return False, "No hay ningun ciclo en marcha."
+            return False, "No hay ningún ciclo en marcha."
         self._running = False
         return True, "Se ha pedido la parada del ciclo."
 

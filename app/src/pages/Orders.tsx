@@ -18,6 +18,7 @@ import {
 } from "@/components/Table";
 import { groupByDayAndCycle } from "@/lib/grouping";
 import { quantity, money, dateTime } from "@/lib/format";
+import { orderStatusLabel } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 import { useTitle } from "@/layout/useTitle";
@@ -198,7 +199,7 @@ function OrderTableRow({ row, symbol }: { row: OrderRow; symbol: string }) {
         <Td numeric>{quantity(row.filled_qty)}</Td>
         <Td numeric>{money(row.filled_avg_price, symbol)}</Td>
         <Td>
-          <span className={cn("font-medium", statusClass(row.status))}>{row.status}</span>
+          <span className={cn("font-medium", statusClass(row.status))}>{orderStatusLabel(row.status)}</span>
         </Td>
       </Row>
 

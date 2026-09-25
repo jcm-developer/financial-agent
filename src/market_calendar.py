@@ -44,7 +44,22 @@ from datetime import date, datetime, time, timedelta
 from types import MappingProxyType
 from zoneinfo import ZoneInfo
 
+from .formatting import compact
+
 log = logging.getLogger(__name__)
+
+# Spanish names for screen text: `%a` and `%b` follow the process locale, which
+# is English in Docker and would print "Fri 25 Sep" in a Spanish sentence.
+_WEEKDAYS = ("lun", "mar", "mié", "jue", "vie", "sáb", "dom")
+_MONTHS = (
+    "ene", "feb", "mar", "abr", "may", "jun",
+    "jul", "ago", "sep", "oct", "nov", "dic",
+)
+
+
+def _day_label(moment: datetime | date) -> str:
+    """`vie 25 sep`, for screen text."""
+    return f"{_WEEKDAYS[moment.weekday()]} {moment.day} {_MONTHS[moment.month - 1]}"
 
 #: An arbitrary date for doing arithmetic with bare times. Its value is unused.
 _ANY_DAY = date(2000, 1, 1)
@@ -333,26 +348,26 @@ def _check_markets(markets=None) -> None:
     """
     for mkt in (MARKETS.values() if markets is None else markets):
         if mkt.open_time >= mkt.close_time:
-            raise ValueError(f"{mkt.code}: la sesion cierra antes de abrir.")
+            raise ValueError(f"{mkt.code}: la sesión cierra antes de abrir.")
         if mkt.min_turnover <= 0:
             # A 0 does not blow up: it switches the screener's liquidity filter
             # off without saying so, and the agent starts analysing stocks that
             # cannot be bought at the book's size.
-            raise ValueError(f"{mkt.code}: min_turnover tiene que ser positivo.")
+            raise ValueError(f"{mkt.code}: el volumen mínimo negociado tiene que ser positivo.")
         if mkt.warmup_minutes < 0 or mkt.drain_minutes < 0:
-            raise ValueError(f"{mkt.code}: los desplazamientos van hacia adelante.")
+            raise ValueError(f"{mkt.code}: los márgenes de apertura y cierre no pueden ser negativos.")
         if mkt.operating_open >= mkt.operating_close:
             raise ValueError(
                 f"{mkt.code}: la ventana operativa "
-                f"({mkt.operating_open:%H:%M}-{mkt.operating_close:%H:%M}) esta "
-                "vacia o cruza la medianoche."
+                f"({mkt.operating_open:%H:%M}-{mkt.operating_close:%H:%M}) está "
+                "vacía o cruza la medianoche."
             )
         # The warm-up cannot eat the whole session, not even a half one.
         for day, early in mkt.early_closes.items():
             if _shift(early, mkt.drain_minutes) <= mkt.operating_open:
                 raise ValueError(
                     f"{mkt.code}: el {day} cierra a las {early:%H:%M} y la ventana "
-                    "operativa quedaria vacia."
+                    "operativa quedaría vacía."
                 )
 
 
@@ -416,9 +431,8 @@ def _localize(moment: datetime | None, mkt: Market) -> datetime:
 def _warn_if_uncovered(day: date, mkt: Market) -> None:
     if day.year > mkt.last_covered_year:
         log.warning(
-            "El calendario de festivos de %s solo cubre hasta %d; %s se evalua "
-            "solo por el dia de la semana. Actualiza la tabla en "
-            "src/market_calendar.py.",
+            "El calendario de festivos de %s solo cubre hasta %d; el %s se evalúa "
+            "solo por el día de la semana. Hay que actualizar la tabla de festivos.",
             mkt.code, mkt.last_covered_year, day,
         )
 
@@ -484,7 +498,7 @@ def next_operating_open(
         if is_trading_day(day, market=mkt):
             return datetime.combine(day, mkt.operating_open, tzinfo=mkt.tz)
     raise RuntimeError(
-        f"No se encontro ninguna sesion de {mkt.code} en los proximos 12 dias."
+        f"No se encontró ninguna sesión de {mkt.code} en los próximos 12 días."
     )
 
 
@@ -530,7 +544,7 @@ def last_trading_day(
         day -= timedelta(days=1)
     # Ten days in a row with no session does not happen; if it does, the table is wrong.
     raise RuntimeError(
-        f"No se encontro ningun dia de mercado de {mkt.code} en los ultimos 10 dias."
+        f"No se encontró ningún día de mercado de {mkt.code} en los últimos 10 días."
     )
 
 
@@ -548,7 +562,7 @@ def next_session_open(
         if is_trading_day(day, market=mkt):
             return datetime.combine(day, mkt.open_time, tzinfo=mkt.tz)
     raise RuntimeError(
-        f"No se encontro ninguna sesion de {mkt.code} en los proximos 12 dias."
+        f"No se encontró ninguna sesión de {mkt.code} en los próximos 12 días."
     )
 
 
@@ -580,17 +594,17 @@ def should_run(
     local = _localize(moment, mkt)
 
     if not is_trading_day(local.date(), market=mkt):
-        return False, f"sin sesion: {describe(local, market=mkt)}"
+        return False, f"sin sesión: {describe(local, market=mkt)}"
 
     if interval == "1d":
         # A market day: there is a new bar, whether it is open or already closed.
-        return True, f"dia de mercado ({local:%a %d %b}), {describe(local, market=mkt)}"
+        return True, f"día de mercado ({_day_label(local)}), {describe(local, market=mkt)}"
 
     if is_operating(local, market=mkt):
         return True, describe(local, market=mkt)
     return (
         False,
-        f"barras de {interval} necesitan sesion viva: {describe(local, market=mkt)}",
+        f"las barras de {interval} necesitan sesión abierta: {describe(local, market=mkt)}",
     )
 
 
@@ -604,7 +618,7 @@ def describe(
     if is_session_open(local, market=mkt):
         _, close = session_bounds(local.date(), market=mkt)
         remaining = (close - local).total_seconds() / 60
-        early = " (media sesion)" if local.date() in mkt.early_closes else ""
+        early = " (media sesión)" if local.date() in mkt.early_closes else ""
         espera = ""
         if not is_operating(local, market=mkt):
             # Session open but still in the warm-up. Without this sentence, the
@@ -621,13 +635,14 @@ def describe(
         restante = (fin - local).total_seconds() / 60
         return (
             f"mercado cerrado ({local:%H:%M} {zone}), ventana operativa abierta "
-            f"{restante:.0f} min mas (hasta las "
+            f"{restante:.0f} min más (hasta las "
             f"{mkt.operating_close_for(local.date()):%H:%M})"
         )
 
     upcoming = next_session_open(local, market=mkt)
     hours = (upcoming - local).total_seconds() / 3600
     return (
-        f"mercado cerrado ({local:%a %H:%M} {zone}), abre en {hours:.1f} h "
-        f"el {upcoming:%a %d %b %H:%M} {zone}"
+        f"mercado cerrado ({_WEEKDAYS[local.weekday()]} {local:%H:%M} {zone}), "
+        f"abre en {compact(hours, 1)} h el {_day_label(upcoming)} a las "
+        f"{upcoming:%H:%M} {zone}"
     )

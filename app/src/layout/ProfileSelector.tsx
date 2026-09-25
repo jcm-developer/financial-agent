@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from "react-router";
 
 import { Select } from "@/components/Select";
 import { useActiveProfile } from "@/profile/useActiveProfile";
+import { profileStatusLabel } from "@/lib/labels";
 
 /**
  * Global profile selector (F5.5).
@@ -35,7 +36,7 @@ export function ProfileSelector() {
     ...profiles.map(
       (row): [string, string] => [
         row.name,
-        row.status === "active" ? row.name : `${row.name} (${row.status})`,
+        row.status === "active" ? row.name : `${row.name} (${profileStatusLabel(row.status)})`,
       ],
     ),
   ];

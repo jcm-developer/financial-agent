@@ -41,7 +41,7 @@ def market(code: str):
 def quotes(
     db: ReadDb,
     symbols: str = Query(
-        "", description="Lista separada por comas. Vacio = todas las conocidas."
+        "", description="Lista separada por comas. Vacío = todas las conocidas."
     ),
 ):
     """Last known price of each symbol, with its age.

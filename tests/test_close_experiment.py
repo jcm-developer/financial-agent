@@ -121,7 +121,7 @@ def test_closing_with_nothing_open_does_nothing_and_says_so(db):
     report = cycle.close_all_positions()
 
     assert report.status == "skipped"
-    assert "posicion abierta" in (report.halted_reason or "")
+    assert "posición abierta" in (report.halted_reason or "")
     assert report.cycle_id is None
     assert db.query("select count(1) as n from cycles")[0]["n"] == 0
 

@@ -38,6 +38,7 @@ import logging
 from .bar_cache import BarCache
 from .config import ScreenerSettings
 from .db import Database
+from .formatting import number
 from .market_data import INDICATOR_INTERVAL, MarketDataError, build_snapshot
 from .models import MarketSnapshot
 from .screener import ScreenerLimits, ScreenerReport, load_universe, screen
@@ -91,7 +92,7 @@ class UniverseMarketData:
         all_symbols = sorted(set(universe) | set(required))
 
         log.info(
-            "Universo: %d simbolos (%d del fichero, %d posiciones abiertas).",
+            "Universo: %d símbolos (%d del fichero, %d posiciones abiertas).",
             len(all_symbols), len(universe), len(required),
         )
 
@@ -100,7 +101,7 @@ class UniverseMarketData:
         self.screen_cache.refresh(all_symbols, lookback_days=self.lookback_days)
         after = self.screen_cache.stats()
         log.info(
-            "Cache diaria: %d simbolos, %d barras (%+d en este ciclo).",
+            "Cache diaria: %d símbolos, %d barras (%+d en este ciclo).",
             after["symbols"], after["bars"], after["bars"] - before["bars"],
         )
 
@@ -114,9 +115,9 @@ class UniverseMarketData:
 
         if not screen_bars:
             raise MarketDataError(
-                "La cache esta vacia tras el refresco. Comprueba la conexion y que "
-                f"el fichero de universo {self.settings.universe_file} tenga simbolos "
-                "que Yahoo reconozca."
+                "La caché está vacía tras actualizarla. Conviene comprobar la conexión y "
+                f"que el fichero de universo {self.settings.universe_file} tenga "
+                "símbolos que Yahoo reconozca."
             )
 
         # 3. Screener. Open positions are not scored: they get in regardless, and
@@ -163,7 +164,7 @@ class UniverseMarketData:
             bars = price_bars.get(symbol)
             if not bars:
                 log.warning(
-                    "%s no tiene barras de %s en la cache; se omite.",
+                    "%s no tiene barras de %s en la caché; se omite.",
                     symbol, self.interval,
                 )
                 continue
@@ -176,8 +177,8 @@ class UniverseMarketData:
             context = screen_bars.get(symbol)
             if not context:
                 log.warning(
-                    "%s no tiene barras diarias en la cache; se omite, porque los "
-                    "indicadores se calculan siempre en diario.", symbol,
+                    "%s no tiene barras diarias en la caché; se omite, porque los "
+                    "indicadores se calculan siempre sobre barras diarias.", symbol,
                 )
                 continue
             snapshot = build_snapshot(symbol, bars, indicator_bars=context)
@@ -185,8 +186,8 @@ class UniverseMarketData:
                 snapshots[symbol] = snapshot
 
         log.info(
-            "Embudo: %d del universo -> %d candidatos + %d posiciones = %d analisis "
-            "(precio en %s, indicadores en %s).",
+            "Embudo: %d del universo → %d candidatos + %d posiciones = %d análisis "
+            "(precio en barras de %s, indicadores en barras de %s).",
             len(universe_bars), len(selected), len(required), len(snapshots),
             self.interval, INDICATOR_INTERVAL,
         )
@@ -195,8 +196,8 @@ class UniverseMarketData:
     def describe_selection(self) -> str:
         """Summary of the last sift, for the cycle's log."""
         if self.last_report is None:
-            return "sin cribar todavia"
+            return "sin cribar todavía"
         top = ", ".join(
-            f"{c.symbol}({c.score:.2f})" for c in self.last_report.candidates[:10]
+            f"{c.symbol} ({number(c.score, 2)})" for c in self.last_report.candidates[:10]
         )
-        return f"{self.last_report.summary()}. Top: {top}"
+        return f"{self.last_report.summary()}. Mejores: {top}"

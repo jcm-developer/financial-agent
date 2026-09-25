@@ -64,11 +64,11 @@ def _get_float(key: str, default: float, *, minimum: float | None = None,
         try:
             value = float(raw)
         except ValueError as exc:
-            raise ConfigError(f"{key} debe ser numerico, no {raw!r}.") from exc
+            raise ConfigError(f"{key} debe ser numérico, no {raw!r}.") from exc
     if minimum is not None and value < minimum:
-        raise ConfigError(f"{key}={value} es menor que el minimo permitido {minimum}.")
+        raise ConfigError(f"{key}={value} es menor que el mínimo permitido {minimum}.")
     if maximum is not None and value > maximum:
-        raise ConfigError(f"{key}={value} supera el maximo permitido {maximum}.")
+        raise ConfigError(f"{key}={value} supera el máximo permitido {maximum}.")
     return value
 
 
@@ -79,9 +79,9 @@ def _get_int(key: str, default: int, *, minimum: int | None = None,
         raise ConfigError(f"{key} debe ser un entero, no {value!r}.")
     result = int(value)
     if minimum is not None and result < minimum:
-        raise ConfigError(f"{key}={result} es menor que el minimo permitido {minimum}.")
+        raise ConfigError(f"{key}={result} es menor que el mínimo permitido {minimum}.")
     if maximum is not None and result > maximum:
-        raise ConfigError(f"{key}={result} supera el maximo permitido {maximum}.")
+        raise ConfigError(f"{key}={result} supera el máximo permitido {maximum}.")
     return result
 
 
@@ -132,14 +132,14 @@ class RiskLimits:
     def __post_init__(self) -> None:
         if self.risk_per_trade_pct > self.max_position_pct:
             raise ConfigError(
-                "RISK_PER_TRADE_PCT no puede superar MAX_POSITION_PCT: se arriesgaria "
-                "mas de lo que la posicion puede llegar a valer."
+                "RISK_PER_TRADE_PCT no puede superar MAX_POSITION_PCT: se arriesgaría "
+                "más de lo que la posición puede llegar a valer."
             )
         if self.min_position_pct > self.max_position_pct:
             raise ConfigError(
                 f"MIN_POSITION_PCT ({self.min_position_pct:g}%) no puede superar "
                 f"MAX_POSITION_PCT ({self.max_position_pct:g}%): la banda de tamaño de "
-                "posicion quedaria al reves y el suelo mandaria sobre el techo."
+                "posición quedaría al revés y el suelo mandaría sobre el techo."
             )
         if self.max_position_pct * self.max_open_positions < self.max_total_exposure_pct:
             # This is not an error: it only means the total exposure limit will
@@ -202,7 +202,7 @@ class Infra:
             raise ConfigError(
                 "Falta NVIDIA_API_KEY: sin clave no se puede llamar al modelo.\n"
                 f"  Ponla en {expected} (copia la plantilla con: copy .env.example .env).\n"
-                "  Para mirar el historico sin ninguna clave:  python run.py report"
+                "  Para mirar el histórico sin ninguna clave:  python run.py report"
             )
         return self.model_api_key
 
@@ -411,8 +411,8 @@ class Settings:
             expected = Path(env_file) if env_file else Path.cwd() / ".env"
             if not expected.exists():
                 raise ConfigError(
-                    f"No se encontro el fichero de configuracion {expected}.\n"
-                    "  Crealo copiando la plantilla y rellena la clave del modelo:\n"
+                    f"No se encontró el fichero de configuración {expected}.\n"
+                    "  Créalo copiando la plantilla y rellena la clave del modelo:\n"
                     "      copy .env.example .env\n"
                     "  Solo hace falta NVIDIA_API_KEY.\n"
                     "  Para ver la interfaz sin ninguna clave:\n"
@@ -428,14 +428,14 @@ class Settings:
         # With the funnel, the watchlist is optional: the universe replaces it.
         if not watchlist and not screener.enabled:
             raise ConfigError(
-                "WATCHLIST esta vacia y no hay UNIVERSE_FILE: no hay nada que analizar."
+                "WATCHLIST está vacía y no hay UNIVERSE_FILE: no hay nada que analizar."
             )
 
         bar_interval = (os.getenv("BAR_INTERVAL") or "1d").strip().lower()
         if bar_interval not in {"1d", "1h"}:
             raise ConfigError(
                 f"BAR_INTERVAL debe ser 1d o 1h, no {bar_interval!r}. Yahoo solo "
-                "sirve unos 700 dias de historico horario."
+                "sirve unos 700 días de histórico horario."
             )
 
         settings = cls(
@@ -474,7 +474,7 @@ class Settings:
 
     def describe(self) -> str:
         """Readable summary for the startup log, with no secrets leaked."""
-        suffix = "  [DRY_RUN]" if self.dry_run else ""
+        suffix = "  [simulacro, sin órdenes]" if self.dry_run else ""
         if self.screener.enabled:
             universe = (
                 f"universo={self.screener.universe_file} "
@@ -486,12 +486,13 @@ class Settings:
         # The currency symbol comes from the market: a European budget written
         # with '$' invites comparing it against another profile's as if it were
         # the same unit, and it is not.
+        from .formatting import money
         from .market_calendar import get_market
 
-        money = get_market(self.market).currency_symbol
+        symbol = get_market(self.market).currency_symbol
         return (
             f"{origin} mercado={self.market} datos=yahoo/{self.bar_interval} "
-            f"presupuesto={money}{self.initial_budget:,.2f} "
+            f"presupuesto={money(self.initial_budget, symbol)} "
             f"{universe} modelo={self.llm_model}"
             f"{suffix}"
         )

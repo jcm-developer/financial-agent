@@ -76,9 +76,9 @@ def standard_commission(symbol: str) -> float:
             return amount
     if "." in clean:
         raise KeyError(
-            f"No hay tarifa de comision para {symbol}: su sufijo de bolsa no esta "
+            f"No hay tarifa de comisión para {symbol}: su sufijo de bolsa no está "
             f"en COMMISSION_BY_SUFFIX. Decide lo que cuesta antes de operarlo, "
-            f"porque el valor por defecto seria operar gratis."
+            f"porque el valor por defecto sería operar gratis."
         )
     return NO_SUFFIX_COMMISSION
 

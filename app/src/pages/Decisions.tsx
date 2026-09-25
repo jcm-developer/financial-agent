@@ -20,6 +20,7 @@ import {
 } from "@/components/Table";
 import { groupByDayAndCycle, groupCyclesByDay } from "@/lib/grouping";
 import { money, dateTime, time, longDate, sentence } from "@/lib/format";
+import { actionLabel, orderStatusLabel } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 import { useTitle } from "@/layout/useTitle";
@@ -586,7 +587,7 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
               row.action === "hold" && "text-text-muted",
             )}
           >
-            {row.action}
+            {actionLabel(row.action)}
           </span>
         </Td>
         <Td numeric>{row.conviction}</Td>
@@ -618,7 +619,7 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
         <Td>
           {row.order_status ? (
             <span className="text-caption text-text-secondary">
-              {row.order_status}
+              {orderStatusLabel(row.order_status)}
               {row.filled_avg_price !== null && row.filled_avg_price !== undefined
                 ? ` a ${money(row.filled_avg_price, symbol)}`
                 : ""}

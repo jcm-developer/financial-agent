@@ -58,14 +58,14 @@ def select_profile(db: Database, *, name: str = "") -> str:
     # without this precedence the startup message never appeared.
     if not profiles:
         raise ConfigError(
-            "No hay ningun perfil en la base de datos, y el ciclo toma\n"
-            "  sus parametros del perfil y no del .env.\n"
+            "No hay ningún perfil en la base de datos, y el ciclo toma\n"
+            "  sus parámetros del perfil y no del .env.\n"
             "  Crea uno con:\n"
             "      python run.py new-profile --name europa-01 --market eu --watch 89\n"
-            "  Eso crea el perfil, sus parametros, su universo y su cartera, y lo\n"
+            "  Eso crea el perfil, sus parámetros, su universo y su cartera, y lo\n"
             "  deja activo.\n"
-            "  Si vienes de un .env de la version anterior que ya trae los\n"
-            "  parametros dentro, puedes convertirlo en su lugar con:\n"
+            "  Si vienes de un .env de la versión anterior que ya trae los\n"
+            "  parámetros dentro, puedes convertirlo en su lugar con:\n"
             "      python run.py import-profile --name experimento-01"
         )
 
@@ -73,7 +73,7 @@ def select_profile(db: Database, *, name: str = "") -> str:
         profile = db.get_profile_by_name(name)
         if profile is None:
             raise ConfigError(
-                f"No existe ningun perfil llamado {name!r}.\n"
+                f"No existe ningún perfil llamado «{name}».\n"
                 f"  Perfiles disponibles: "
                 + ", ".join(p["name"] for p in profiles)
             )
@@ -84,16 +84,16 @@ def select_profile(db: Database, *, name: str = "") -> str:
         return str(active[0]["id"])
     if not active:
         raise ConfigError(
-            "Ningun perfil esta activo, asi que no hay contra que operar.\n"
+            "Ningún perfil está activo, así que no hay contra qué operar.\n"
             "  Perfiles: "
             + ", ".join(f"{p['name']} ({p['status']})" for p in profiles)
-            + "\n  Activalo con:  python run.py activate --profile <nombre>"
+            + "\n  Actívalo con:  python run.py activate --profile <nombre>"
         )
     raise ConfigError(
         f"Hay {len(active)} perfiles activos y ninguno es el evidente. Elige uno:\n"
         + "\n".join(f"      python run.py cycle --profile {p['name']}" for p in active)
         + "\n  Ejecutar el ciclo contra el experimento equivocado ensucia dos\n"
-        "  historicos a la vez y no se puede deshacer."
+        "  históricos a la vez y no se puede deshacer."
     )
 
 
@@ -118,10 +118,10 @@ def resolve_settings(db: Database, profile_id: str, *, infra: Infra) -> Settings
     bar_interval = str(row["bar_interval"] or "1d").strip().lower()
     if bar_interval not in CYCLE_INTERVALS:
         raise ConfigError(
-            f"El perfil {label!r} tiene bar_interval={bar_interval!r}, y el ciclo "
-            f"solo analiza {' o '.join(CYCLE_INTERVALS)}. El valor '1m' es para el "
-            "ingestor de precios, no para el analisis: con barras de un minuto no "
-            "hay historico suficiente para los indicadores largos."
+            f"El perfil «{label}» usa barras de «{bar_interval}», y el ciclo "
+            f"solo analiza {' o '.join(CYCLE_INTERVALS)}. Las barras de «1m» son para el "
+            "ingestor de precios, no para el análisis: con barras de un minuto no "
+            "hay histórico suficiente para los indicadores largos."
         )
 
     market = _resolve_market(row, label=label)
@@ -130,9 +130,9 @@ def resolve_settings(db: Database, profile_id: str, *, infra: Infra) -> Settings
     watchlist = tuple(db.get_profile_universe(profile_id))
     if not watchlist and not universe_file:
         raise ConfigError(
-            f"El perfil {label!r} no tiene nada que analizar: ni universo propio "
+            f"El perfil «{label}» no tiene nada que analizar: ni universo propio "
             "ni fichero de universo.\n"
-            "  Anade simbolos al perfil o apunta universe_file a un fichero como "
+            "  Añade símbolos al perfil o apunta universe_file a un fichero como "
             f"{market.universe_file}."
         )
 
@@ -150,7 +150,7 @@ def resolve_settings(db: Database, profile_id: str, *, infra: Infra) -> Settings
     try:
         risk = risk_presets.resolve_limits(row)
     except ConfigError as exc:
-        raise ConfigError(f"Perfil {label!r}: {exc}") from exc
+        raise ConfigError(f"Perfil «{label}»: {exc}") from exc
 
     provider, api_key, base_url = _resolve_model_access(row, infra, label=label)
 
@@ -205,7 +205,7 @@ def _resolve_market(row: dict[str, Any], *, label: str) -> market_calendar.Marke
     try:
         return market_calendar.get_market(code)
     except market_calendar.UnknownMarket as exc:
-        raise ConfigError(f"Perfil {label!r}: {exc}") from exc
+        raise ConfigError(f"Perfil «{label}»: {exc}") from exc
 
 
 def _check_symbols_match_market(
@@ -224,12 +224,14 @@ def _check_symbols_match_market(
         return
     muestra = ", ".join(foreign[:8]) + ("..." if len(foreign) > 8 else "")
     raise ConfigError(
-        f"El perfil {label!r} opera en {market.code} ({market.label}) pero su "
-        f"universo trae {len(foreign)} simbolo(s) de otra bolsa: {muestra}\n"
-        "  Un perfil cubre un solo mercado: de ahi salen el horario, el "
+        f"El perfil «{label}» opera en {market.code} ({market.label}), pero su "
+        "universo trae "
+        + ("1 símbolo" if len(foreign) == 1 else f"{len(foreign)} símbolos")
+        + f" de otra bolsa: {muestra}\n"
+        "  Un perfil cubre un solo mercado: de ahí salen el horario, el "
         "calendario y la divisa,\n"
-        "  y el proyecto no convierte divisa en ningun sitio.\n"
-        "  Saca esos simbolos del perfil, o crea otro perfil con su mercado."
+        "  y el proyecto no convierte divisas en ningún sitio.\n"
+        "  Saca esos símbolos del perfil o crea otro perfil con su mercado."
     )
 
 
@@ -247,7 +249,7 @@ def _resolve_model_access(
     try:
         known = llm.resolve_provider(provider)
     except llm.LLMError as exc:
-        raise ConfigError(f"Perfil {label!r}: {exc}") from exc
+        raise ConfigError(f"Perfil «{label}»: {exc}") from exc
 
     api_key = str(row["llm_api_key"] or "").strip()
     if not api_key:
@@ -255,7 +257,7 @@ def _resolve_model_access(
             api_key = infra.require_model_key()
         else:
             raise ConfigError(
-                f"El perfil {label!r} usa {known.label} pero no tiene clave de API.\n"
+                f"El perfil «{label}» usa {known.label}, pero no tiene clave de API.\n"
                 "  La clave va en el perfil, no en el .env: solo NVIDIA NIM usa\n"
                 "  NVIDIA_API_KEY como respaldo.\n"
                 f"      db.update_settings(<perfil>, {{'llm_api_key': '...'}})"
@@ -389,7 +391,7 @@ def create_market_profile(
         # If the market's file carries symbols from another exchange, the profile
         # would not even resolve. Better said here than on the first cycle.
         raise UniverseError(
-            f"{market.universe_file} tiene simbolos que no son de "
+            f"{market.universe_file} tiene símbolos que no son de "
             f"{market.code}: {', '.join(forasteros[:8])}"
         )
 
@@ -397,9 +399,9 @@ def create_market_profile(
         seguidos = universe[:watch]
     elif len(universe) > MAX_LIVE_SYMBOLS:
         raise ConfigError(
-            f"{market.universe_file} tiene {len(universe)} simbolos y el "
-            f"ingestor pide uno por peticion cada minuto.\n"
-            f"  Elige cuantos seguir en vivo:  --watch 50\n"
+            f"{market.universe_file} tiene {len(universe)} símbolos y el "
+            f"ingestor pide uno por petición cada minuto.\n"
+            f"  Elige cuántos seguir en vivo:  --watch 50\n"
             f"  (el screener sigue cribando el universo entero para el ciclo)"
         )
     else:
@@ -553,7 +555,7 @@ def import_env_profile(
         db.set_profile_status(profile_id, "active")
 
     log.info(
-        "Perfil %r importado del .env: %d simbolos, limites de riesgo en modo "
+        "Perfil %r importado del .env: %d símbolos, límites de riesgo en modo "
         "avanzado.", name, len(env_settings.watchlist),
     )
     return profile_id
@@ -579,5 +581,5 @@ def cycle_settings(db: Database, cycle_id: str) -> dict[str, Any] | None:
     try:
         return json.loads(raw)
     except (TypeError, ValueError):
-        log.warning("El settings_json del ciclo %s no es JSON valido.", cycle_id)
+        log.warning("El settings_json del ciclo %s no es JSON válido.", cycle_id)
         return None

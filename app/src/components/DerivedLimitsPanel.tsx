@@ -46,7 +46,7 @@ interface Props {
   source: "sliders" | "effective";
 }
 
-const HAND_SET = "Fijado a mano en los limites duros de abajo.";
+const HAND_SET = "Fijado a mano en los límites duros de abajo.";
 
 /**
  * The panel showing the eleven limits in force.

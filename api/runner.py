@@ -132,7 +132,7 @@ class CycleRunner:
         process.wait()
         self._returncode = process.returncode
         self._finished_at = datetime.now(timezone.utc).isoformat()
-        log.info("Ciclo terminado con codigo %s.", process.returncode)
+        log.info("Ciclo terminado con código %s.", process.returncode)
 
     def stop(self, cycle_id: str | None = None) -> tuple[bool, str]:
         """Asks the running cycle to stop, whoever launched it (F4.21).
@@ -155,14 +155,14 @@ class CycleRunner:
                 return False, f"No se pudo pedir la parada: {exc}"
             return True, (
                 "Parada pedida. El ciclo se detiene en su siguiente punto de "
-                "control, que puede tardar si esta esperando al modelo."
+                "control, que puede tardar si está esperando al modelo."
             )
 
         with self._lock:
             if not self.running or self._process is None:
-                return False, "No hay ningun ciclo en marcha."
+                return False, "No hay ningún ciclo en marcha."
             self._process.terminate()
-        return True, "Se ha pedido la parada del ciclo, que aun no habia empezado a registrar."
+        return True, "Se ha pedido la parada del ciclo, que aún no había empezado a registrar."
 
     def status(self) -> dict:
         return {

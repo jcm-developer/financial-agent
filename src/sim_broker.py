@@ -36,9 +36,14 @@ from datetime import datetime, timezone
 from . import fees
 from .broker import BrokerError, SubmittedOrder
 from .db import Database
+from .formatting import money, number, signed_money
 from .models import AccountState, BrokerPosition
 
 log = logging.getLogger(__name__)
+
+#: How the fill price was taken, as the log on the Ciclos screen names it. The
+#: machine key stays in `sim_fills.basis`.
+_BASIS_LABELS = {"next_open": "apertura siguiente", "close": "cierre"}
 
 
 def _now() -> str:
@@ -106,8 +111,8 @@ class SimBroker:
              timestamp, timestamp),
         )
         log.info(
-            "Cuenta simulada creada con %.2f %s de efectivo inicial.",
-            initial_cash, self.currency_symbol,
+            "Cuenta simulada creada con %s de efectivo inicial.",
+            money(initial_cash, self.currency_symbol),
         )
 
     def _account_row(self) -> dict:
@@ -158,7 +163,7 @@ class SimBroker:
             "where id = ?",
             (equity, session, _now(), self.account_id),
         )
-        log.debug("Sesion %s: referencia de equity fijada en %.2f.", session, equity)
+        log.debug("Sesión %s: valor de referencia fijado en %s.", session, number(equity))
 
     # -- Lectura -----------------------------------------------------------
 
@@ -223,11 +228,11 @@ class SimBroker:
     def buy_market(self, symbol: str, qty: float) -> SubmittedOrder:
         whole_qty = int(qty)
         if whole_qty < 1:
-            raise BrokerError(f"Cantidad invalida para comprar {symbol}: {qty}.")
+            raise BrokerError(f"Cantidad no válida para comprar {symbol}: {qty}.")
 
         quote = self._quotes.get(symbol)
         if quote is None:
-            raise BrokerError(f"No hay precio de ejecucion para {symbol}.")
+            raise BrokerError(f"No hay precio de ejecución para {symbol}.")
 
         # Slippage works against you: buying pays a little more.
         price = quote.fill_price * (1 + self.slippage_bps / 10_000.0)
@@ -239,7 +244,8 @@ class SimBroker:
         if cost > cash + 1e-9:
             raise BrokerError(
                 f"Efectivo insuficiente para comprar {whole_qty} de {symbol}: "
-                f"hacen falta {cost:,.2f} y hay {cash:,.2f}."
+                f"hacen falta {money(cost, self.currency_symbol)} y hay "
+                f"{money(cash, self.currency_symbol)}."
             )
 
         existing = self.db.query(
@@ -277,10 +283,12 @@ class SimBroker:
         self._record_fill(symbol, "buy", whole_qty, price, quote.basis, commission)
 
         log.info(
-            "[SIM] COMPRA %s: %d a %.4f (%s, deslizamiento %.0f pb, "
-            "comision %.2f). Efectivo: %.2f",
-            symbol, whole_qty, price, quote.basis, self.slippage_bps,
-            commission, cash - cost,
+            "[SIM] COMPRA %s: %d a %s (%s, deslizamiento de %s pb, "
+            "comisión de %s). Efectivo: %s",
+            symbol, whole_qty, number(price, 4),
+            _BASIS_LABELS.get(quote.basis, quote.basis), number(self.slippage_bps, 0),
+            money(commission, self.currency_symbol),
+            money(cash - cost, self.currency_symbol),
         )
         return SubmittedOrder(
             broker_order_id=f"sim-{uuid.uuid4().hex[:12]}",
@@ -291,7 +299,7 @@ class SimBroker:
     def sell_market(self, symbol: str, qty: float) -> SubmittedOrder:
         whole_qty = int(qty)
         if whole_qty < 1:
-            raise BrokerError(f"Cantidad invalida para vender {symbol}: {qty}.")
+            raise BrokerError(f"Cantidad no válida para vender {symbol}: {qty}.")
         return self._sell(symbol, whole_qty)
 
     def close_position(self, symbol: str) -> SubmittedOrder:
@@ -300,20 +308,20 @@ class SimBroker:
             (self.account_id, symbol),
         )
         if not rows:
-            raise BrokerError(f"No hay posicion abierta en {symbol} que cerrar.")
+            raise BrokerError(f"No hay posición abierta en {symbol} que cerrar.")
         return self._sell(symbol, int(float(rows[0]["qty"])))
 
     def _sell(self, symbol: str, whole_qty: int) -> SubmittedOrder:
         quote = self._quotes.get(symbol)
         if quote is None:
-            raise BrokerError(f"No hay precio de ejecucion para {symbol}.")
+            raise BrokerError(f"No hay precio de ejecución para {symbol}.")
 
         rows = self.db.query(
             "select * from sim_positions where account_id = ? and symbol = ?",
             (self.account_id, symbol),
         )
         if not rows:
-            raise BrokerError(f"No hay posicion abierta en {symbol}.")
+            raise BrokerError(f"No hay posición abierta en {symbol}.")
 
         position = rows[0]
         held = float(position["qty"])
@@ -362,8 +370,11 @@ class SimBroker:
         )
 
         log.info(
-            "[SIM] VENTA %s: %d a %.4f (%s). P&L %+.2f. Efectivo: %.2f",
-            symbol, whole_qty, price, quote.basis, realized, new_cash,
+            "[SIM] VENTA %s: %d a %s (%s). Resultado: %s. Efectivo: %s",
+            symbol, whole_qty, number(price, 4),
+            _BASIS_LABELS.get(quote.basis, quote.basis),
+            signed_money(realized, self.currency_symbol),
+            money(new_cash, self.currency_symbol),
         )
         return SubmittedOrder(
             broker_order_id=f"sim-{uuid.uuid4().hex[:12]}",

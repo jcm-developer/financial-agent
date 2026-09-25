@@ -161,7 +161,7 @@ def test_describe_says_closed_and_when_it_opens():
 
 
 def test_describe_flags_a_half_session():
-    assert "media sesion" in mc.describe(et(2026, 12, 24, 12, 0))
+    assert "media sesión" in mc.describe(et(2026, 12, 24, 12, 0))
 
 
 # -- Cobertura de la tabla ---------------------------------------------------

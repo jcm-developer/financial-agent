@@ -118,7 +118,7 @@ def build_snapshot(
     context_bars = context[:-1]
     if len(context_bars) < MIN_BARS:
         log.warning(
-            "%s tiene %d barras utilizables (minimo %d); se omite del analisis.",
+            "%s tiene %d barras utilizables (mínimo %d); se omite del análisis.",
             symbol, len(context_bars), MIN_BARS,
         )
         return None
@@ -191,7 +191,7 @@ class YahooMarketData:
             import yfinance  # noqa: F401 - solo para fallar pronto y claro
         except ImportError as exc:  # pragma: no cover
             raise MarketDataError(
-                "Falta el paquete yfinance. Instalalo con: pip install yfinance"
+                "Falta el paquete yfinance. Se instala con: pip install yfinance"
             ) from exc
         self.watchlist = tuple(watchlist)
         self.lookback_days = lookback_days
@@ -215,7 +215,7 @@ class YahooMarketData:
         for symbol in symbols:
             bars = self._extract_bars(price_frame, symbol, single=single)
             if not bars:
-                log.warning("%s: Yahoo no devolvio datos utilizables; se omite.", symbol)
+                log.warning("%s: Yahoo no devolvió datos utilizables; se omite.", symbol)
                 continue
             context = (
                 bars if indicator_frame is price_frame
@@ -223,8 +223,8 @@ class YahooMarketData:
             )
             if not context:
                 log.warning(
-                    "%s: Yahoo no devolvio barras diarias; se omite (los indicadores "
-                    "se calculan siempre en diario).", symbol,
+                    "%s: Yahoo no devolvió barras diarias; se omite (los indicadores "
+                    "se calculan siempre sobre barras diarias).", symbol,
                 )
                 continue
             snapshot = build_snapshot(symbol, bars, indicator_bars=context)
@@ -232,7 +232,7 @@ class YahooMarketData:
                 snapshots[symbol] = snapshot
 
         log.info(
-            "Datos de Yahoo listos para %d/%d simbolos (precio en %s, indicadores en %s).",
+            "Datos de Yahoo listos para %d de %d símbolos (precio en barras de %s, indicadores en barras de %s).",
             len(snapshots), len(symbols), self.interval, INDICATOR_INTERVAL,
         )
         return snapshots
@@ -261,8 +261,8 @@ class YahooMarketData:
 
         if frame is None or frame.empty:
             raise MarketDataError(
-                f"Yahoo no devolvio ninguna barra de {interval}. Comprueba la conexion "
-                f"y que los simbolos existan: {', '.join(symbols)}"
+                f"Yahoo no devolvió ninguna barra de {interval}. Conviene comprobar la "
+                f"conexión y que los símbolos existan: {', '.join(symbols)}"
             )
         return frame
 
@@ -338,8 +338,8 @@ def build_market_data(settings, database=None) -> MarketDataProvider:
     if settings.screener.enabled:
         if database is None:
             raise MarketDataError(
-                "El embudo por universo necesita la base de datos para la cache "
-                "de barras."
+                "El cribado del universo necesita la base de datos para guardar "
+                "las barras en caché."
             )
         from .universe_data import UniverseMarketData
 

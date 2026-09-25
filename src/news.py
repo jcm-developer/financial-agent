@@ -244,7 +244,7 @@ def load_search_names(path: str | Path = NEWS_NAMES_FILE) -> dict[str, SearchNam
             continue
         parts = [part.strip() for part in line.split("|")]
         if len(parts) < 2 or not parts[0] or not parts[1]:
-            raise ValueError(f"{file}: linea sin simbolo o sin consulta: {raw!r}")
+            raise ValueError(f"{file}: línea sin símbolo o sin consulta: {raw!r}")
         aliases = tuple(a.strip() for a in parts[2].split(",") if a.strip()) if len(parts) > 2 else ()
         locale = None
         if len(parts) > 3 and parts[3]:
@@ -298,8 +298,8 @@ class NewsProvider:
         try:
             items = parse_google_rss(self._fetch_text(url))
         except Exception as exc:  # noqa: BLE001 - any failure of the feed is the same failure
-            log.warning("Google News fallo para %s (%s); se prueba Yahoo.", symbol, exc)
-            return self._from_yahoo(symbol, reason=f"Google News fallo: {exc}")
+            log.warning("Google News falló para %s (%s); se prueba con Yahoo.", symbol, exc)
+            return self._from_yahoo(symbol, reason=f"Google News falló: {exc}")
         finally:
             self._sleep()
 
@@ -310,8 +310,8 @@ class NewsProvider:
         try:
             items = parse_yahoo_items(self._fetch_yahoo(symbol))
         except Exception as exc:  # noqa: BLE001
-            log.warning("Tampoco Yahoo dio noticias de %s: %s", symbol, exc)
-            return NewsResult(error=f"{reason}; Yahoo tambien fallo: {exc}")
+            log.warning("Yahoo tampoco dio noticias de %s: %s", symbol, exc)
+            return NewsResult(error=f"{reason}; Yahoo también falló: {exc}")
         log.info("Noticias de %s desde Yahoo (%s).", symbol, reason)
         return NewsResult(self._keep(items))
 
@@ -333,7 +333,7 @@ class NewsProvider:
                 collected += self._keep(found, max_age_days=max_age)[:share]
             except Exception as exc:  # noqa: BLE001
                 errors.append(f"{language}-{country}: {exc}")
-                log.warning("Contexto de mercado %s-%s no disponible: %s", language, country, exc)
+                log.warning("Noticias de mercado %s-%s no disponibles: %s", language, country, exc)
             finally:
                 self._sleep()
         if errors and not collected:

@@ -200,7 +200,7 @@ def _with_news(prompt: str, honesty_old: str, honesty_new: str, before: str) -> 
     on exactly the prompt it always ran on.
     """
     if honesty_old not in prompt or before not in prompt:
-        raise RuntimeError("El prompt base cambio y la variante con noticias ya no encaja.")
+        raise RuntimeError("El prompt base cambió y la variante con noticias ya no encaja.")
     return prompt.replace(honesty_old, honesty_new).replace(before, _NEWS_REFS_FIELD + before)
 
 
@@ -415,7 +415,7 @@ class Analyst:
             )
         except LLMError as exc:
             self.failures += 1
-            log.warning("El analisis de entrada de %s fallo: %s", snapshot.symbol, exc)
+            log.warning("Falló el análisis de entrada de %s: %s", snapshot.symbol, exc)
             return None
 
         data = response.parsed or {}
@@ -442,7 +442,7 @@ class Analyst:
         )
         _warn_unknown_refs(snapshot.symbol, unknown)
         log.info(
-            "%s -> %s (conviccion %d) %s",
+            "%s -> %s (convicción %d) %s",
             snapshot.symbol, proposal.action, proposal.conviction,
             _truncate(proposal.thesis, 110),
         )
@@ -472,7 +472,7 @@ class Analyst:
             )
         except LLMError as exc:
             self.failures += 1
-            log.warning("La revision de salida de %s fallo: %s", position.symbol, exc)
+            log.warning("Falló la revisión de salida de %s: %s", position.symbol, exc)
             return None
 
         data = response.parsed or {}
@@ -685,8 +685,8 @@ def _coerce_news_refs(
 def _warn_unknown_refs(symbol: str, unknown: list[str]) -> None:
     if unknown:
         log.warning(
-            "%s: el analista cito noticias que no estaban en su prompt: %s. "
-            "Se descartan y quedan en la respuesta cruda.",
+            "%s: el analista citó noticias que no se le habían dado: %s. "
+            "Se descartan, aunque quedan guardadas en su respuesta original.",
             symbol, ", ".join(unknown),
         )
 
@@ -837,7 +837,7 @@ def _coerce_action(value: Any, *, allowed: set[str]) -> str:
         candidate = value.strip().lower()
         if candidate in allowed:
             return candidate
-    log.debug("Accion no reconocida %r; se degrada a 'hold'.", value)
+    log.debug("Acción no reconocida %r; se toma como 'hold'.", value)
     return "hold"
 
 

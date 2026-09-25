@@ -190,6 +190,9 @@ def rellenar(db: Database, provider: YahooQuotes, symbols: list[str], days: int)
 
 
 def main() -> int:
+    from src.formatting import utf8_console
+
+    utf8_console()
     logging.basicConfig(
         level=(os.getenv("LOG_LEVEL") or "INFO").strip().upper(),
         format="%(asctime)s  %(levelname)-7s %(name)-10s %(message)s",

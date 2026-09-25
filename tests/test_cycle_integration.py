@@ -43,10 +43,10 @@ def test_the_summary_carries_the_profile_currency():
     """
     numbers = dict(equity_start=10_000.0, equity_end=10_040.5)
 
-    assert "Equity: €10,000.00 -> €10,040.50" in CycleReport(
+    assert "Capital: 10.000,00 € → 10.040,50 €" in CycleReport(
         currency_symbol="€", **numbers
     ).summary()
-    assert "Equity: $10,000.00 -> $10,040.50" in CycleReport(
+    assert "Capital: 10.000,00 $ → 10.040,50 $" in CycleReport(
         currency_symbol="$", **numbers
     ).summary()
 

@@ -146,7 +146,7 @@ def test_fractional_quantities_are_truncated_to_whole_shares(broker):
 def test_buying_less_than_one_share_is_refused(broker):
     broker.set_quotes({"AAPL": quote(100.0)})
 
-    with pytest.raises(BrokerError, match="Cantidad invalida"):
+    with pytest.raises(BrokerError, match="Cantidad no válida"):
         broker.buy_market("AAPL", 0.5)
 
 
@@ -304,7 +304,7 @@ def test_no_short_selling(broker):
     """Selling what you do not hold would open a short, which the simulator does not model."""
     broker.set_quotes({"AAPL": quote(100.0)})
 
-    with pytest.raises(BrokerError, match="No hay posicion abierta"):
+    with pytest.raises(BrokerError, match="No hay posición abierta"):
         broker.sell_market("AAPL", 10)
 
 

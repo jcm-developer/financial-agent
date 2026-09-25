@@ -189,7 +189,7 @@ class Database:
         if read_only:
             if not self.path.exists():
                 raise DatabaseError(
-                    f"La base de datos {self.path} no existe todavia. "
+                    f"La base de datos {self.path} no existe todavía. "
                     "Ejecuta primero: python run.py cycle"
                 )
             target: Any = f"file:{self.path.as_posix()}?mode=ro"
@@ -224,7 +224,7 @@ class Database:
         try:
             self._conn.executescript(sql)
         except sqlite3.Error as exc:
-            raise DatabaseError(f"Fallo al aplicar schema.sql: {exc}") from exc
+            raise DatabaseError(f"Falló al aplicar schema.sql: {exc}") from exc
         # The order is not a detail: renaming has to happen before the missing
         # columns are added, or the column that just changed name would be added
         # again under its new name, empty and with the schema's default. See
@@ -255,8 +255,8 @@ class Database:
                 if new in existing:
                     raise DatabaseError(
                         f"{table} tiene a la vez {old} y {new}. La primera es la que "
-                        f"lleva el valor bueno y la segunda la que leeria el codigo, "
-                        f"asi que seguir usaria un valor que nadie eligio. "
+                        f"lleva el valor bueno y la segunda la que leería el código, "
+                        f"así que seguir usaría un valor que nadie eligió. "
                         f"Copia el valor a mano y borra {old}."
                     )
                 self._execute(f"alter table {table} rename column {old} to {new}")
@@ -278,7 +278,7 @@ class Database:
                 if column in existing:
                     continue
                 self._execute(f"alter table {table} add column {column} {definition}")
-                log.info("Columna %s.%s anadida a una base existente.", table, column)
+                log.info("Columna %s.%s añadida a una base existente.", table, column)
 
     def close(self) -> None:
         try:
@@ -298,7 +298,7 @@ class Database:
         try:
             return self._conn.execute(sql, params)
         except sqlite3.Error as exc:
-            raise DatabaseError(f"Fallo la consulta SQL ({exc}). SQL: {sql.strip()[:160]}") from exc
+            raise DatabaseError(f"Falló la consulta SQL ({exc}). SQL: {sql.strip()[:160]}") from exc
 
     def _insert(self, table: str, payload: dict[str, Any]) -> sqlite3.Cursor:
         columns = ", ".join(payload)
@@ -326,7 +326,7 @@ class Database:
         guarantee each row carries its mandatory fields. Returns the affected rows.
         """
         if self.read_only:
-            raise DatabaseError("La base esta abierta en solo lectura.")
+            raise DatabaseError("La base está abierta en solo lectura.")
         return self._execute(sql, params).rowcount
 
     def _executemany(self, sql: str, rows: list[tuple]) -> int:
@@ -336,7 +336,7 @@ class Database:
             return self._conn.executemany(sql, rows).rowcount
         except sqlite3.Error as exc:
             raise DatabaseError(
-                f"Fallo la escritura por lotes ({exc}). SQL: {sql.strip()[:160]}"
+                f"Falló la escritura por lotes ({exc}). SQL: {sql.strip()[:160]}"
             ) from exc
 
     def _columns(self, table: str) -> set[str]:
@@ -367,7 +367,7 @@ class Database:
             "select id from profiles where name = ? limit 1", (name,)
         ).fetchone()
         if existing is not None:
-            raise DatabaseError(f"Ya existe un perfil llamado {name!r}.")
+            raise DatabaseError(f"Ya existe un perfil llamado «{name}».")
 
         profile_id = _new_id()
         now = _now()
@@ -451,7 +451,7 @@ class Database:
     def set_profile_status(self, profile_id: str, status: str) -> None:
         valid = {"draft", "active", "paused", "archived"}
         if status not in valid:
-            raise DatabaseError(f"Estado invalido: {status!r}. Validos: {sorted(valid)}.")
+            raise DatabaseError(f"Estado no válido: «{status}». Los válidos son: {', '.join(sorted(valid))}.")
         payload: dict[str, Any] = {"status": status, "updated_at": _now()}
         if status == "archived":
             payload["archived_at"] = _now()
@@ -481,7 +481,7 @@ class Database:
             "select * from agent_settings where profile_id = ?", (profile_id,)
         )
         if not rows:
-            raise DatabaseError(f"El perfil {profile_id} no tiene parametros.")
+            raise DatabaseError(f"El perfil {profile_id} no tiene parámetros.")
         return rows[0]
 
     def update_settings(
@@ -500,8 +500,8 @@ class Database:
         unknown = set(changes) - allowed
         if unknown:
             raise DatabaseError(
-                f"Parametros desconocidos: {', '.join(sorted(unknown))}. "
-                f"Validos: {', '.join(sorted(allowed))}."
+                f"Parámetros desconocidos: {', '.join(sorted(unknown))}. "
+                f"Los válidos son: {', '.join(sorted(allowed))}."
             )
 
         current = self.get_settings(profile_id)
@@ -536,7 +536,7 @@ class Database:
             ],
         )
         log.info(
-            "Perfil %s: %d parametro(s) actualizado(s) (%s).",
+            "Perfil %s: %d parámetro(s) actualizado(s) (%s).",
             profile_id, len(applied), ", ".join(sorted(applied)),
         )
         return sorted(applied)
@@ -650,8 +650,8 @@ class Database:
                 # Mezclar paper y dinero real en la misma cartera haria
                 # incomparables los historicos.
                 raise DatabaseError(
-                    f"La cartera {name!r} se creo en modo {row['mode']!r} y ahora se "
-                    f"pide {mode!r}. Usa un PORTFOLIO_NAME distinto para no mezclar "
+                    f"La cartera «{name}» se creó en modo «{row['mode']}» y ahora se "
+                    f"pide «{mode}». Usa un PORTFOLIO_NAME distinto para no mezclar "
                     f"resultados de paper y de dinero real."
                 )
             return str(row["id"])
@@ -1209,7 +1209,7 @@ class Database:
             if position is None:
                 log.warning(
                     "%s figuraba abierta en la base de datos pero no existe en el "
-                    "broker; se marca cerrada por reconciliacion.", symbol,
+                    "broker; se marca cerrada por reconciliación.", symbol,
                 )
                 self.close_position(
                     str(row["id"]),

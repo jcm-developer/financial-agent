@@ -255,10 +255,11 @@ def _refuse_rename_with_history(db: ConfigDb, profile: dict) -> None:
     if cycles:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"El perfil {profile['name']!r} ya tiene {cycles} ciclo(s) y su cartera "
-            "se llama igual que el. Renombrarlo ahora dejaria el historico colgando "
-            "de un nombre que ya no existe. Duplicalo con el nombre nuevo si lo que "
-            "quieres es seguir por otro camino.",
+            f"El perfil «{profile['name']}» ya tiene "
+            + ("1 ciclo" if cycles == 1 else f"{cycles} ciclos")
+            + " y su cartera se llama igual que él. Renombrarlo ahora dejaría el "
+            "histórico colgando de un nombre que ya no existe. Duplícalo con el "
+            "nombre nuevo si quieres seguir por otro camino.",
         )
 
 
@@ -279,11 +280,11 @@ def delete_profile(
     if confirm != profile["name"]:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            f"Para borrar {profile['name']!r} y su historico, repite el nombre: "
+            f"Para borrar «{profile['name']}» y su histórico, repite el nombre: "
             f"?confirm={profile['name']}",
         )
     db.delete_profile(profile["id"])
-    return {"ok": True, "message": f"Perfil {profile['name']!r} borrado."}
+    return {"ok": True, "message": f"Perfil «{profile['name']}» borrado."}
 
 
 @router.patch("/{profile_ref}/settings", response_model=SettingsApplied)
@@ -342,7 +343,10 @@ def put_universe(db: ConfigDb, profile_ref: str, body: UniverseUpdate):
     db.set_profile_universe(profile["id"], symbols)
     return {
         "ok": True,
-        "message": f"{len(symbols)} simbolo(s) en seguimiento para {profile['name']!r}.",
+        "message": (
+            ("1 símbolo" if len(symbols) == 1 else f"{len(symbols)} símbolos")
+            + f" en seguimiento para «{profile['name']}»."
+        ),
     }
 
 
@@ -372,8 +376,9 @@ def _check_universe_matches_market(db: ConfigDb, profile: dict, changes: dict) -
 def _foreign_message(name: str, market, foreign: list[str]) -> str:
     muestra = ", ".join(foreign[:8]) + ("..." if len(foreign) > 8 else "")
     return (
-        f"El perfil {name!r} quedaria en {market.code} ({market.label}) con "
-        f"{len(foreign)} simbolo(s) de otra bolsa: {muestra}\n"
-        "  Un perfil cubre un solo mercado: de ahi salen el horario, el calendario "
-        "y la divisa, y el proyecto no convierte divisa en ningun sitio."
+        f"El perfil «{name}» quedaría en {market.code} ({market.label}) con "
+        + ("1 símbolo" if len(foreign) == 1 else f"{len(foreign)} símbolos")
+        + f" de otra bolsa: {muestra}\n"
+        "  Un perfil cubre un solo mercado: de ahí salen el horario, el calendario "
+        "y la divisa, y el proyecto no convierte divisas en ningún sitio."
     )

@@ -53,7 +53,7 @@ def test_empty_configuration_is_rejected(raw):
 
 @pytest.mark.parametrize("raw", ["22", "22h15", "abc", "22:15:30"])
 def test_malformed_time_is_rejected(raw):
-    with pytest.raises(ScheduleError, match="invalida"):
+    with pytest.raises(ScheduleError, match="no válida"):
         parse_times(raw)
 
 

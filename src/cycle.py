@@ -25,6 +25,7 @@ from .analyst import Analyst, prompt_versions
 from .broker import Broker, BrokerError
 from .config import Settings
 from .db import Database, DatabaseError
+from .formatting import money, number as fmt_number, signed_money
 from .llm import LLMClient
 from .market_data import INDICATOR_INTERVAL, MarketDataError, build_market_data
 from .models import AccountState, ExitSignal, MarketSnapshot, Proposal
@@ -43,6 +44,28 @@ STALE_CYCLE_MINUTES = 90
 #: `cycles.error` and in the summary, both of which are read on screen, so it is
 #: screen text (and it is what tells this 'halted' from the kill switch's).
 STOP_REASON = "Parada solicitada desde la interfaz."
+
+#: How the summary names each `cycles.status`; the column keeps the machine value.
+_STATUS_LABELS = {
+    "running": "en marcha",
+    "completed": "completado",
+    "halted": "detenido",
+    "failed": "fallido",
+    "skipped": "omitido",
+}
+
+#: How the log names the rule behind an exit. `positions.exit_reason` keeps the
+#: machine key in brackets, because the Posiciones screen splits it from there.
+_EXIT_RULE_LABELS = {
+    "stop_loss_hit": "stop",
+    "take_profit_hit": "objetivo",
+    "llm_exit": "decisión del analista",
+    "experiment_closed": "cierre del experimento",
+}
+
+#: Why an approved order was not sent, as the order's `error` and the log say it.
+_DRY_RUN_REASON = "modo de prueba (DRY_RUN)"
+_MARKET_CLOSED_REASON = "mercado cerrado"
 
 #: Fraction of the profile's initial stop distance that the trailing stop may
 #: never cross (F9.25). Half, so the ratchet still has somewhere to go —a floor
@@ -108,19 +131,19 @@ class CycleReport:
         if self.status == "skipped":
             return f"Ciclo omitido. {self.halted_reason or ''}".strip()
         lines = [
-            f"Estado del ciclo: {self.status}",
-            f"Mercado abierto: {'si' if self.market_open else 'no'}",
-            f"Equity: {self.currency_symbol}{self.equity_start:,.2f} -> "
-            f"{self.currency_symbol}{self.equity_end:,.2f}",
+            f"Estado del ciclo: {_STATUS_LABELS.get(self.status, self.status)}",
+            f"Mercado abierto: {'sí' if self.market_open else 'no'}",
+            f"Capital: {money(self.equity_start, self.currency_symbol)} → "
+            f"{money(self.equity_end, self.currency_symbol)}",
         ]
         if self.screened:
             lines.append(f"Cribado: {self.screened}")
         lines += [
-            f"Analizados: {self.analyzed}  propuestas de compra: {self.proposals_buy}",
-            f"Riesgo: {self.approved} aprobadas / {self.rejected} rechazadas",
-            f"Ordenes enviadas: {self.orders_submitted}",
-            f"Salidas: {self.exits_forced} forzadas / "
-            f"{self.exits_discretionary} discrecionales",
+            f"Analizados: {self.analyzed} · propuestas de compra: {self.proposals_buy}",
+            f"Riesgo: {self.approved} aprobadas, {self.rejected} rechazadas",
+            f"Órdenes enviadas: {self.orders_submitted}",
+            f"Salidas: {self.exits_forced} forzadas, "
+            f"{self.exits_discretionary} a criterio del analista",
         ]
         # Same criterion as the analyst's failures below: it is only named when
         # it happens, so that when it appears it is read. It goes ABOVE the
@@ -129,7 +152,7 @@ class CycleReport:
         if self.positions_without_price:
             lines.append(
                 f"SIN PRECIO: {', '.join(self.positions_without_price)} "
-                "(stop no comprobado, tesis no revisada)"
+                "(sin comprobar el stop ni revisar la tesis)"
             )
 
         if self.news_queries:
@@ -138,7 +161,7 @@ class CycleReport:
                 f"{self.news_queries} consultas"
             )
             if self.news_failures:
-                line += f" ({self.news_failures} sin poder consultar)"
+                line += f" ({self.news_failures} no se pudieron consultar)"
             lines.append(line)
 
         # Only mentioned when there are failures: "0 of 33" in every summary is
@@ -151,7 +174,7 @@ class CycleReport:
         if self.stopped:
             lines.append(f"PARADA: {self.halted_reason}")
         elif self.halted_reason:
-            lines.append(f"KILL SWITCH: {self.halted_reason}")
+            lines.append(f"SIN OPERAR EL RESTO DEL DÍA: {self.halted_reason}")
         for error in self.errors:
             lines.append(f"Error: {error}")
         return "\n".join(lines)
@@ -381,7 +404,7 @@ class TradingCycle:
         except (BrokerError, MarketDataError, DatabaseError) as exc:
             report.status = "failed"
             report.errors.append(str(exc))
-            log.exception("El ciclo fallo: %s", exc)
+            log.exception("El ciclo ha fallado: %s", exc)
         except Exception as exc:  # noqa: BLE001 - queremos cerrar el ciclo siempre
             report.status = "failed"
             report.errors.append(f"Error inesperado: {exc}")
@@ -428,7 +451,7 @@ class TradingCycle:
 
     # ------------------------------------------------------------------
 
-    def close_all_positions(self, *, reason: str = "cierre del experimento") -> CycleReport:
+    def close_all_positions(self, *, reason: str = "Cierre del experimento.") -> CycleReport:
         """Sells every open position, to end an experiment (F5.8).
 
         **It goes through the broker and the same exit path as any other sale**,
@@ -469,7 +492,7 @@ class TradingCycle:
             # Not a failure: an experiment with nothing open is already closed,
             # and saying so beats writing an empty cycle into the history.
             report.status = "skipped"
-            report.halted_reason = "No hay ninguna posicion abierta que cerrar."
+            report.halted_reason = "No hay ninguna posición abierta que cerrar."
             log.info("Cierre innecesario: no hay posiciones abiertas.")
             return report
 
@@ -486,11 +509,14 @@ class TradingCycle:
         # the market shut there is no price to sell at, and inventing one would
         # falsify precisely the figure this whole operation exists to produce.
         if not self._can_execute(market_open):
-            why = "DRY_RUN activo" if settings.dry_run else "el mercado esta cerrado"
+            why = (
+                f"está activo el {_DRY_RUN_REASON}" if settings.dry_run
+                else "el mercado está cerrado"
+            )
             report.status = "skipped"
             report.halted_reason = (
                 f"No se puede cerrar ahora: {why}. Las {len(open_symbols)} posiciones "
-                f"siguen abiertas; vuelve a intentarlo en la proxima sesion."
+                f"siguen abiertas; vuelve a intentarlo en la próxima sesión."
             )
             log.warning("Cierre no ejecutado: %s", why)
             return report
@@ -544,7 +570,7 @@ class TradingCycle:
         except (BrokerError, MarketDataError, DatabaseError) as exc:
             report.status = "failed"
             report.errors.append(str(exc))
-            log.exception("El cierre fallo: %s", exc)
+            log.exception("El cierre ha fallado: %s", exc)
         except Exception as exc:  # noqa: BLE001 - queremos cerrar el ciclo siempre
             report.status = "failed"
             report.errors.append(f"Error inesperado: {exc}")
@@ -577,8 +603,8 @@ class TradingCycle:
             log.error("No se pudo marcar el cierre como finalizado: %s", exc)
 
         log.info(
-            "Experimento cerrado: %d posiciones liquidadas, capital final %.2f %s.",
-            report.exits_forced, report.equity_end, self.currency_symbol,
+            "Experimento cerrado: %d posiciones liquidadas, capital final de %s.",
+            report.exits_forced, money(report.equity_end, self.currency_symbol),
         )
         return report
 
@@ -617,7 +643,7 @@ class TradingCycle:
         if not failures:
             return
 
-        detalle = f"El analista no respondio en {failures} de {calls} llamadas"
+        detalle = f"El analista no respondió en {failures} de {calls} llamadas"
 
         if failures == calls and report.status == "completed":
             report.status = "failed"
@@ -626,15 +652,15 @@ class TradingCycle:
                 "del proveedor y el log anterior."
             )
             log.error(
-                "Ciclo sin analisis: %d de %d llamadas al modelo fallaron. "
+                "Ciclo sin análisis: fallaron %d de %d llamadas al modelo. "
                 "El ciclo se marca como fallido para que no se lea como una "
-                "sesion tranquila.", failures, calls,
+                "sesión tranquila.", failures, calls,
             )
             return
 
         report.errors.append(f"{detalle}.")
         log.warning(
-            "%s. El ciclo sigue siendo valido, pero esos simbolos se han "
+            "%s. El ciclo sigue siendo válido, pero esos valores se han "
             "quedado sin analizar.", detalle,
         )
 
@@ -665,7 +691,7 @@ class TradingCycle:
                     cycle_id=cycle_id, snapshot=snapshot
                 )
             except DatabaseError as exc:
-                log.warning("No se pudo guardar el snapshot de %s: %s", symbol, exc)
+                log.warning("No se pudieron guardar los datos de mercado de %s: %s", symbol, exc)
 
         # --- 2 bis. Market context, once for the whole cycle (F9.4) ---------
         self._fetch_market_news(report, cycle_id)
@@ -688,7 +714,7 @@ class TradingCycle:
         kill_switch = self.risk.check_kill_switch(account)
         if kill_switch.triggered:
             report.halted_reason = kill_switch.reason
-            log.warning("KILL SWITCH activado: %s", kill_switch.reason)
+            log.warning("Sin operar el resto del día: %s", kill_switch.reason)
             self.db.save_risk_event(
                 cycle_id=cycle_id,
                 portfolio_id=portfolio_id,
@@ -750,8 +776,8 @@ class TradingCycle:
                 continue
             if proposal.conviction < self.settings.risk.min_conviction:
                 log.info(
-                    "%s: venta propuesta con conviccion %d, por debajo del minimo %d; "
-                    "se mantiene la posicion.",
+                    "%s: venta propuesta con convicción %d, por debajo del mínimo de %d; "
+                    "se mantiene la posición.",
                     symbol, proposal.conviction, self.settings.risk.min_conviction,
                 )
                 continue
@@ -759,7 +785,7 @@ class TradingCycle:
             signal = ExitSignal(
                 symbol=symbol,
                 qty=position.qty,
-                reason=proposal.thesis or "Tesis degradada segun el analista.",
+                reason=proposal.thesis or "El analista da la tesis por agotada.",
                 rule="llm_exit",
                 forced=False,
                 price=position.current_price,
@@ -779,7 +805,7 @@ class TradingCycle:
         self._check_stop(cycle_id)
 
         if kill_switch.triggered:
-            log.info("No se evaluan entradas: el kill switch esta activo.")
+            log.info("No se evalúan entradas: la pérdida del día ha alcanzado el límite.")
             report.status = "halted"
             return
 
@@ -814,11 +840,11 @@ class TradingCycle:
 
         for symbol in candidates:
             if len(account.positions) >= self.settings.risk.max_open_positions:
-                log.info("Limite de posiciones abiertas alcanzado; se detiene la busqueda.")
+                log.info("Alcanzado el límite de posiciones abiertas; se detiene la búsqueda.")
                 break
             if per_cycle_cap > 0 and opened_this_cycle >= per_cycle_cap:
                 log.info(
-                    "Tope de %d entradas nuevas por ciclo alcanzado; los %d candidatos "
+                    "Alcanzado el tope de %d entradas nuevas por ciclo; los %d candidatos "
                     "restantes se dejan para el ciclo siguiente.",
                     per_cycle_cap, len(candidates) - candidates.index(symbol),
                 )
@@ -848,7 +874,7 @@ class TradingCycle:
 
             if not verdict.approved:
                 report.rejected += 1
-                log.info("RECHAZADA %s [%s]: %s", symbol, verdict.rule, verdict.reason)
+                log.info("RECHAZADA %s: %s", symbol, verdict.reason)
                 continue
 
             report.approved += 1
@@ -978,7 +1004,7 @@ class TradingCycle:
         try:
             order = self.broker.buy_market(symbol, verdict.qty)
         except BrokerError as exc:
-            log.error("Fallo la orden de compra de %s: %s", symbol, exc)
+            log.error("Ha fallado la orden de compra de %s: %s", symbol, exc)
             self._safe_save_order(
                 cycle_id=cycle_id, portfolio_id=portfolio_id, symbol=symbol,
                 side="buy", qty=verdict.qty, status="failed",
@@ -1017,14 +1043,15 @@ class TradingCycle:
             # The order is already sent: this cannot be undone. It is logged loudly
             # so the next cycle's reconciliation adopts it.
             log.error(
-                "Orden de %s enviada pero no se pudo registrar la posicion: %s. "
-                "La reconciliacion del proximo ciclo la adoptara.", symbol, exc,
+                "Orden de %s enviada, pero no se pudo registrar la posición: %s. "
+                "El próximo ciclo la recuperará al cuadrar la cartera con el broker.",
+                symbol, exc,
             )
-            report.errors.append(f"Posicion de {symbol} sin registrar: {exc}")
+            report.errors.append(f"Posición de {symbol} sin registrar: {exc}")
 
         log.info(
-            "COMPRA %s: %g acciones a ~%.2f, stop %s, objetivo %s",
-            symbol, verdict.qty, entry_price,
+            "COMPRA %s: %g acciones a unos %s, stop en %s, objetivo en %s",
+            symbol, verdict.qty, fmt_number(entry_price),
             _fmt(verdict.stop_price), _fmt(verdict.target_price),
         )
         return True
@@ -1049,10 +1076,11 @@ class TradingCycle:
         )
 
         if not self._can_execute(market_open):
-            reason = "DRY_RUN" if self.settings.dry_run else "mercado cerrado"
+            reason = _DRY_RUN_REASON if self.settings.dry_run else _MARKET_CLOSED_REASON
             log.warning(
-                "SALIDA PENDIENTE %s [%s]: %s. No se ejecuta (%s).",
-                symbol, signal.rule, signal.reason, reason,
+                "SALIDA PENDIENTE %s (%s): %s No se ejecuta: %s.",
+                symbol, _EXIT_RULE_LABELS.get(signal.rule, signal.rule),
+                signal.reason, reason,
             )
             self._safe_save_order(
                 cycle_id=cycle_id, portfolio_id=portfolio_id, symbol=symbol,
@@ -1066,7 +1094,7 @@ class TradingCycle:
         try:
             order = self.broker.close_position(symbol)
         except BrokerError as exc:
-            log.error("Fallo el cierre de %s: %s", symbol, exc)
+            log.error("Ha fallado el cierre de %s: %s", symbol, exc)
             self._safe_save_order(
                 cycle_id=cycle_id, portfolio_id=portfolio_id, symbol=symbol,
                 side="sell", qty=signal.qty, status="failed",
@@ -1102,13 +1130,14 @@ class TradingCycle:
                     exit_order_id=order_id,
                 )
             except DatabaseError as exc:
-                log.error("Posicion de %s cerrada en el broker pero no en la base de datos: %s",
+                log.error("Posición de %s cerrada en el broker pero no en la base de datos: %s",
                           symbol, exc)
                 report.errors.append(f"Cierre de {symbol} sin registrar: {exc}")
             log.info(
-                "VENTA %s: %g acciones a ~%.2f, P&L %+.2f %s [%s]",
-                symbol, signal.qty, exit_price, realized,
-                self.currency_symbol, signal.rule,
+                "VENTA %s: %g acciones a unos %s, resultado de %s (%s)",
+                symbol, signal.qty, fmt_number(exit_price),
+                signed_money(realized, self.currency_symbol),
+                _EXIT_RULE_LABELS.get(signal.rule, signal.rule),
             )
         return True
 
@@ -1129,7 +1158,7 @@ class TradingCycle:
             position = broker_positions.get(symbol)
             if snapshot is None or position is None:
                 log.warning(
-                    "%s adoptada sin datos de mercado: queda sin stop. Revisala a mano.",
+                    "%s recuperada sin datos de mercado: queda sin stop. Revísala a mano.",
                     symbol,
                 )
                 continue
@@ -1145,7 +1174,7 @@ class TradingCycle:
                 self.db.update_position_levels(
                     position_id, stop_price=round(stop, 4), target_price=round(target, 4)
                 )
-                log.info("%s adoptada: stop asignado en %.2f por ATR.", symbol, stop)
+                log.info("%s recuperada: stop en %s por ATR.", symbol, fmt_number(stop))
             except DatabaseError as exc:
                 log.warning("No se pudo asignar stop a %s: %s", symbol, exc)
 
@@ -1197,25 +1226,28 @@ class TradingCycle:
             if suggested > nearest:
                 if current is not None and nearest <= current:
                     log.info(
-                        "%s: el analista pedia el stop en %.2f, a %.2f ATR del precio; "
-                        "se queda en %s porque el suelo de %.2f ATR (%.2f) no lo mejora.",
-                        position.symbol, suggested, (price - suggested) / atr,
-                        _fmt(current), floor_multiple, nearest,
+                        "%s: el analista pedía el stop en %s, a %s veces el ATR del "
+                        "precio; se queda en %s porque el mínimo de %s veces el ATR "
+                        "(%s) no lo mejora.",
+                        position.symbol, fmt_number(suggested),
+                        fmt_number((price - suggested) / atr), _fmt(current),
+                        fmt_number(floor_multiple), fmt_number(nearest),
                     )
                     return
                 log.info(
-                    "%s: el analista pedia el stop en %.2f, a %.2f ATR del precio; "
-                    "se sube solo a %.2f, el suelo de %.2f ATR.",
-                    position.symbol, suggested, (price - suggested) / atr,
-                    nearest, floor_multiple,
+                    "%s: el analista pedía el stop en %s, a %s veces el ATR del "
+                    "precio; se sube solo a %s, el mínimo de %s veces el ATR.",
+                    position.symbol, fmt_number(suggested),
+                    fmt_number((price - suggested) / atr), fmt_number(nearest),
+                    fmt_number(floor_multiple),
                 )
                 stop = nearest
 
         try:
             self.db.update_position_levels(str(row["id"]), stop_price=round(stop, 4))
             log.info(
-                "%s: stop elevado de %s a %.2f por sugerencia del analista.",
-                position.symbol, _fmt(current), stop,
+                "%s: stop subido de %s a %s a propuesta del analista.",
+                position.symbol, _fmt(current), fmt_number(stop),
             )
         except DatabaseError as exc:
             log.warning("No se pudo actualizar el stop de %s: %s", position.symbol, exc)
@@ -1250,8 +1282,8 @@ class TradingCycle:
             if age_minutes > STALE_CYCLE_MINUTES:
                 self.db.abandon_cycle(
                     str(other["id"]),
-                    f"Abandonado: seguia en 'running' tras {age_minutes:.0f} minutos. "
-                    "Probablemente el proceso murio a media ejecucion.",
+                    f"Abandonado: seguía en marcha tras {age_minutes:.0f} minutos. "
+                    "Probablemente el proceso murió a medias.",
                 )
                 return None
             return (
@@ -1298,23 +1330,24 @@ class TradingCycle:
         missing = set(self.db.get_open_positions(self.portfolio_id or "")) - set(quotes)
         if missing:
             log.warning(
-                "Sin precio para %s: se valoran al precio de entrada y no se "
+                "Sin precio para %s: se valoran a su precio de entrada y no se "
                 "pueden cerrar en este ciclo.", ", ".join(sorted(missing)),
             )
 
     def _warn_if_budget_exceeds_account(self, account: AccountState) -> None:
         if self.settings.initial_budget > account.equity:
             log.warning(
-                "INITIAL_BUDGET (%.2f) supera el equity de la cuenta (%.2f). Los "
-                "limites de riesgo se calculan sobre el equity real, que es menor.",
-                self.settings.initial_budget, account.equity,
+                "El presupuesto inicial (%s) supera el valor de la cuenta (%s). Los "
+                "límites de riesgo se calculan sobre el valor real, que es menor.",
+                money(self.settings.initial_budget, self.currency_symbol),
+                money(account.equity, self.currency_symbol),
             )
 
     def _record_unexecuted_order(
         self, cycle_id, portfolio_id, symbol, side, verdict,
         decision_id, risk_event_id, market_open,
     ) -> None:
-        reason = "DRY_RUN activo" if self.settings.dry_run else "mercado cerrado"
+        reason = _DRY_RUN_REASON if self.settings.dry_run else _MARKET_CLOSED_REASON
         log.info("%s aprobada pero no ejecutada: %s.", symbol, reason)
         self._safe_save_order(
             cycle_id=cycle_id, portfolio_id=portfolio_id, symbol=symbol,
@@ -1335,7 +1368,7 @@ class TradingCycle:
                 proposal=proposal, snapshot_id=snapshot_id,
             )
         except DatabaseError as exc:
-            log.warning("No se pudo guardar la decision de %s: %s", proposal.symbol, exc)
+            log.warning("No se pudo guardar la decisión de %s: %s", proposal.symbol, exc)
             return None
 
     def _report_positions_without_price(
@@ -1375,7 +1408,7 @@ class TradingCycle:
 
         report.positions_without_price = missing
         log.warning(
-            "SIN PRECIO en %d posicion(es) abierta(s): %s. No se ha podido "
+            "SIN PRECIO en %d posiciones abiertas: %s. No se ha podido "
             "comprobar su stop ni revisar su tesis en este ciclo; se valoran a su "
             "precio de entrada.",
             len(missing), ", ".join(missing),
@@ -1390,8 +1423,8 @@ class TradingCycle:
                 cycle_id, portfolio_id, symbol,
                 _rejection(
                     "no_price",
-                    "Sin cotizacion en este ciclo: no se comprueba el stop ni se "
-                    "revisa la tesis, y la posicion se valora a su precio de entrada.",
+                    "Sin cotización en este ciclo: no se comprueba el stop ni se "
+                    "revisa la tesis, y la posición se valora a su precio de entrada.",
                 ),
                 None,
             )
@@ -1440,4 +1473,4 @@ def _opt_float(value) -> float | None:
 
 
 def _fmt(value: float | None) -> str:
-    return "n/d" if value is None else f"{value:.2f}"
+    return "n/d" if value is None else fmt_number(value)

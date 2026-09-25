@@ -765,29 +765,32 @@ def _ingest_verdict(
     ]
     if not ticks:
         if not por_mercado:
-            return True, "Ningun perfil activo: el ingestor no tiene que pedir nada."
+            return True, "Ningún perfil activo: no hay precios que pedir."
         if not abierto:
-            return True, "Sin ticks todavia; ninguna bolsa seguida esta operando."
-        return False, "Ninguna pasada registrada con la bolsa abierta."
+            return True, "Aún no hay lecturas y ninguna bolsa seguida está operando."
+        return False, "No hay ninguna lectura registrada con la bolsa abierta."
 
     if seguidos >= 5:
         return False, (
-            f"{seguidos} pasadas seguidas sin datos. Mira si Yahoo esta "
-            "devolviendo 429 o si los simbolos siguen existiendo."
+            f"{seguidos} lecturas seguidas sin datos. Mira si Yahoo está "
+            "limitando las peticiones o si los símbolos siguen existiendo."
         )
     if not abierto:
         return True, (
-            "Fuera de la ventana operativa: el ingestor duerme hasta la proxima "
+            "Fuera del horario operativo: la ingesta se reanuda en la próxima "
             "apertura."
         )
     if desde is not None and desde > 180:
         return False, (
-            f"El ultimo tick fue hace {math.floor(desde / 60)} minutos y hay "
-            "bolsa abierta."
+            f"La última lectura fue hace {math.floor(desde / 60)} minutos y la "
+            "bolsa está abierta."
         )
     if seguidos:
-        return True, f"{seguidos} pasada(s) sin datos; el siguiente tick reintenta."
-    return True, "Ingesta al dia."
+        return True, (
+            ("1 lectura" if seguidos == 1 else f"{seguidos} lecturas")
+            + " sin datos; la siguiente lo reintenta."
+        )
+    return True, "Ingesta al día."
 
 
 # ----------------------------------------------------------------------

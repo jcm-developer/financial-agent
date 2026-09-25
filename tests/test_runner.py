@@ -95,4 +95,4 @@ def test_stopping_with_nothing_registered_and_nothing_of_ours_says_so(tmp_path):
     ok, message = runner.stop(cycle_id=None)
 
     assert ok is False
-    assert "No hay ningun ciclo en marcha" in message
+    assert "No hay ningún ciclo en marcha" in message

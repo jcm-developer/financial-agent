@@ -71,8 +71,8 @@ def run_cycle(db: ReadDb, runner: Runner, body: CycleRunRequest):
     if _cycle_running_elsewhere(db):
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            "Ya hay un ciclo en marcha (probablemente lanzado por el "
-            "planificador). Espera a que termine.",
+            "Ya hay un ciclo en marcha, probablemente lanzado por el "
+            "planificador. Espera a que termine.",
         )
 
     ok, message = runner.start(profile=profile_name, dry_run=body.dry_run)
@@ -105,7 +105,7 @@ def close_experiment(db: ReadDb, runner: Runner, body: CycleRunRequest):
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "Hay un ciclo en marcha. Espera a que termine antes de cerrar el "
-            "experimento: vender mientras el agente decide dejaria las dos "
+            "experimento: vender mientras el agente decide dejaría las dos "
             "cosas a medias.",
         )
 
@@ -141,7 +141,7 @@ def _require_controls(runner: Any) -> None:
     if runner is None:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
-            "Los controles estan desactivados (API_CONTROLS=false). Esta API "
+            "Los controles están desactivados (API_CONTROLS=false): esta API "
             "solo sirve datos.",
         )
 

@@ -25,6 +25,7 @@ import zlib
 from dataclasses import dataclass, field
 from typing import Any
 
+from .formatting import compact, number, percent
 from .indicators import Bar, compute_snapshot
 
 log = logging.getLogger(__name__)
@@ -65,11 +66,24 @@ class ScreenerReport:
     rejected: dict[str, int] = field(default_factory=dict)
 
     def summary(self) -> str:
-        motivos = ", ".join(f"{k}={v}" for k, v in sorted(self.rejected.items()))
+        # The keys are data (tests and audits read them); the screen gets words.
+        motivos = ", ".join(
+            f"{_REJECTION_LABELS.get(k, k)}: {v}" for k, v in sorted(self.rejected.items())
+        )
         return (
             f"{self.evaluated} evaluados, {len(self.candidates)} seleccionados"
-            + (f". Descartes: {motivos}" if motivos else "")
+            + (f". Descartados — {motivos}" if motivos else "")
         )
+
+
+#: Screen wording for each hard discard in `ScreenerReport.rejected`.
+_REJECTION_LABELS = {
+    "datos_insuficientes": "sin historial suficiente",
+    "precio_bajo": "precio demasiado bajo",
+    "iliquido": "poco líquidos",
+    "demasiado_volatil": "demasiado volátiles",
+    "sin_atr": "sin ATR",
+}
 
 
 def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
@@ -94,8 +108,8 @@ def _setup_factor(rsi: float | None) -> tuple[float, str]:
     if 62 < rsi <= 70:
         return 0.60, f"RSI {rsi:.0f} algo alto"
     if rsi > 70:
-        return 0.35, f"RSI {rsi:.0f} sobrecomprado: perseguir el precio"
-    return 0.50, f"RSI {rsi:.0f} sobrevendido: puede ser caida estructural"
+        return 0.35, f"RSI {rsi:.0f} sobrecomprado: sería perseguir el precio"
+    return 0.50, f"RSI {rsi:.0f} sobrevendido: puede ser una caída estructural"
 
 
 def arbitrary_score(symbol: str) -> float:
@@ -169,13 +183,13 @@ def score_symbol(indicators: dict[str, Any]) -> tuple[float, dict[str, float], l
     momentum = _clamp((return_60 or 0.0) / 20.0) if return_60 is not None else 0.0
     components["momento"] = momentum * 0.25
     if momentum > 0.5 and return_60 is not None:
-        reasons.append(f"momento 60 barras {return_60:+.1f}%")
+        reasons.append(f"momento a 60 barras del {percent(return_60, 1, signed=True)}")
 
     # --- Interes por volumen (0.20) --------------------------------------
     interest = _clamp(((volume_ratio or 1.0) - 0.8) / 1.2)
     components["volumen"] = interest * 0.20
     if (volume_ratio or 0) > 1.5:
-        reasons.append(f"volumen {volume_ratio:.1f}x la media")
+        reasons.append(f"volumen {compact(volume_ratio, 1)} veces la media")
 
     # --- Usable volatility (0.15) ----------------------------------------
     # The middle range is rewarded: with no movement there is no trade to make,
@@ -195,7 +209,7 @@ def score_symbol(indicators: dict[str, Any]) -> tuple[float, dict[str, float], l
         components[key] = round(components[key] * factor, 6)
 
     if from_high is not None and from_high > -3:
-        reasons.append("cerca del maximo de 52 semanas")
+        reasons.append("cerca del máximo de 52 semanas")
 
     return round(sum(components.values()), 4), components, reasons
 
@@ -248,7 +262,7 @@ def screen(
 
         if mode == "random":
             score = arbitrary_score(symbol)
-            components, reasons = {}, ["seleccion arbitraria (grupo de control)"]
+            components, reasons = {}, ["selección al azar (grupo de control)"]
         else:
             score, components, reasons = score_symbol(indicators)
 
@@ -263,7 +277,9 @@ def screen(
 
     log.info("Screener: %s", report.summary())
     if report.candidates:
-        top = ", ".join(f"{c.symbol}({c.score:.2f})" for c in report.candidates[:8])
+        top = ", ".join(
+            f"{c.symbol} ({number(c.score, 2)})" for c in report.candidates[:8]
+        )
         log.info("Mejores candidatos: %s", top)
     return report
 
@@ -275,8 +291,8 @@ def load_universe(path: str) -> list[str]:
     file = Path(path).expanduser()
     if not file.is_file():
         raise FileNotFoundError(
-            f"No se encontro el fichero de universo {file}. "
-            "Generalo con: python tools/fetch_universe.py"
+            f"No se encontró el fichero de universo {file}. "
+            "Se genera con: python tools/fetch_universe.py"
         )
 
     symbols: list[str] = []

@@ -103,7 +103,7 @@ async def stream(
     config: Config,
     runner: Runner,
     symbols: str = Query(
-        "", description="Lista separada por comas. Vacio = todas las conocidas."
+        "", description="Lista separada por comas. Vacío = todas las conocidas."
     ),
 ) -> StreamingResponse:
     wanted = [s.strip().upper() for s in symbols.split(",") if s.strip()] or None

@@ -62,7 +62,7 @@ def _env_float(key: str, default: float) -> float:
     try:
         return float(raw) if raw else default
     except ValueError:
-        log.warning("%s=%r no es un numero; se usa %s.", key, raw, default)
+        log.warning("%s=%r no es un número; se usa %s.", key, raw, default)
         return default
 
 
@@ -204,8 +204,8 @@ def find_profile(db: Database, reference: str) -> dict[str, Any]:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=(
-                f"No existe ningun perfil {reference!r}."
-                + (f" Hay: {disponibles}." if disponibles else "")
+                f"No existe ningún perfil «{reference}»."
+                + (f" Los que hay: {disponibles}." if disponibles else "")
             ),
         )
     return profile
@@ -223,8 +223,8 @@ def portfolio_of(profile: dict[str, Any]) -> str:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"El perfil {profile['name']!r} no tiene cartera asociada, asi que "
-                "no tiene historico que enseñar."
+                f"El perfil «{profile['name']}» no tiene cartera asociada, así que "
+                "no tiene histórico que enseñar."
             ),
         )
     return str(portfolio_id)
@@ -236,7 +236,7 @@ def resolve_portfolio(db: Database, reference: str) -> tuple[dict[str, Any], str
 
 
 #: Pagination parameters shared by every list.
-LimitQuery = Annotated[int, Query(ge=1, le=500, description="Filas por pagina.")]
+LimitQuery = Annotated[int, Query(ge=1, le=500, description="Filas por página.")]
 OffsetQuery = Annotated[int, Query(ge=0, description="Filas que saltar.")]
 ProfileQuery = Annotated[
     str, Query(description="Id o nombre del perfil de experimento.")

@@ -59,7 +59,7 @@ def test_anthropic_says_not_yet():
     Telling "not yet" from "does not exist" matters: the first is a pending task
     (F9.1), the second would be a typo.
     """
-    with pytest.raises(LLMError, match="no esta implementado todavia"):
+    with pytest.raises(LLMError, match="no está implementado todavía"):
         resolve_provider("anthropic")
 
 
@@ -284,7 +284,7 @@ def test_a_refused_temperature_is_dropped_and_said(caplog):
 
     assert "temperature" not in sent_body(seen[1])
     assert "response_format" in sent_body(seen[1])
-    assert "temperature" in caplog.text
+    assert "temperatura 0,2" in caplog.text
 
 
 def test_nim_still_gets_max_tokens():

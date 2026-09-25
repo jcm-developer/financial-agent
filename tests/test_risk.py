@@ -351,7 +351,7 @@ def test_the_binding_rule_says_conviction_when_conviction_is_what_cut(manager):
 
     assert verdict.approved
     assert verdict.rule == "conviction"
-    assert "limita: conviction" in verdict.reason
+    assert "limita la convicción" in verdict.reason
 
 
 # -- Comisiones (F9.9) -------------------------------------------------------
@@ -387,7 +387,7 @@ def test_the_reward_risk_counts_both_legs_commission():
     # The gross ratio travels too, so a rejection caused by friction can be told
     # from one caused by the thesis.
     assert verdict.details["reward_risk_gross"] == pytest.approx(1.6)
-    assert "8.22" in verdict.reason
+    assert "8,22 € de comisiones" in verdict.reason
 
 
 def test_the_same_trade_is_approved_once_it_is_big_enough():
@@ -621,7 +621,7 @@ def test_approval_text_carries_the_profile_currency():
     )
 
     assert verdict.approved
-    assert "€20,000.00" in verdict.reason
+    assert "por 20.000,00 €" in verdict.reason
     assert "$" not in verdict.reason
 
 
@@ -636,7 +636,7 @@ def test_rejection_text_carries_the_profile_currency():
 
     assert not verdict.approved
     assert verdict.rule == "min_order_notional"
-    assert "€100,000.00" in verdict.reason
+    assert "mínimo de 100.000,00 €" in verdict.reason
     assert "$" not in verdict.reason
 
 
@@ -647,7 +647,7 @@ def test_manager_without_a_currency_writes_a_bare_figure(manager):
     verdict = manager.evaluate_entry(proposal(), account(), atr=2.0)
 
     assert verdict.approved
-    assert "por 20,000.00" in verdict.reason
+    assert "por 20.000,00 (" in verdict.reason
     assert "$" not in verdict.reason
 
 
@@ -693,7 +693,7 @@ def test_a_target_inside_the_noise_is_rejected_however_good_its_ratio():
     # The floor travels in the rejection so it can be aggregated later in SQL
     # without recomputing that day's ATR.
     assert verdict.details["target_floor"] == pytest.approx(109.07, abs=0.01)
-    assert "0.8 sigma" in verdict.reason
+    assert "0,8 σ" in verdict.reason
 
 
 def test_the_same_target_passes_at_a_short_horizon():

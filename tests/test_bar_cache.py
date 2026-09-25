@@ -73,7 +73,7 @@ def patch_yf(monkeypatch):
 # -- Construccion ------------------------------------------------------------
 
 def test_an_unsupported_interval_is_refused(db):
-    with pytest.raises(BarCacheError, match="1d o 1h"):
+    with pytest.raises(BarCacheError, match="1d y 1h"):
         BarCache(db, interval="5m")
 
 

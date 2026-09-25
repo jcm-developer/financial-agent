@@ -26,7 +26,7 @@ def build_dashboard(db: Database, *, portfolio_name: str) -> dict[str, Any]:
         return {
             "portfolio": None,
             "message": (
-                f"Todavia no hay datos para la cartera {portfolio_name!r}. "
+                f"Todavía no hay datos para la cartera «{portfolio_name}». "
                 "Ejecuta: python run.py cycle"
             ),
         }

@@ -214,7 +214,7 @@ def test_both_failing_is_an_error_not_an_empty_list():
     result = got.company("SAN.MC")
 
     assert result.headlines == ()
-    assert "Yahoo tambien fallo" in (result.error or "")
+    assert "Yahoo también falló" in (result.error or "")
 
 
 def test_a_symbol_without_a_curated_name_goes_to_yahoo():

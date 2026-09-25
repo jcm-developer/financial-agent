@@ -287,20 +287,22 @@ def test_is_derived_refuses_a_field_that_is_not_a_limit():
 
 def test_describe_names_the_effective_values():
     """It is the text of F6.8: moving a slider without seeing the consequence in
-    concrete numbers is guesswork."""
+    concrete numbers is guesswork. And it is screen text: accents and decimal
+    commas, like every figure the frontend prints next to it."""
     text = describe({"risk_profile": 10, "horizon_days": 180,
                      "advanced_overrides": 0})
 
-    assert "5 posiciones" in text
-    assert "5% de riesgo" in text
-    assert "180 dias" in text
-    assert "deslizador" in text
-    assert "diversificacion" not in text
+    assert text == (
+        "Riesgo 10/10 a 180 días: hasta 5 posiciones de entre el 20% y el 40%, "
+        "exposición máxima del 100%, riesgo por operación del 5%, convicción mínima 50, "
+        "stop a 7,94 veces el ATR (0,7 σ), objetivo mínimo de 1 σ, beneficio/riesgo mínimo 1,29 "
+        "y sin operar el resto del día si la cartera cae un 10%."
+    )
 
 
 def test_describe_warns_that_the_limits_are_manual():
     text = describe({"risk_profile": 5, "advanced_overrides": 1,
                      "max_open_positions": 2})
 
-    assert "a mano" in text
-    assert "2 posiciones" in text
+    assert text.startswith("Límites fijados a mano.")
+    assert "hasta 2 posiciones" in text

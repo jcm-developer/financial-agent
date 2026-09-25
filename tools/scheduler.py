@@ -55,7 +55,7 @@ _stopping = False
 def _handle_signal(signum: int, _frame: object) -> None:
     global _stopping
     _stopping = True
-    log.info("Recibida senal %s; se detendra tras el ciclo en curso.", signum)
+    log.info("Recibida la señal %s: se detendrá tras el ciclo en curso.", signum)
 
 
 class ScheduleError(ValueError):
@@ -79,11 +79,11 @@ def parse_times(raw: str) -> list[tuple[int, int]]:
             hour, minute = int(hour_text), int(minute_text)
         except ValueError as exc:
             raise ScheduleError(
-                f"hora invalida {chunk!r}: se espera HH:MM, por ejemplo "
-                f"'17:40' o '11:20,14:20,17:40'."
+                f"hora no válida «{chunk}»: se espera HH:MM, por ejemplo "
+                f"«17:40» o «11:20,14:20,17:40»."
             ) from exc
         if not (0 <= hour <= 23 and 0 <= minute <= 59):
-            raise ScheduleError(f"hora fuera de rango: {chunk!r}.")
+            raise ScheduleError(f"hora fuera de rango: «{chunk}».")
         times.append((hour, minute))
 
     if not times:
@@ -125,7 +125,7 @@ def load_plans(db) -> list[Plan]:
             times = parse_times(settings["cycle_times"])
         except ScheduleError as exc:
             log.error(
-                "Perfil %r: %s No se planificara hasta que se corrija en Ajustes.",
+                "Perfil %r: %s No se planificará hasta que se corrija en Ajustes.",
                 profile["name"], exc,
             )
             continue
@@ -177,7 +177,7 @@ def warn_about_odd_times(plan: Plan) -> None:
         ):
             log.warning(
                 "Perfil %r: ciclo a las %02d:%02d con barras diarias, pero %s "
-                "cierra a las %02d:%02d. Analizaria la barra del dia sin "
+                "cierra a las %02d:%02d: analizaría la barra del día sin "
                 "terminar.",
                 plan.profile, hour, minute, market.label,
                 market.close_time.hour, market.close_time.minute,
@@ -203,7 +203,7 @@ def next_run(now: datetime, times: tuple[tuple[int, int], ...]) -> datetime:
             if candidate > now:
                 return candidate
     # Unreachable: with two days of margin there is always a later time.
-    raise RuntimeError("No se pudo calcular la siguiente ejecucion.")
+    raise RuntimeError("No se pudo calcular la siguiente ejecución.")
 
 
 def run_cycle(profile: str) -> int:
@@ -222,12 +222,12 @@ def run_cycle(profile: str) -> int:
     elapsed = time.monotonic() - started
 
     if result.returncode == 0:
-        log.info("Ciclo de %r completado en %.0fs.", profile, elapsed)
+        log.info("Ciclo de %r completado en %.0f s.", profile, elapsed)
     else:
         # It is not aborted: a failed cycle (network, model quota) must not stop
         # the next one, nor the other profiles'.
         log.error(
-            "El ciclo de %r termino con codigo %d tras %.0fs. Revisa el log "
+            "El ciclo de %r terminó con código %d tras %.0f s. Revisa el log "
             "anterior y `python run.py report`.", profile, result.returncode, elapsed,
         )
     return result.returncode
@@ -243,6 +243,9 @@ def _sleep_a_little(seconds: float) -> None:
 
 
 def main() -> int:
+    from src.formatting import utf8_console
+
+    utf8_console()
     logging.basicConfig(
         level=(os.getenv("LOG_LEVEL") or "INFO").strip().upper(),
         format="%(asctime)s  %(levelname)-7s %(name)-12s %(message)s",
@@ -270,7 +273,7 @@ def main() -> int:
 
     log.info(
         "Planificador en marcha. Los horarios salen del perfil; "
-        "la lista se relee cada %.0fs, asi que activar o pausar un experimento "
+        "la lista se relee cada %.0f s, así que activar o pausar un experimento "
         "desde la interfaz surte efecto sin reiniciar nada.", refresh,
     )
 
@@ -284,9 +287,9 @@ def main() -> int:
             if known.get(name) != plan:
                 # New, or its schedule changed in the interface.
                 if name in known:
-                    log.info("Planificacion actualizada -> %s", plan.describe())
+                    log.info("Planificación actualizada: %s", plan.describe())
                 else:
-                    log.info("Experimento activo -> %s", plan.describe())
+                    log.info("Experimento activo: %s", plan.describe())
                 warn_about_odd_times(plan)
                 upcoming[name] = next_run(datetime.now(plan.tz), plan.times)
                 log.info(
@@ -296,14 +299,14 @@ def main() -> int:
 
         for name in list(known):
             if name not in current:
-                log.info("Experimento %r ya no esta activo: se deja de planificar.", name)
+                log.info("El experimento %r ya no está activo: se deja de planificar.", name)
                 upcoming.pop(name, None)
         known = current
 
         if not current:
             log.info(
-                "No hay ningun experimento activo. Actívalo desde la pantalla de "
-                "Experimentos y esto lo recogera solo."
+                "No hay ningún experimento activo. Actívalo desde la pantalla de "
+                "Experimentos y el planificador lo recogerá solo."
             )
 
         if first_pass:
@@ -312,7 +315,7 @@ def main() -> int:
                 for name in current:
                     if _stopping:
                         break
-                    log.info("RUN_ON_START activo: ciclo inmediato de %r.", name)
+                    log.info("Ciclo inmediato de %r al arrancar (RUN_ON_START).", name)
                     run_cycle(name)
 
         # Whatever is due is run. Several profiles can fall in the same slice, and

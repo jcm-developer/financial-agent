@@ -150,7 +150,7 @@ class ConfigDatabase(Database):
             # CREATE, DROP, ALTER, ATTACH, REINDEX... The API does none of that:
             # the schema is governed by `schema.sql` and applied by whoever opens
             # the database.
-            return self._deny("esquema", arg1 or f"accion {action}")
+            return self._deny("esquema", arg1 or f"acción {action}")
 
         table = arg1 or ""
         if verb in WRITABLE.get(table, frozenset()):
@@ -176,11 +176,11 @@ class ConfigDatabase(Database):
                 "vistas las gobierna schema.sql."
             )
         if verb == "pragma":
-            return HistoryIsReadOnly(f"La API no puede ejecutar 'pragma {target}'.")
+            return HistoryIsReadOnly(f"La API no puede ejecutar «pragma {target}».")
         return HistoryIsReadOnly(
-            f"La API no puede hacer {verb.upper()} en {target!r}: solo escribe en "
-            f"las tablas de configuracion ({', '.join(sorted(WRITABLE))}).\n"
-            "  El historico de operaciones lo escriben el ciclo y el ingestor, "
+            f"La API no puede hacer {verb.upper()} en «{target}»: solo escribe en "
+            f"las tablas de configuración ({', '.join(sorted(WRITABLE))}).\n"
+            "  El histórico de operaciones lo escriben el ciclo y el ingestor, "
             "cada uno en su proceso."
         )
 
@@ -221,7 +221,7 @@ class ConfigDatabase(Database):
         """
         with self._cascade():
             super().delete_profile(profile_id)
-        log.info("Perfil %s borrado desde la API, con su historico.", profile_id)
+        log.info("Perfil %s borrado desde la API, con su histórico.", profile_id)
 
     # -- Puertas que no se usan -------------------------------------------
 
@@ -234,7 +234,7 @@ class ConfigDatabase(Database):
         what it does can be seen.
         """
         raise HistoryIsReadOnly(
-            "La API no ejecuta SQL libre. Usa los metodos con nombre de Database."
+            "La API no ejecuta SQL libre: usa los métodos con nombre de Database."
         )
 
 

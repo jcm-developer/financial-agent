@@ -214,7 +214,7 @@ def test_with_several_active_one_must_be_chosen(db, perfil):
 def test_with_none_active_nothing_is_guessed_either(db):
     db.create_profile(name="borrador")
 
-    with pytest.raises(ConfigError, match="Ningun perfil esta activo"):
+    with pytest.raises(ConfigError, match="Ningún perfil está activo"):
         select_profile(db)
 
 
