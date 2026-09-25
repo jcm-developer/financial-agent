@@ -18,7 +18,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Query, status
 
 from src.config import ConfigError
-from src.db import DatabaseError
+from src.db import SECRET_SETTINGS, DatabaseError, history_text
 from src.market_calendar import get_market
 from src.profile_settings import (
     UniverseError,
@@ -133,6 +133,13 @@ def get_settings_history(
         "order by changed_at desc, id desc limit ? offset ?",
         (profile["id"], limit, offset),
     )
+    # Masked again on read: rows written before `SECRET_SETTINGS` existed carry
+    # the key whole, and this route cannot rewrite them (it opens the history
+    # read-only). Re-masking an already masked value is harmless.
+    for row in rows:
+        if row["field"] in SECRET_SETTINGS:
+            row["old_value"] = history_text(row["field"], row["old_value"])
+            row["new_value"] = history_text(row["field"], row["new_value"])
     return {"items": rows, "total": total, "limit": limit, "offset": offset}
 
 

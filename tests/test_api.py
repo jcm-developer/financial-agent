@@ -1213,3 +1213,34 @@ def test_a_cycle_running_elsewhere_blocks_launching_another(client, db_path, pro
 
     assert respuesta.status_code == 409
     assert "planificador" in respuesta.json()["detail"]
+
+
+def test_the_settings_history_never_serves_the_api_key(client, profile):
+    """F6.7 kept the key out of every screen and missed this table: until
+    2026-09-25 a key typed into the form came back whole from this route,
+    while `/settings` masked the very same key."""
+    pid = profile["id"]
+    client.patch(
+        f"/api/profiles/{pid}/settings", json={"llm_api_key": "sk-proj-muysecreto9876"}
+    )
+    historial = client.get(f"/api/profiles/{pid}/settings/history").json()
+
+    cambio = next(f for f in historial["items"] if f["field"] == "llm_api_key")
+    assert "muysecreto" not in str(historial)
+    assert cambio["new_value"] == "sk-...9876"
+
+
+def test_a_key_already_stored_whole_is_masked_on_read(client, db_path, profile):
+    """Rows written before the mask existed are not rewritten by the API, which
+    opens the history read-only, so the route masks them again."""
+    pid = profile["id"]
+    with Database(path=db_path) as db:
+        db._execute(
+            "insert into agent_settings_history "
+            "(profile_id, field, old_value, new_value, source, changed_at) "
+            "values (?, 'llm_api_key', null, 'sk-proj-antiguo1234', 'ui', '2026-09-01')",
+            (pid,),
+        )
+    historial = client.get(f"/api/profiles/{pid}/settings/history").json()
+
+    assert "antiguo" not in str(historial)

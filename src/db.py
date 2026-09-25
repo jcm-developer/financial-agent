@@ -140,6 +140,32 @@ def _text(value: Any) -> str | None:
     return None if value is None else str(value)
 
 
+#: Settings whose value must never reach `agent_settings_history` in the clear.
+#:
+#: F6.7 kept the profile's key out of `cycles.settings_json` and out of every
+#: screen, and missed this table: until 2026-09-25 a key typed into the form was
+#: stored whole as `new_value` and served whole by `GET .../settings/history`,
+#: while `GET .../settings` masked the very same key. The history still records
+#: *that* the key changed, and its last four characters, which is what the row is
+#: for: telling one key from another, not using it.
+SECRET_SETTINGS = frozenset({"llm_api_key"})
+
+
+def history_text(field: str, value: Any) -> str | None:
+    """`_text`, masking the fields in `SECRET_SETTINGS`.
+
+    Public because the API applies it again on read, for rows written before the
+    mask existed. The import is local because `profile_settings` imports this
+    module; moving `mask_secret` here instead would split F6.7's one masking rule
+    across two files.
+    """
+    if field in SECRET_SETTINGS and value is not None:
+        from .profile_settings import mask_secret
+
+        return mask_secret(str(value))
+    return _text(value)
+
+
 class Database:
     def __init__(self, *, path: str | Path, read_only: bool = False) -> None:
         """`read_only=True` opens the database with no write permission.
@@ -493,7 +519,10 @@ class Database:
             "(profile_id, field, old_value, new_value, source, changed_at) "
             "values (?, ?, ?, ?, ?, ?)",
             [
-                (profile_id, field, _text(current.get(field)), _text(value), source, now)
+                (
+                    profile_id, field, history_text(field, current.get(field)),
+                    history_text(field, value), source, now,
+                )
                 for field, value in applied.items()
             ],
         )
