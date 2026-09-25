@@ -3,7 +3,7 @@
 Registro de todo lo pendiente. Cada tarea tiene un id (`F1.2`) para referenciarla en
 commits y conversaciones. Marcar `[x]` al cerrarla.
 
-Última actualización: 2026-09-25 (F9.7, mitad de noticias: Yahoo deja 32 de los 89 sin ninguna noticia en la semana, 23 de los 35 de Madrid, y Google News RSS por nombre y en el idioma de cada bolsa los cubre todos; F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`; F9.8.2: Resumen ya dice que sus tres primeras cifras van a precio del ultimo ciclo y la tabla de abajo a precio vivo, con `equity_as_of` nuevo en la API porque la hora del ultimo ciclo no es la de la valoracion; F9.14 y F9.15 abiertas: la tabla de riesgo de F6.5 se calibro con barras diarias y el perfil corre en `1h`, asi que el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria y `llm_wider` es hoy la pieza que lo tapa, y hace falta medir con los mismos snapshots cuanto de los objetivos cortos es el intervalo y cuanto es el modelo; F9.15: `tools/replay_analyst.py` mide el intervalo con la base congelada y sin tocar Yahoo, y de paso encuentra que `volatility_20d_pct` tambien estaba 4,19x baja y que un tercio de las propuestas tienen stop y objetivo los dos bajo 0,5 sigma; F9.14 cerrada con la salida (a): los indicadores del analista pasan a ser **siempre diarios** y `bar_interval` queda como reloj del precio y de la ejecucion, con `lookback_days` a 400 y el experimento reseteado; R8 corregida —lo que la capa gratuita limita son peticiones simultaneas, no por minuto—; F9.16 cerrada: el objetivo tiene ahora un suelo absoluto en sigmas del horizonte, y el minimo por orden sube de 100 a 500 EUR porque cubrir la comision es un problema de tamaño de orden y no de tamaño de recorrido; F9.17: `horizon_days` era una columna muerta y era la causa de los objetivos del 6 % —una sigma a 14 dias son 6,8 % del precio—, asi que ahora viaja al prompt con la sigma ya calculada y al motor de riesgo; F9.18: el capital se repartia por orden alfabetico porque dos `sorted()` tiraban el ranking del screener justo antes de gastarlo, y un ciclo ya no puede abrir mas de `max_new_positions_per_cycle` posiciones; decision nº 9: el experimento de un mes con horizonte de 45 dias, objetivos del 12 % y siete posiciones del 14 %, con el historico reseteado antes de arrancar; F9.19 y F9.20 abiertas: el reparto en dos pasadas y el modelo que contesta con plantilla —24 de 24 `buy`, conviccion 60 en las 24—; F9.21: el tamaño de posicion pasa a ser una banda `min_position_pct`-`max_position_pct`, porque el techo solo no evitaba que la cartera se quedara a medio invertir —el modelo pedia 8 % en 11 de 11 propuestas y con siete plazas eso deja el 44 % del capital en caja, o sea un +12 % por operacion convertido en un +6,7 % de cartera—; F10.11: la tarjeta «Con estos ajustes» enseñaba los limites de los deslizadores encima de un perfil que corria con otros, y cuatro campos de la pantalla —benchmark, reserva de caja, sectores excluidos y permitir cortos— se guardan y no los lee nadie, asi que ahora lo dicen; F9.22: el endpoint de `llama-3.3-70b` se quedo colgado en NIM —acepta la peticion y no la despacha, 61 s hasta el corte con 16 tokens igual que con 1.600—, asi que los cinco perfiles pasan a `meta/llama-3.1-70b-instruct`, que es la unica de la gama grande que responde, y el historico queda partido como en F9.16; el cliente lee la respuesta en streaming, que se implemento persiguiendo un diagnostico falso y se conserva porque el timeout pasa a significar cuanto puede callar el servidor en vez de cuanto puede durar la llamada; F9.23: NVIDIA retiro `meta/llama-3.1-70b-instruct` el 2026-08-26 a las 09:00 UTC con un 410 de fin de vida y el ciclo de las 10:20 fallo 29 de 29 llamadas, asi que el modelo sale de la gama `meta/llama` —que se queda sin ninguna version servida— y pasa a `minimaxai/minimax-m3`, el unico de los doce medidos con el prompt real que contesto las tres veces, por delante del mucho mas capaz Nemotron 3 Ultra, que razona en el `content` sin marcarlo y gasta 1.432 de los 1.600 tokens antes del JSON; tercer corte del historico en once dias, y el argumento mas fuerte hasta ahora para F9.1; F9.24 abierta: `extract_json_object` no perdona el `{` doblado que emite la familia `nemotron-3`; F9.23.1: `minimaxai/minimax-m3`, el sustituto que eligio F9.23, devolvio 429 en las 29 llamadas del ciclo siguiente y en 206 ms, y el 429 resulto ser **del modelo y no de la cuenta** —la misma clave era servida por otros en el mismo minuto—, asi que se cae el aviso de F9.23 sobre la cuota agotada; repetir la medicion con tres llamadas por modelo tumba tambien los dos veredictos de F9.23 sobre `nemotron-3`, que eran de una llamada cada uno: super contesta JSON 3 de 3 en 14-23 s y pasa a ser el modelo de los cinco perfiles, y ultra manda el razonamiento separado en `reasoning_content` pero tarda 160 s, o sea 77 min de ciclo; el precio de super son tres campos a null que deriva el motor de riesgo; cuarto corte del historico en doce dias; el techo de 1.600 tokens ya roza —1.492 en la peor de tres— y queda en F9.24 con el numero puesto; F9.25: el trailing stop de las salidas no tenia suelo —`risk.py` solo acepta el stop del analista en una entrada si es mas ancho que el de 3xATR, y `_maybe_raise_stop` aceptaba cualquiera mas estrecho—, asi que el primer ciclo bueno con super subio el stop de seis de nueve posiciones y dejo la cartera entre 0,48x y 1,20x ATR, con UCG.MI por encima del precio vivo; el suelo pasa a ser la mitad de `stop_atr_multiple`, el recorte se registra con las dos cifras, y los seis stops ya escritos se recolocaron a mano porque `positions` no guarda historial de niveles)
+Última actualización: 2026-09-25 (F9.26 a F9.32 abiertas: revisar `gpt-6-sol` —y que F9.1 ya no es «cero código»—, medir el acierto de cada decisión con los `hold` incluidos, un perfil de control sin modelo, comparar contra el Euro Stoxx 50, contexto macro y de mercado, el tipo de cambio que reabre D8, y un cajon de ideas donde el simulador resulta no abonar dividendos; F9.4 con diseño propuesto; F9.20 medida otra vez, 79 de 93 `buy` con `nemotron-3-super`; F9.7, mitad de noticias: Yahoo deja 32 de los 89 sin ninguna noticia en la semana, 23 de los 35 de Madrid, y Google News RSS por nombre y en el idioma de cada bolsa los cubre todos; F10: adopción completa de **Verdana Health** como sistema de diseño, con controles propios y sin tema oscuro; comisiones reales del banco y el P&L realizado corregido, F5.9; confirmado el retraso de 15 min del feed europeo, F2.1c; F8.5 cerrada; los cinco perfiles alineados en 1h con los ocho ciclos; el volumen renombrado a `financial-agent-trading-data` y declarado `external`; F10.6: la tesis se pliega en Posiciones y el filtro de Riesgo abre en «Todos»; FE.14: los dólares que quedaban en el veredicto de riesgo y en el resumen del ciclo; F4.14: las pantallas de datos se refrescan solas cada minuto, con el precio de la cartera; F4.15: cuatro tarjetas de resumen de cartera en Posiciones, calculadas de las filas de la tabla, y la tesis a todo el ancho; F9.8 abierta: tres cifras correctas que la interfaz deja leer mal; F4.16: el `+0,00%` sobre una pérdida, que era el cero negativo de JavaScript; F4.17: el P&L de una posición abierta descuenta ya la comisión, como el de una cerrada, y las tarjetas pasan a ser la cartera entera; F9.9: el Risk Manager pasa a dimensionar y filtrar **con** las comisiones, asi que el historico queda partido en dos mitades no comparables; F4.18: el `VIVO` fuera, que la ausencia de etiqueta ya afirma que el precio es vivo; F9.10: la conviccion modula el tamaño dentro de los topes; F9.9.4: los dos prompts dicen lo que cuesta operar; F9.11 auditada, tres decididos y dos huecos con nombre; F9.12: `tools/reset_experiment.py` y el experimento arrancado de cero; F4.19: el panel negaba un ciclo del planificador y dejaba `Parar` apagado sin decir por que; F4.20: Tailwind v4 dejo de poner `cursor: pointer` en los botones; F9.13: el analista pide el peso de la posicion y el tope deja de ser el valor por defecto; F4.21: el ciclo del planificador ya se puede parar, y la parada se pide por fichero en vez de mandarse por señal; F4.22: el log en vivo sale de un fichero del volumen compartido, asi que la pantalla ensena tambien el del planificador; F4.23: el rotulo del panel decia dos veces quien lanzo el ciclo; F10.7: el tercer relapso de FE.8 —dos lineas de log que aun escribian USD— y la tabla de cerradas, que se quedo volcando la prosa del analista cuando F10.6 movio la de abiertas; F10.8: el log en vivo no bajaba solo porque comprobaba la distancia al final despues de meter el texto nuevo; F10.9: Decisiones pasa de lista plana a arbol de jornada → ciclo → decision, con la prosa plegada como en Posiciones, y con el arbol cambiando de fuente cuando hay un filtro puesto; F10.10: Ordenes y Riesgo se agrupan igual, con la estructura extraida a `GroupedRows` y `lib/decisions.ts` renombrado a `lib/grouping.ts`; F9.8.2: Resumen ya dice que sus tres primeras cifras van a precio del ultimo ciclo y la tabla de abajo a precio vivo, con `equity_as_of` nuevo en la API porque la hora del ultimo ciclo no es la de la valoracion; F9.14 y F9.15 abiertas: la tabla de riesgo de F6.5 se calibro con barras diarias y el perfil corre en `1h`, asi que el stop por ATR sale de 3 a 5 veces mas estrecho de lo que la tabla queria y `llm_wider` es hoy la pieza que lo tapa, y hace falta medir con los mismos snapshots cuanto de los objetivos cortos es el intervalo y cuanto es el modelo; F9.15: `tools/replay_analyst.py` mide el intervalo con la base congelada y sin tocar Yahoo, y de paso encuentra que `volatility_20d_pct` tambien estaba 4,19x baja y que un tercio de las propuestas tienen stop y objetivo los dos bajo 0,5 sigma; F9.14 cerrada con la salida (a): los indicadores del analista pasan a ser **siempre diarios** y `bar_interval` queda como reloj del precio y de la ejecucion, con `lookback_days` a 400 y el experimento reseteado; R8 corregida —lo que la capa gratuita limita son peticiones simultaneas, no por minuto—; F9.16 cerrada: el objetivo tiene ahora un suelo absoluto en sigmas del horizonte, y el minimo por orden sube de 100 a 500 EUR porque cubrir la comision es un problema de tamaño de orden y no de tamaño de recorrido; F9.17: `horizon_days` era una columna muerta y era la causa de los objetivos del 6 % —una sigma a 14 dias son 6,8 % del precio—, asi que ahora viaja al prompt con la sigma ya calculada y al motor de riesgo; F9.18: el capital se repartia por orden alfabetico porque dos `sorted()` tiraban el ranking del screener justo antes de gastarlo, y un ciclo ya no puede abrir mas de `max_new_positions_per_cycle` posiciones; decision nº 9: el experimento de un mes con horizonte de 45 dias, objetivos del 12 % y siete posiciones del 14 %, con el historico reseteado antes de arrancar; F9.19 y F9.20 abiertas: el reparto en dos pasadas y el modelo que contesta con plantilla —24 de 24 `buy`, conviccion 60 en las 24—; F9.21: el tamaño de posicion pasa a ser una banda `min_position_pct`-`max_position_pct`, porque el techo solo no evitaba que la cartera se quedara a medio invertir —el modelo pedia 8 % en 11 de 11 propuestas y con siete plazas eso deja el 44 % del capital en caja, o sea un +12 % por operacion convertido en un +6,7 % de cartera—; F10.11: la tarjeta «Con estos ajustes» enseñaba los limites de los deslizadores encima de un perfil que corria con otros, y cuatro campos de la pantalla —benchmark, reserva de caja, sectores excluidos y permitir cortos— se guardan y no los lee nadie, asi que ahora lo dicen; F9.22: el endpoint de `llama-3.3-70b` se quedo colgado en NIM —acepta la peticion y no la despacha, 61 s hasta el corte con 16 tokens igual que con 1.600—, asi que los cinco perfiles pasan a `meta/llama-3.1-70b-instruct`, que es la unica de la gama grande que responde, y el historico queda partido como en F9.16; el cliente lee la respuesta en streaming, que se implemento persiguiendo un diagnostico falso y se conserva porque el timeout pasa a significar cuanto puede callar el servidor en vez de cuanto puede durar la llamada; F9.23: NVIDIA retiro `meta/llama-3.1-70b-instruct` el 2026-08-26 a las 09:00 UTC con un 410 de fin de vida y el ciclo de las 10:20 fallo 29 de 29 llamadas, asi que el modelo sale de la gama `meta/llama` —que se queda sin ninguna version servida— y pasa a `minimaxai/minimax-m3`, el unico de los doce medidos con el prompt real que contesto las tres veces, por delante del mucho mas capaz Nemotron 3 Ultra, que razona en el `content` sin marcarlo y gasta 1.432 de los 1.600 tokens antes del JSON; tercer corte del historico en once dias, y el argumento mas fuerte hasta ahora para F9.1; F9.24 abierta: `extract_json_object` no perdona el `{` doblado que emite la familia `nemotron-3`; F9.23.1: `minimaxai/minimax-m3`, el sustituto que eligio F9.23, devolvio 429 en las 29 llamadas del ciclo siguiente y en 206 ms, y el 429 resulto ser **del modelo y no de la cuenta** —la misma clave era servida por otros en el mismo minuto—, asi que se cae el aviso de F9.23 sobre la cuota agotada; repetir la medicion con tres llamadas por modelo tumba tambien los dos veredictos de F9.23 sobre `nemotron-3`, que eran de una llamada cada uno: super contesta JSON 3 de 3 en 14-23 s y pasa a ser el modelo de los cinco perfiles, y ultra manda el razonamiento separado en `reasoning_content` pero tarda 160 s, o sea 77 min de ciclo; el precio de super son tres campos a null que deriva el motor de riesgo; cuarto corte del historico en doce dias; el techo de 1.600 tokens ya roza —1.492 en la peor de tres— y queda en F9.24 con el numero puesto; F9.25: el trailing stop de las salidas no tenia suelo —`risk.py` solo acepta el stop del analista en una entrada si es mas ancho que el de 3xATR, y `_maybe_raise_stop` aceptaba cualquiera mas estrecho—, asi que el primer ciclo bueno con super subio el stop de seis de nueve posiciones y dejo la cartera entre 0,48x y 1,20x ATR, con UCG.MI por encima del precio vivo; el suelo pasa a ser la mitad de `stop_atr_multiple`, el recorte se registra con las dos cifras, y los seis stops ya escritos se recolocaron a mano porque `positions` no guarda historial de niveles)
 
 ---
 
@@ -2747,8 +2747,32 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
         que era el otro motivo— pero **esta tarea no se puede llamar «ejecución intradía
         real» en Europa**, y el nombre importa porque es lo que la vendía. Renombrarla es
         parte de hacerla.
-- [ ] **F9.4** Noticias / sentimiento como entrada adicional del analista. **Depende de
-      F9.7**: hasta saber qué fuentes hay y con qué cobertura, no se puede diseñar.
+- [ ] **F9.4** **Sistema de noticias como entrada del analista.** ~~Depende de F9.7~~ **La
+      mitad de noticias de F9.7 está medida (2026-09-25)**, así que ya se puede diseñar.
+      Pedido el 2026-09-25.
+
+      **Diseño propuesto, pendiente de confirmar:**
+      - **Las recoge el sistema, no el modelo.** Google News RSS por nombre de empresa y en
+        el idioma de su bolsa, Yahoo de respaldo. Hace falta un **nombre de búsqueda curado
+        por símbolo** en el universo: el de `.info` llega truncado en 7 de los 89.
+      - **Se guardan con fecha y fuente** en una tabla propia, con el id del ciclo que los
+        leyó. Es lo que F9.7 pedía para poder interpretar el histórico después, y lo que
+        permite a F9.2 no usar un titular publicado después de la barra.
+      - **El modelo los recibe con un id** (`N3: «…», El Economista, 24-09`) y solo puede
+        citarlos por ese id, en un campo nuevo de la propuesta. Lo que cite fuera de la lista
+        sigue siendo una alucinación visible, así que **la regla de honestidad del prompt se
+        reescribe en vez de levantarse**.
+      - **Filtro de ruido antes del prompt:** páginas de cotización, foros y homónimos
+        (medido: «VEOLIA Cours Action VIE», «Foro Logista», Almirall en la búsqueda de Rovi).
+      - **En un perfil nuevo**, no en `eu-05`: comparar «con» contra «sin» pide dos perfiles,
+        como dejó escrito F9.7.
+
+      **Descartado: la búsqueda web propia de los modelos GPT-6.** Solo existe con un
+      proveedor, así que no se puede comparar contra un perfil de NIM; cada ciclo lee cosas
+      distintas; y el modelo elige qué lee, que es invitarlo a buscar lo que le da la razón.
+
+      Decisiones abiertas: la fuente y si el perfil nuevo estrena a la vez modelo (F9.26).
+      Estrenar las dos cosas es un perfil; separar su efecto, dos.
 - [ ] **F9.5** Notificaciones (Telegram) al abrir o cerrar posición.
 - [ ] **F9.6** Publicar en internet: sería el momento de Supabase + Cloudflare del plan
       anterior, con autenticación. Hoy no hace falta y costaría dinero.
@@ -3635,6 +3659,9 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       dos. Se cruza con **F9.3** (ejecutar al precio vivo del momento de la orden) y probablemente
       haya que hacer las dos juntas.
 
+      **Pedida de nuevo el 2026-09-25**, en la lista de mejoras. Sigue detrás de F9.20 por la
+      misma razón: con `buy` en 79 de 93, ordenar por convicción aún no separa nada.
+
 - [x] **F9.21** **El techo por posición no podía evitar que la cartera se quedara a medio
       invertir, así que el tamaño pasa a ser una banda.** Abierta y cerrada el 2026-08-11, a
       raíz de una frase: «lo lógico sería que si tiene capital y ve una oportunidad, lo
@@ -4084,6 +4111,160 @@ no tenemos sería peor que aguantar. Lo que cambia es que ya no se calla. **644 
       3. **F5.7 (`screener_mode = random`)** sigue siendo la medición que lo cierra: si el agente rinde
          igual con candidatos al azar, la convicción constante no era el problema porque no había
          señal que perder.
+
+      **Sigue igual con `nemotron-3-super`, medido el 2026-09-25 sobre toda la tabla
+      `decisions`:** entradas, **`buy` en 79 de 93**; salidas, **`hold` en 870 de 897**. Tres
+      modelos distintos y el mismo sesgo, lo que apunta cada vez más al prompt o a la tarea y
+      menos a un modelo concreto. **Recalibrar** es probar, en este orden y de uno en uno:
+      la temperatura (punto 1), un modelo de otra categoría (F9.26), y un prompt que pida
+      primero el caso bajista y luego el alcista, o que puntúe contra una base de referencia
+      explícita («¿es esto mejor que el candidato medio del screener?»). La vara con la que
+      se mide si mejoró es **F9.27**: la convicción está calibrada si los de 70 aciertan más
+      que los de 55, y hoy eso no se puede calcular.
+
+- [ ] **F9.26** **Revisar `gpt-6-sol` como modelo del experimento, y lo que F9.1 da por hecho.**
+      Pedido el 2026-09-25. Concreta F9.1 para GPT.
+
+      **Por qué Sol y no Luna ni Astra**, con el catálogo de OpenAI del 2026-09-25:
+
+      | Modelo | Entrada / salida por M tokens | Para qué se vende | Estimado al mes aquí |
+      |---|---|---|---|
+      | `gpt-6-luna` | 0,10 $ / 0,50 $ | Volumen: resumir, extraer, clasificar | ~2–4 $ |
+      | `gpt-6-sol` | 2 $ / 10 $ | Tareas complejas, «la mitad de errores que su predecesor» | ~30–70 $ |
+      | `gpt-6-astra` | 10 $ / 50 $ | Código y uso del ordenador | ~150–360 $ |
+
+      El estimado sale de los tokens reales de `decisions` (entrada ~2.750 / ~1.300 de salida
+      con `nemotron-3-super`), 50–120 llamadas al día y ~1.000 tokens más por noticias. Lo que
+      falla hoy es juzgar sin certeza y calibrar (F9.20), que es justo lo que Luna no promete.
+      Luna sirve como **segundo perfil barato**, no como el principal.
+
+      ⚠️ **«GPT: ya se puede, cero código pendiente» (F9.1) probablemente ya no es cierto.**
+      [src/llm.py](src/llm.py) manda `max_tokens: 1600` y `temperature: 0.2`. Los modelos de
+      razonamiento de OpenAI suelen pedir `max_completion_tokens`, un `reasoning_effort` y la
+      temperatura por defecto, y 1.600 tokens se los come el razonamiento antes del JSON, igual
+      que le pasó a Nemotron Ultra en F9.23. **Sin verificar**: hace falta una llamada con la
+      clave de OpenAI. Si salen bien, aprovechar las salidas con esquema JSON, que cierran F9.24
+      por el otro lado.
+
+      **Dos consecuencias que hay que asumir:**
+      - **Rompe la premisa de 0 €**, que era el aviso de F9.1.
+      - **Corte de conocimiento: 2026-04-20.** No afecta al vivo, pero `replay_analyst.py` y
+        F9.2 sobre fechas anteriores le preguntarían al modelo por un pasado que ya conoce.
+
+      La ventaja que no sale en ningún benchmark: **el histórico dejaría de partirse cada
+      semana** por un modelo que NVIDIA retira o deja colgado (cuatro cortes en doce días,
+      F9.22–F9.23.1).
+
+- [ ] **F9.27** **Medir si cada decisión acertó, `hold` incluidos.** Pedido el 2026-09-25.
+
+      Hoy solo se juzgan las operaciones ejecutadas, así que el P&L mezcla el acierto del
+      modelo con lo que hicieron el Risk Manager, el tope de entradas y el orden de llegada.
+      Y los `hold` —870 de 897 salidas— no se evalúan nunca: no se sabe si aguantar fue bueno.
+
+      **La idea:** para cada fila de `decisions`, apuntar el precio a `horizon_days` (y a
+      plazos intermedios, 5 y 20 sesiones) y si tocó antes el stop o el objetivo propuestos.
+      Con eso salen la tasa de acierto por acción, la **calibración de la convicción** (los
+      de 70 deberían acertar más que los de 55) y el valor de los `hold` de salida.
+
+      - **Es un cálculo, no un registro nuevo del ciclo**: sale de `decisions` y de
+        `bar_cache`, así que se puede calcular a posteriori para todo el histórico.
+      - ⚠️ **Hay que separar los cortes del histórico** (F9.9, F9.16, F9.22, F9.23): calibrar
+        un modelo con las decisiones de otro es mezclar dos experimentos.
+
+- [ ] **F9.28** **Un perfil de control sin modelo, para ver si el modelo aporta algo.**
+      Pedido el 2026-09-25.
+
+      Es la pregunta de fondo del proyecto y nada la responde hoy. F5.7 mide si el screener
+      aporta; esto mide si **el analista** aporta. Un perfil que compra lo que el screener
+      pone arriba, con el mismo Risk Manager, los mismos stops, las mismas comisiones y el
+      mismo tope de entradas, y sin llamar a ningún modelo. Si el perfil con modelo no le gana
+      después de comisiones, el modelo está añadiendo coste y no criterio.
+
+      - Tiene que ser **un modo del analista** (`analyst_mode = rules`, al estilo de
+        `screener_mode`), no un fork del ciclo, para que la única diferencia sea esa.
+      - Sale gratis: no gasta cuota, así que puede correr siempre en paralelo al perfil que se
+        mida.
+
+- [ ] **F9.29** **Comparar el resultado con el Euro Stoxx 50.** Pedido el 2026-09-25.
+
+      `Market.benchmark` existe y la columna `benchmark` del perfil no la lee nadie (F10.11).
+      Sin índice de referencia un +5 % no se puede interpretar: en un mes en que el mercado
+      hace +8 es perder. La Analítica necesita la curva del índice sobre las mismas fechas,
+      rebasada al capital inicial, y el exceso de rentabilidad. ⚠️ **Índice de rentabilidad
+      total o de precio**: el de precio no cobra dividendos, y el universo tiene muchos
+      valores españoles con dividendos altos, así que eso inclina la comparación.
+
+- [ ] **F9.30** **Contexto de mercado y macroeconomía: que el analista sepa qué está pasando en
+      el mundo.** Pedido el 2026-09-25 («si hay una guerra, a lo mejor no le interesa comprar
+      X»). Complementa F9.4, que es por empresa.
+
+      Hoy cada llamada ve un activo aislado: no sabe si el índice lleva un −10 %, si el BCE
+      sube tipos mañana o si el Brent se ha disparado. Propuesta en tres capas, de más
+      barata a menos:
+
+      1. **Régimen de mercado, determinista y gratis.** Un bloque calculado una vez por ciclo:
+         tendencia y caída desde máximos de los índices, volatilidad implícita (VSTOXX),
+         EUR/USD, Bund a 10 años, Brent, oro y fuerza relativa por sector. Los datos salen de
+         Yahoo, pero **hay que verificar que los sirve** símbolo a símbolo, como FE.2.
+      2. **Resumen de mercado en una llamada por ciclo.** Titulares generales de macro y
+         geopolítica (BCE, inflación, conflictos, materias primas) resumidos por el modelo
+         **una vez**, guardados en el ciclo con los ids de los titulares que usó, y pasados a
+         todas las llamadas por símbolo. Cuesta una llamada, no veinte, y es la capa que
+         responde a lo de la guerra.
+      3. **Calendario.** Fechas de resultados por símbolo, reuniones del BCE y datos de IPC.
+         Una regla determinista en `risk.py` —no abrir a menos de N sesiones de resultados—
+         vale más que decírselo al modelo, y no rompe la premisa.
+
+      **Requisito previo: el sector de cada símbolo**, que falta desde FE.12. Sin él, «hay
+      guerra» no se puede convertir en «defensa sí, aerolíneas no», y tampoco se puede aplicar
+      el tope por sector.
+
+      ⚠️ **La misma trampa que F9.4, y más grande:** un resumen de mercado es texto generado,
+      así que **tiene que guardarse tal cual** en el ciclo. Si no, nadie sabrá después qué
+      contexto llevó al modelo a comprar.
+
+- [ ] **F9.31** ⚠️ **Divisa: el tipo de cambio del momento de cada operación, y reabrir D8.**
+      Pedido el 2026-09-25.
+
+      **Contradice una decisión tomada**, y por eso va con aviso: D8 dejó escrito que un
+      perfil cubre una sola bolsa y que el proyecto **no convierte divisa en ningún sitio**.
+      Hoy eso es cierto y basta, porque cada cartera está en la moneda de su mercado. Hace
+      falta convertir en cuanto una cuenta en euros compre en otra divisa: Estados Unidos,
+      Londres, Zúrich o Estocolmo.
+
+      **Qué supondría:**
+      - Una **divisa base por cartera**, distinta de la del mercado.
+      - El **tipo de cambio en cada orden, guardado en la fila**, tomado en el mismo instante
+        que el `fill_price`, con el mismo reloj (sección 5 de EXPERIMENT.md). Un tipo de otra
+        hora mezclaría dos precios de momentos distintos.
+      - **La comisión de cambio del banco**, que es un coste aparte de la de la orden y que
+        el Risk Manager tendría que tener en cuenta, igual que en F9.9.
+      - **El P&L partido en dos**: lo que ganó el valor y lo que ganó o perdió la divisa. Si
+        no, un +5 % en dólares con el euro subiendo un 5 % se lee como un acierto del modelo.
+      - Londres cotiza en **peniques**, que es otra unidad antes de ser otra divisa.
+
+      Mientras no se haga, la divisa sí puede entrar **como contexto** en F9.30 (EUR/USD pesa
+      en los exportadores europeos) sin convertir nada.
+
+- [ ] **F9.32** **Ideas del 2026-09-25, sin decidir todavía:**
+      - **Revisión de cada posición al cerrarla.** Una llamada que compare la tesis de entrada
+        con lo que pasó. Sirve para leer el experimento; ⚠️ usarla como memoria del modelo en
+        ciclos siguientes contaminaría la comparación entre perfiles.
+      - **Preguntar dos veces lo mismo.** Con Luna es casi gratis y mide cuánto ruido tiene
+        el propio modelo: si la misma pregunta da `buy` una vez y `hold` la otra, la
+        convicción no significa nada.
+      - **Correlación de la cartera aplicada, no solo pedida.** El prompt dice «evita
+        concentrar en activos muy correlacionados» y nada lo comprueba. Una regla en
+        `risk.py` con la correlación de 60 sesiones contra lo que ya hay abierto.
+      - **Dividendos: el simulador no los abona, comprobado.** Las barras llegan sin ajustar
+        (`auto_adjust=False`, `actions=False` en `bar_cache.py`, `ingest.py` y
+        `market_data.py`) y nada en `src/` apunta un dividendo. El día ex-dividendo el precio
+        cae el importe del dividendo y la cartera se lo come entero: el P&L sale por debajo
+        del real, y en valores españoles la caída puede perforar un stop sin que la tesis
+        haya cambiado. También inclina F9.29 si se compara contra un índice de rentabilidad
+        total.
+      - **Fundamentales con fecha** (la otra mitad de F9.7): PER, capitalización y márgenes,
+        guardados cada día desde ya, porque los de `yfinance` son siempre los de hoy.
 
 ---
 
