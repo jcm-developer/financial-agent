@@ -270,7 +270,6 @@ function SettingsForm({
           options={[
             ["nvidia", "NVIDIA NIM (capa gratuita)"],
             ["openai", "OpenAI"],
-            ["anthropic", "Claude (suscripción)"],
           ]}
         />
         <Input

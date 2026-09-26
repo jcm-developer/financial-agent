@@ -4,7 +4,7 @@ None of this talks to the network: what gets tested is the provider table, the
 resolution of credentials and the masking. What matters here are three things
 that would fail silently or at the most inopportune moment:
 
-  * a made-up provider has to say "unknown", with the valid ones listed,
+  * an unimplemented provider has to say "not yet", not "unknown",
   * the NIM key must **not** be used against OpenAI: that does not fail at
     resolution, it fails halfway through the cycle with a 401 nobody relates to
     the profile,
@@ -41,8 +41,8 @@ def perfil(db):
 # -- Tabla de proveedores ----------------------------------------------------
 
 
-def test_the_three_implemented_providers():
-    assert set(PROVIDERS) == {"nvidia", "openai", "anthropic"}
+def test_the_two_implemented_providers():
+    assert set(PROVIDERS) == {"nvidia", "openai"}
 
 
 def test_nvidia_is_the_default():
@@ -53,11 +53,14 @@ def test_the_name_is_normalised():
     assert resolve_provider("  OpenAI  ").name == "openai"
 
 
-def test_anthropic_goes_through_the_cli():
-    """The value the schema admitted since F1.2, implemented in F9.35 over the
-    `claude` command and not over HTTP."""
-    assert resolve_provider("anthropic").transport == "cli"
-    assert resolve_provider("openai").transport == "http"
+def test_anthropic_says_not_yet():
+    """The schema has admitted 'anthropic' since F1.2, but it is not implemented.
+
+    Telling "not yet" from "does not exist" matters: the first is a pending task
+    (F9.1), the second would be a typo.
+    """
+    with pytest.raises(LLMError, match="no está implementado todavía"):
+        resolve_provider("anthropic")
 
 
 def test_a_made_up_provider_is_refused():
