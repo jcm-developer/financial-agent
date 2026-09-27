@@ -258,6 +258,13 @@ class YahooMarketData:
     def _download(self, symbols: list[str], interval: str) -> Any:
         # Margen amplio: `lookback_days` son sesiones, no dias naturales.
         period_days = int(self.lookback_days * 1.8) + 40
+        # Capped at Yahoo's intraday limit, the same one `bar_cache` applies.
+        # With `lookback_days` at 400 (F9.14) the margin asks for 760 days, Yahoo
+        # refuses anything past 730 in `1h` and returns no bars at all, so
+        # `run.py check` reported the market data down on a healthy connection.
+        from .bar_cache import MAX_DAYS_BY_INTERVAL
+
+        period_days = min(period_days, MAX_DAYS_BY_INTERVAL.get(interval, period_days))
 
         import yfinance as yf
 
