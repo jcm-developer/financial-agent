@@ -151,7 +151,10 @@ create table if not exists decisions (
     suggested_target  real,
     -- Peso que pidio el analista, en % del capital (F9.13). NULL significa
     -- que no pidio ninguno, no que pidiera cero: el Risk Manager cae
-    -- entonces al factor de conviccion.
+    -- entonces al factor de conviccion. En una revision (kind = 'exit') es el
+    -- peso que debe tener la posicion DESPUES de operar (F9.37): con 'buy' se
+    -- amplia hasta el, con 'sell' se reduce hasta el, y un 'sell' sin peso
+    -- cierra entera.
     suggested_weight_pct real,
     -- Los ids de news_items que el analista dice haber usado (F9.4), en JSON.
     -- Solo los que existian en su prompt: uno inventado se queda en

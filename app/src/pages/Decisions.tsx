@@ -20,7 +20,7 @@ import {
 } from "@/components/Table";
 import { groupByDayAndCycle, groupCyclesByDay } from "@/lib/grouping";
 import { money, dateTime, time, longDate, sentence } from "@/lib/format";
-import { actionLabel, orderStatusLabel, ruleLabel } from "@/lib/labels";
+import { decisionActionLabel, orderStatusLabel, ruleLabel } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 import { useTitle } from "@/layout/useTitle";
@@ -577,7 +577,7 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
               row.action === "hold" && "text-text-muted",
             )}
           >
-            {actionLabel(row.action)}
+            {decisionActionLabel(row.action, row.kind, row.suggested_weight_pct)}
           </span>
         </Td>
         <Td numeric>{row.conviction}</Td>

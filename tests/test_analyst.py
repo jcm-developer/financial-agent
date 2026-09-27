@@ -111,7 +111,7 @@ def test_the_exit_prompt_says_that_closing_costs_money(snapshot, position):
         INTERVAL_LABELS["1h"], "EUR", 4.11,
     )
 
-    assert "Coste de cerrar: 4.11 EUR" in prompt
+    assert "Coste de operar: 4.11 EUR de comision por orden" in prompt
 
 
 def test_the_analyst_never_tells_the_model_that_trading_is_free(snapshot, account):
@@ -310,3 +310,68 @@ def test_the_weight_is_not_clamped_to_the_profile_ceiling_here():
     from src.analyst import _coerce_weight
 
     assert _coerce_weight(80) == pytest.approx(80.0)
+
+
+# -- Ampliar, reducir o cerrar (F9.37) ------------------------------------------
+
+def test_the_review_prompt_states_the_weight_the_answer_is_measured_against(
+    snapshot, position, account
+):
+    """`target_weight_pct` is answered against the current weight, so the weight
+    is handed over worked out, like the sigma and the price gap."""
+    prompt = _render_exit_prompt(
+        position, snapshot, "Tendencia intacta.", 4.2, 5.4,
+        INTERVAL_LABELS["1h"], "EUR", 4.11,
+        account=account, max_position_pct=20.0,
+    )
+
+    assert "Peso actual en la cartera: 4.8% del capital" in prompt
+    assert "Peso maximo por posicion: 20% del capital" in prompt
+    assert "Efectivo disponible para ampliar: 10000.00 EUR" in prompt
+    assert "Ampliar NO es posible" not in prompt
+
+
+def test_the_review_prompt_says_a_loser_cannot_be_added_to(snapshot, account):
+    losing = BrokerPosition(
+        symbol="SAN.MC", qty=100.0, avg_entry_price=5.00,
+        current_price=4.83, market_value=483.0,
+        unrealized_pl=-17.0, unrealized_pl_pct=-3.4,
+    )
+    prompt = _render_exit_prompt(
+        losing, snapshot, "Tendencia intacta.", 4.2, 5.4,
+        INTERVAL_LABELS["1h"], "EUR", 4.11, account=account,
+    )
+
+    assert "Ampliar NO es posible" in prompt
+
+
+def test_the_review_reads_the_target_weight_and_allows_a_buy(snapshot, position, account):
+    """A `buy` on a review is an add and no longer degrades to `hold`, and the
+    entry prompt's field name is taken too, so a trim written out of habit is
+    not read as a whole close."""
+    from src.analyst import Analyst
+    from src.llm import LLMResponse
+
+    class Answer:
+        def __init__(self, parsed):
+            self.parsed = parsed
+
+        def complete_json(self, *, system, user, max_tokens=1600):
+            return LLMResponse(
+                content="{}", parsed=self.parsed, model="stub",
+                latency_ms=1, prompt_tokens=1, completion_tokens=1,
+            )
+
+    def review(parsed):
+        return Analyst(Answer(parsed), currency="EUR").evaluate_exit(
+            position, snapshot, "Tesis.", 4.2, 5.4, account=account,
+        )
+
+    add = review({"action": "buy", "conviction": 80, "target_weight_pct": 12})
+    assert (add.action, add.suggested_weight_pct) == ("buy", 12.0)
+
+    trim = review({"action": "sell", "conviction": 80, "suggested_weight_pct": 2})
+    assert (trim.action, trim.suggested_weight_pct) == ("sell", 2.0)
+
+    close = review({"action": "sell", "conviction": 80, "target_weight_pct": 0})
+    assert close.suggested_weight_pct is None

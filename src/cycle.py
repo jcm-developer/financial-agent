@@ -6,8 +6,9 @@ The order of the phases is deliberate:
   2. Market data                    -> a single request for the whole universe.
   3. Daily-loss kill switch         -> if it trips, nothing new is opened.
   4. Forced exits                   -> stop/target hit, without asking the LLM.
-  5. LLM review of exits            -> thesis degraded.
-  6. Entries                        -> analysis, risk filter, execution.
+  5. LLM review of open positions  -> hold, trim, close, or queue an add.
+  6. Entries and adds               -> analysis, one conviction ranking, risk
+                                       filter, execution.
   7. Equity curve and close         -> always, even if something failed.
 
 Exits go before entries for a practical reason: they free cash and position slots
@@ -30,7 +31,7 @@ from .llm import LLMClient
 from .market_data import INDICATOR_INTERVAL, MarketDataError, build_market_data
 from .models import AccountState, ExitSignal, MarketSnapshot, Proposal
 from .news import NewsContext, NewsProvider, NumberedHeadline, build_news_provider, number
-from .risk import RiskManager
+from .risk import RiskManager, horizon_sigma
 from .sim_broker import Quote, SimBroker
 
 log = logging.getLogger(__name__)
@@ -109,6 +110,11 @@ class CycleReport:
     orders_submitted: int = 0
     exits_forced: int = 0
     exits_discretionary: int = 0
+    #: Adds to an open position and partial sales of one (F9.37). Kept apart from
+    #: the entries and the exits because neither opens nor closes a position, and
+    #: the summary counts positions there.
+    additions: int = 0
+    reductions: int = 0
     halted_reason: str | None = None
     #: True when the cycle was cut short because it was asked to stop. Kept apart
     #: from `halted_reason` so the summary does not print "KILL SWITCH" over a stop
@@ -145,6 +151,12 @@ class CycleReport:
             f"Salidas: {self.exits_forced} forzadas, "
             f"{self.exits_discretionary} a criterio del analista",
         ]
+        # Only when it happened, like the failures below: most cycles adjust
+        # nothing, and a line of zeros in every summary stops being read.
+        if self.additions or self.reductions:
+            lines.append(
+                f"Ajustes: {self.additions} ampliaciones, {self.reductions} ventas parciales"
+            )
         # Same criterion as the analyst's failures below: it is only named when
         # it happens, so that when it appears it is read. It goes ABOVE the
         # errors because it is not an error —the cycle completed— and it is the
@@ -899,8 +911,16 @@ class TradingCycle:
                 broker_positions.pop(signal.symbol, None)
                 closed_this_cycle.add(signal.symbol)
 
-        # --- 5. Revision discrecional de salidas -------------------------
+        # --- 5. Revision discrecional de cada posicion ---------------------
+        # Hold, trim or close happen here; an add is only queued (F9.37). It
+        # spends cash, so it waits for step 6 and competes there with the new
+        # entries in the same conviction ranking instead of taking the cash
+        # first for having been reviewed first.
         forced_symbols = {s.symbol for s in forced_exits}
+        adds: list[tuple[Proposal, MarketSnapshot, str | None]] = []
+        # Refreshed so the review states the cash and weights the forced exits
+        # left, not the ones the cycle started with.
+        account = self.broker.get_account_state()
         for symbol, position in list(broker_positions.items()):
             if symbol in forced_symbols:
                 continue
@@ -917,6 +937,7 @@ class TradingCycle:
                 stop_price=_opt_float(row.get("stop_price")),
                 target_price=_opt_float(row.get("target_price")),
                 news=self._news_for(report, cycle_id, symbol),
+                account=account,
             )
             if proposal is None:
                 continue
@@ -925,7 +946,11 @@ class TradingCycle:
                 cycle_id, portfolio_id, proposal, snapshot_ids.get(symbol)
             )
             self._maybe_raise_stop(row, proposal, position, snapshot)
+            self._maybe_revise_target(row, proposal, position, snapshot)
 
+            if proposal.action == "buy":
+                adds.append((proposal, snapshot, decision_id))
+                continue
             if proposal.action != "sell":
                 continue
             if proposal.conviction < self.settings.risk.min_conviction:
@@ -934,6 +959,24 @@ class TradingCycle:
                     "se mantiene la posición.",
                     symbol, proposal.conviction, self.settings.risk.min_conviction,
                 )
+                continue
+
+            verdict = self.risk.evaluate_trim(proposal, account, position)
+            if not verdict.approved:
+                self._save_risk_event(
+                    cycle_id, portfolio_id, symbol, verdict, decision_id
+                )
+                report.rejected += 1
+                log.info("RECHAZADA %s: %s", symbol, verdict.reason)
+                continue
+
+            if verdict.rule == "llm_trim":
+                if self._execute_trim(
+                    report, portfolio_id, cycle_id, verdict, row, position,
+                    market_open=market_open, decision_id=decision_id,
+                ):
+                    report.reductions += 1
+                    account = self.broker.get_account_state()
                 continue
 
             signal = ExitSignal(
@@ -951,6 +994,7 @@ class TradingCycle:
                 report.exits_discretionary += 1
                 broker_positions.pop(symbol, None)
                 closed_this_cycle.add(symbol)
+                account = self.broker.get_account_state()
 
         # --- 6. Entradas --------------------------------------------------
         # Checked before the phase and not only inside its loop: the entries are
@@ -1001,9 +1045,14 @@ class TradingCycle:
         # ciclo se ejecutan a la apertura de la misma barra, fijada al bajar los
         # datos, asi que da igual mandar la primera a las 10:21 o a las 10:40. Eso
         # cambiara con F9.3, al ejecutar a precio vivo.
-        if len(account.positions) >= self.settings.risk.max_open_positions:
+        # A full book still reviews its adds (F9.37): they take no slot, so the
+        # early return that saves the twenty entry calls cannot skip them too.
+        book_full = len(account.positions) >= self.settings.risk.max_open_positions
+        if book_full:
             log.info("Cartera llena: no se evalúan entradas en este ciclo.")
-            return
+            if not adds:
+                return
+            candidates = []
 
         # --- 6a. Analizar todos los candidatos ------------------------------
         buys: list[tuple[Proposal, MarketSnapshot, str | None]] = []
@@ -1030,16 +1079,34 @@ class TradingCycle:
         # la que el propio modelo dice cuanto se fia, y la que F9.27 calibrara.
         # `sorted` es estable, asi que a igual conviccion manda el orden del
         # screener, que es el desempate que ya se tenia.
+        #
+        # Las ampliaciones entran en la misma cola (F9.37), **detras de las
+        # entradas a igual conviccion**: con el mismo grado de confianza, una
+        # idea nueva diversifica y reforzar una que ya se tiene concentra. A
+        # distinta conviccion manda la conviccion, que es lo que F9.19 fijo.
         self._check_stop(cycle_id)
-        ranked = sorted(buys, key=lambda item: -item[0].conviction)
+        queue = buys + adds
+        ranked = sorted(queue, key=lambda item: -item[0].conviction)
         if len(ranked) > 1:
             log.info(
                 "Propuestas de compra por convicción: %s",
-                ", ".join(f"{p.symbol} ({p.conviction})" for p, _, _ in ranked),
+                ", ".join(
+                    f"{p.symbol} ({p.conviction}{', ampliar' if p.kind == 'exit' else ''})"
+                    for p, _, _ in ranked
+                ),
             )
 
         for proposal, snapshot, decision_id in ranked:
             symbol = proposal.symbol
+            if proposal.kind == "exit":
+                if self._evaluate_and_execute_add(
+                    report, portfolio_id, cycle_id, account, proposal, snapshot,
+                    decision_id, market_open,
+                ):
+                    account = self.broker.get_account_state()
+                    report.equity_end = account.equity
+                continue
+
             full = len(account.positions) >= self.settings.risk.max_open_positions
             capped = per_cycle_cap > 0 and opened_this_cycle >= per_cycle_cap
             if full or capped:
@@ -1314,7 +1381,12 @@ class TradingCycle:
             entry_price = float(row.get("entry_price") or 0.0)
             if position is not None:
                 entry_price = position.avg_entry_price or entry_price
-            realized = (exit_price - entry_price) * signal.qty
+            # Plus whatever earlier trims of this position already realized
+            # (F9.37), so the closed row carries the whole trade and not only
+            # its last slice.
+            realized = (exit_price - entry_price) * signal.qty + float(
+                row.get("realized_pnl") or 0.0
+            )
             try:
                 self.db.close_position(
                     str(row["id"]),
@@ -1333,6 +1405,187 @@ class TradingCycle:
                 signed_money(realized, self.currency_symbol),
                 _EXIT_RULE_LABELS.get(signal.rule, signal.rule),
             )
+        return True
+
+    def _evaluate_and_execute_add(
+        self,
+        report: CycleReport,
+        portfolio_id: str,
+        cycle_id: str,
+        account: AccountState,
+        proposal: Proposal,
+        snapshot: MarketSnapshot,
+        decision_id: str | None,
+        market_open: bool,
+    ) -> bool:
+        """Sizes and sends an add to an open position (F9.37).
+
+        The position and its levels are read again here and not carried from
+        step 5: a trim, a stop raised or a target revised in the review is what
+        this add has to be sized against.
+        """
+        symbol = proposal.symbol
+        position = account.position_for(symbol)
+        row = self.db.get_open_positions(portfolio_id).get(symbol)
+        if position is None or row is None:
+            log.info("%s: la posición ya no está abierta; no se amplía.", symbol)
+            return False
+
+        atr = _opt_float(snapshot.indicators.get("atr_14"))
+        verdict = self.risk.evaluate_add(
+            proposal, account, position, atr,
+            stop_price=_opt_float(row.get("stop_price")),
+            target_price=_opt_float(row.get("target_price")),
+        )
+        risk_event_id = self._save_risk_event(
+            cycle_id, portfolio_id, symbol, verdict, decision_id
+        )
+        if not verdict.approved:
+            report.rejected += 1
+            log.info("RECHAZADA %s (ampliar): %s", symbol, verdict.reason)
+            return False
+
+        report.approved += 1
+        log.info("APROBADA %s (ampliar): %s", symbol, verdict.reason)
+
+        if not self._can_execute(market_open):
+            self._record_unexecuted_order(
+                cycle_id, portfolio_id, symbol, "buy", verdict,
+                decision_id, risk_event_id, market_open,
+            )
+            return False
+
+        if not self.broker.is_tradable(symbol):
+            self._save_risk_event(
+                cycle_id, portfolio_id, symbol,
+                _rejection("not_tradable", f"El broker no admite operaciones en {symbol}."),
+                decision_id,
+            )
+            report.rejected += 1
+            return False
+
+        try:
+            order = self.broker.buy_market(symbol, verdict.qty)
+        except BrokerError as exc:
+            log.error("Ha fallado la ampliación de %s: %s", symbol, exc)
+            self._safe_save_order(
+                cycle_id=cycle_id, portfolio_id=portfolio_id, symbol=symbol,
+                side="buy", qty=verdict.qty, status="failed",
+                decision_id=decision_id, risk_event_id=risk_event_id,
+                stop_price=verdict.stop_price, target_price=verdict.target_price,
+                error=str(exc),
+            )
+            report.errors.append(f"Ampliación de {symbol} fallida: {exc}")
+            return False
+
+        report.orders_submitted += 1
+        report.additions += 1
+        self._safe_save_order(
+            cycle_id=cycle_id, portfolio_id=portfolio_id, symbol=symbol,
+            side="buy", qty=verdict.qty, status=order.status,
+            decision_id=decision_id, risk_event_id=risk_event_id,
+            broker_order_id=order.broker_order_id,
+            filled_qty=order.filled_qty, filled_avg_price=order.filled_avg_price,
+            stop_price=verdict.stop_price, target_price=verdict.target_price,
+        )
+
+        # The broker already merged the average; the record copies it rather
+        # than working it out a second time and risking two different figures.
+        after = self.broker.get_account_state().position_for(symbol)
+        total = after.qty if after else position.qty + verdict.qty
+        average = after.avg_entry_price if after else position.avg_entry_price
+        try:
+            self.db.enlarge_position(
+                str(row["id"]), qty=total, entry_price=average,
+                stop_price=verdict.stop_price, target_price=verdict.target_price,
+            )
+        except DatabaseError as exc:
+            # The next cycle's reconciliation copies the broker's quantity and
+            # price; what it cannot recover is the raised stop, hence the noise.
+            log.error(
+                "Ampliación de %s enviada, pero no se pudo registrar: %s. El "
+                "próximo ciclo cuadrará la cantidad con el broker.", symbol, exc,
+            )
+            report.errors.append(f"Ampliación de {symbol} sin registrar: {exc}")
+
+        log.info(
+            "AMPLIACIÓN %s: +%g acciones a unos %s, %g en total, stop en %s",
+            symbol, verdict.qty, fmt_number(order.filled_avg_price or snapshot.price),
+            total, _fmt(verdict.stop_price),
+        )
+        return True
+
+    def _execute_trim(
+        self,
+        report: CycleReport,
+        portfolio_id: str,
+        cycle_id: str,
+        verdict,
+        row: dict,
+        position,
+        *,
+        market_open: bool,
+        decision_id: str | None,
+    ) -> bool:
+        """Sells part of an open position, as the Risk Manager sized it (F9.37).
+
+        Its stop and target are left where they were: they are prices, not
+        amounts, and the part that stays is the same idea at the same levels.
+        """
+        symbol = position.symbol
+        risk_event_id = self._save_risk_event(
+            cycle_id, portfolio_id, symbol, verdict, decision_id
+        )
+        report.approved += 1
+        log.info("APROBADA %s (reducir): %s", symbol, verdict.reason)
+
+        if not self._can_execute(market_open):
+            self._record_unexecuted_order(
+                cycle_id, portfolio_id, symbol, "sell", verdict,
+                decision_id, risk_event_id, market_open,
+            )
+            return False
+
+        try:
+            order = self.broker.sell_market(symbol, verdict.qty)
+        except BrokerError as exc:
+            log.error("Ha fallado la venta parcial de %s: %s", symbol, exc)
+            self._safe_save_order(
+                cycle_id=cycle_id, portfolio_id=portfolio_id, symbol=symbol,
+                side="sell", qty=verdict.qty, status="failed",
+                decision_id=decision_id, risk_event_id=risk_event_id,
+                error=str(exc),
+            )
+            report.errors.append(f"Venta parcial de {symbol} fallida: {exc}")
+            return False
+
+        report.orders_submitted += 1
+        self._safe_save_order(
+            cycle_id=cycle_id, portfolio_id=portfolio_id, symbol=symbol,
+            side="sell", qty=verdict.qty, status=order.status,
+            decision_id=decision_id, risk_event_id=risk_event_id,
+            broker_order_id=order.broker_order_id,
+            filled_qty=order.filled_qty, filled_avg_price=order.filled_avg_price,
+        )
+
+        exit_price = order.filled_avg_price or position.current_price
+        # Same formula as `_execute_exit`, so the trims and the close of one
+        # position add up to what a single sale would have reported.
+        realized = (exit_price - position.avg_entry_price) * verdict.qty
+        remaining = position.qty - verdict.qty
+        try:
+            self.db.reduce_position(str(row["id"]), qty=remaining, realized_pnl=realized)
+        except DatabaseError as exc:
+            log.error(
+                "Venta parcial de %s ejecutada, pero no se pudo registrar: %s.", symbol, exc,
+            )
+            report.errors.append(f"Venta parcial de {symbol} sin registrar: {exc}")
+
+        log.info(
+            "VENTA PARCIAL %s: %g de %g acciones a unos %s, resultado de %s",
+            symbol, verdict.qty, position.qty, fmt_number(exit_price),
+            signed_money(realized, self.currency_symbol),
+        )
         return True
 
     # ------------------------------------------------------------------
@@ -1445,6 +1698,54 @@ class TradingCycle:
             )
         except DatabaseError as exc:
             log.warning("No se pudo actualizar el stop de %s: %s", position.symbol, exc)
+
+    def _maybe_revise_target(
+        self, row: dict, proposal: Proposal, position, snapshot: MarketSnapshot
+    ) -> None:
+        """Applies the analyst's revised target, if it clears the floor (F9.37).
+
+        The review prompt asked for `suggested_target` from the first day and the
+        answer was stored in `decisions` and never read: the target a position
+        was opened with was the one it kept, whatever the analyst said later.
+
+        **Both directions are allowed, and the floor is what makes that safe.**
+        Lowering it is taking profit earlier on a thesis that has shrunk; raising
+        it is letting a confirmed one run. Either way it has to stay at least
+        `min_target_sigma` sigmas above **today's** price, the same floor an entry
+        faces: below it the target fires on noise, and a review that pulled the
+        target to a hair above the price would be a sale disguised as a level.
+
+        Without an ATR there is no floor to measure, and then nothing is written:
+        the rule is closed by default, like every other one.
+        """
+        suggested = proposal.suggested_target
+        if suggested is None:
+            return
+        current = _opt_float(row.get("target_price"))
+        if current is not None and abs(suggested - current) < 0.005:
+            return
+        price = position.current_price
+        atr = _opt_float(snapshot.indicators.get("atr_14"))
+        if not atr or price <= 0:
+            return
+        sigma = horizon_sigma(atr, self.settings.horizon_days)
+        floor = price + sigma * self.settings.risk.min_target_sigma
+        if suggested < floor:
+            log.info(
+                "%s: el analista proponía el objetivo en %s, por debajo del suelo de "
+                "%s; se queda en %s.",
+                position.symbol, fmt_number(suggested), fmt_number(floor), _fmt(current),
+            )
+            return
+        try:
+            self.db.update_position_levels(str(row["id"]), target_price=round(suggested, 4))
+            row["target_price"] = round(suggested, 4)
+            log.info(
+                "%s: objetivo revisado de %s a %s a propuesta del analista.",
+                position.symbol, _fmt(current), fmt_number(suggested),
+            )
+        except DatabaseError as exc:
+            log.warning("No se pudo actualizar el objetivo de %s: %s", position.symbol, exc)
 
     def _check_no_other_cycle_running(self, portfolio_id: str) -> str | None:
         """Returns the reason it cannot start, or None when the way is clear.

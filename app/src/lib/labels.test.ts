@@ -1,0 +1,20 @@
+import { describe, expect, it } from "vitest";
+
+import { decisionActionLabel } from "./labels";
+
+describe("decisionActionLabel", () => {
+  it("names an entry's actions as they always were", () => {
+    expect(decisionActionLabel("buy", "entry", 12)).toBe("compra");
+    expect(decisionActionLabel("hold", "entry", null)).toBe("mantener");
+  });
+
+  it("reads a buy on a review as an add, not as a second position", () => {
+    expect(decisionActionLabel("buy", "exit", 20)).toBe("ampliar");
+    expect(decisionActionLabel("buy", "exit", null)).toBe("ampliar");
+  });
+
+  it("tells a partial sale from a whole close by the weight kept", () => {
+    expect(decisionActionLabel("sell", "exit", 5)).toBe("reducir");
+    expect(decisionActionLabel("sell", "exit", null)).toBe("venta");
+  });
+});

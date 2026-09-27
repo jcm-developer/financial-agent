@@ -11,7 +11,9 @@ recorrido del objetivo y banda al tamaño de la posición (F9.16–F9.18 y F9.21
 secciones 4, 6 y 7 bis). **Revisado otra vez el 2026-09-25**, con la base borrada y
 el experimento de seis meses por delante: el modelo lee noticias (sección 6 bis), el
 perfil de riesgo es el único deslizador y el stop se mide en sigmas del horizonte
-(sección 4). Cuando algo aquí deje de ser cierto, se corrige aquí —no en un
+(sección 4). Y el **2026-09-27**, al dejar que el analista amplíe, reduzca o cierre
+una posición abierta, y no solo que la cierre (sección 4 bis). Cuando algo aquí deje
+de ser cierto, se corrige aquí —no en un
 comentario suelto—, porque es el sitio donde se mira antes de tocar el ciclo.
 
 ---
@@ -109,9 +111,10 @@ modelo.
 5. Screener        89 símbolos → 20 candidatos       DETERMINISTA, sin LLM, segundos
                    (criba con barras DIARIAS, que son también las de los indicadores)
 6. Salidas obligatorias  stop y objetivo de cada posición abierta   SIN LLM
-7. Revisión de salidas   1 llamada por posición abierta      sell | hold
+7. Revisión de posiciones  1 llamada por posición abierta   hold | buy | sell
+                   reduce o cierra aquí; la ampliación se deja en cola
 8. Entradas             1 llamada por candidato, TODOS       buy  | hold
-9. Reparto + risk manager  las `buy` de más a menos convicción:
+9. Reparto + risk manager  entradas y ampliaciones, de más a menos convicción:
                    aprueba, redimensiona o rechaza hasta llenar el tope   DETERMINISTA
 10. Broker         ejecuta lo aprobado
 11. Cierre         equity_snapshot y estado final del ciclo
@@ -131,6 +134,8 @@ una:
 | **Stop** | Solo **más lejos** que el del perfil: **0,35–0,7 sigmas del horizonte** según el riesgo | Más aire implica posición más pequeña; acercarlo sería quitar protección |
 | **Objetivo** | Solo **por encima** del suelo en sigmas del horizonte | Debajo del suelo el nivel se alcanza por ruido (sección 7 bis) |
 | **Peso** | Solo **dentro** de la banda `min_position_pct`–`max_position_pct` | El techo evita concentrar; el suelo evita que la cartera se quede sin invertir (F9.21) |
+| **Peso en una revisión** | Por encima del actual solo si va en ganancias y **nunca** sobre el techo contando lo que ya tiene; por debajo, al menos un cuarto de la posición | Ampliar una perdedora es convertir un stop en una posición más grande; recortar poco es pagar una comisión por nada (sección 4 bis) |
+| **Objetivo revisado** | En cualquier dirección, siempre **por encima** del suelo medido desde el precio de hoy | Bajarlo es recoger antes; debajo del suelo saltaría por ruido |
 
 ⚠️ **El stop está en sigmas del horizonte desde el 2026-09-25, no en ATRs fijos.**
 La tabla vieja lo ponía a 1,2×–3× ATR fuera cual fuera el plazo, lo que a 180 días
@@ -148,6 +153,64 @@ plazas eso deja el 44 % del capital en caja, y una cartera a medio invertir divi
 el resultado por dos —un +12 % en las siete es un +6,7 % de cartera—. El analista
 sigue eligiendo dentro de la banda, que era el punto de F9.13; lo que no puede es
 dejar el experimento sin jugar.
+
+### 4 bis. Ampliar, reducir o cerrar una posición abierta (F9.37)
+
+**Hasta el 2026-09-27 una posición solo podía abrirse entera y cerrarse entera.** El
+motor rechazaba con `already_open` cualquier `buy` sobre algo que ya estaba en
+cartera, y la revisión solo admitía `sell` o `hold`, con `sell` vendiéndolo todo.
+Ahora la revisión tiene tres respuestas y **un peso objetivo**, `target_weight_pct`:
+el peso que el analista quiere que tenga la posición *después* de operar. Se guarda
+en `decisions.suggested_weight_pct`, la misma columna que en una entrada, porque es la
+misma pregunta hecha sobre una posición que ya existe.
+
+| Respuesta | Qué pasa | Dónde |
+|---|---|---|
+| `hold` | Nada; el stop y el objetivo pueden moverse igual | paso 7 |
+| `sell` sin peso, o con 0 | Se cierra entera, regla `llm_exit`, como siempre | paso 7 |
+| `sell` con peso por debajo del actual | **Venta parcial**, regla `llm_trim` | paso 7 |
+| `buy` | **Ampliación**, que espera al paso 9 y compite por la caja | paso 9 |
+
+El modelo sigue sin decidir cantidades: dice el peso y
+[src/risk.py](src/risk.py) (`evaluate_add` y `evaluate_trim`) calcula las acciones.
+
+**Lo que el motor exige a una ampliación:**
+
+- **No se promedia a la baja** (`add_to_loser`): solo con el precio por encima de la
+  entrada media. Es lo único que `already_open` protegía de verdad, y sigue cerrado.
+- **Todos los topes cuentan lo que ya hay.** El presupuesto de riesgo, el techo por
+  posición y el peso pedido se aplican a la posición entera, así que dos ampliaciones
+  del 20 % no construyen un 60 % bajo un techo del 40 %.
+- **Toda la posición pasa al stop nuevo, que solo sube**: `max(el actual, precio −
+  k·ATR)`. Las acciones nuevas llevan la distancia que tendría una entrada de hoy y
+  las viejas la heredan si es más alta.
+- **El objetivo tiene que seguir lejos**: el mismo suelo en sigmas que una entrada,
+  medido desde el precio de hoy. Ampliar pegado al objetivo es comprar ruido.
+- **No gasta plaza.** Ni `max_open_positions` ni `max_new_positions_per_cycle`
+  cuentan una ampliación, así que **con la cartera llena se siguen evaluando**. Sí
+  compite por la caja con las entradas nuevas, en el mismo orden por convicción, y
+  **a igual convicción va detrás**: una idea nueva diversifica, reforzar una vieja
+  concentra.
+- **Con el kill switch disparado no se amplía**, como no se entra.
+
+**Lo que exige a una venta parcial:** que venda al menos **un cuarto** de la
+posición (`MIN_TRIM_FRACTION`, regla `trim_too_small`) y que llegue a la orden
+mínima. Si lo que quedaría no llega a la orden mínima, se cierra entera. El stop y el
+objetivo se quedan donde estaban: son precios, no importes.
+
+**Cómo queda en el histórico.** Una posición sigue siendo **una fila de
+`positions`** desde la primera compra hasta la última venta: la ampliación actualiza
+cantidad, precio medio y stop, y la venta parcial resta cantidad y **suma lo
+realizado en `realized_pnl` de la fila abierta**. El cierre añade la última venta a
+lo acumulado, así que una posición recortada dos veces cuenta como una operación en
+el porcentaje de acierto. Cada orden lleva su `decision_id`, que es donde se ve
+cuántas veces se tocó. La pantalla de Decisiones escribe **«ampliar»** y
+**«reducir»** en las revisiones, no «compra» y «venta».
+
+**Y el objetivo revisado ya se aplica.** El prompt de revisión pedía
+`suggested_target` desde el principio, se guardaba en `decisions` y **no lo leía
+nadie**: una posición se quedaba con el objetivo con el que se abrió. Ahora se escribe
+si queda por encima del suelo medido desde el precio de hoy, en las dos direcciones.
 
 **Los pasos 5, 6 y 9 no gastan modelo**, y eso importa: las salidas obligatorias
 —stop perforado, objetivo alcanzado— se pueden comprobar **gratis**, sin pasar por
@@ -565,6 +628,7 @@ Para no volver a preguntárselo:
 | Aplicar el tope por sector (lo calcula y no lo hace cumplir) | **FE.12** / **F6.5** |
 | Operar en corto | `allow_shorts` existe y está a 0 |
 | Cerrar por horizonte cumplido (`horizon_days` fija la escala del objetivo y del suelo, pero no cierra ninguna posición al expirar) | — |
+| Comparar posiciones entre sí: cada una se revisa por separado, así que el modelo no puede decir «vende parte de esta para comprar aquella» (puede reducir, y la caja liberada entra en el reparto) | — |
 | Usar `cash_reserve_pct`, que está en el esquema y en la interfaz y no lo lee nadie | **F9.17** (apuntado, no arreglado) |
 | Convertir divisa | **nunca**, es una restricción del diseño (D8) |
 | Operar con dinero real | **nunca**, el único broker es el simulador |
@@ -579,9 +643,10 @@ Para no volver a preguntárselo:
 3. El **planificador** lanza un ciclo a cada hora configurada del perfil y, entre
    uno y otro, comprueba los stops cada hora sin consultar al modelo (F9.36).
 4. Cada ciclo: screener determinista criba 89 → 20; el modelo opina sobre esos 20
-   y sobre cada posición abierta; **solo después** se reparte el dinero entre las
-   `buy`, de más a menos convicción; el risk manager decide y el broker ejecuta,
-   hasta `max_new_positions_per_cycle` entradas nuevas (F9.19).
+   y sobre cada posición abierta —mantener, ampliar, reducir o cerrar—; **solo
+   después** se reparte el dinero entre las `buy` y las ampliaciones, de más a menos
+   convicción; el risk manager decide y el broker ejecuta, hasta
+   `max_new_positions_per_cycle` entradas nuevas (F9.19, F9.37).
 4 bis. **El plazo del perfil (`horizon_days`) fija el tamaño del objetivo y la
    distancia del stop**: los dos se miden en sigmas de ese plazo (sección 7 bis y
    sección 4). Una sigma a 45 días son 12,1 % del precio; a 180, 24,3 %.

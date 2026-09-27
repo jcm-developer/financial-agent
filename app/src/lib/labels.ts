@@ -68,6 +68,12 @@ const RULE: Record<string, string> = {
   llm_exit: "salida del analista",
   experiment_closed: "experimento cerrado",
   entry_cap: "sin plaza en el ciclo",
+  add_to_loser: "promediar a la baja",
+  weight_not_above_current: "peso por debajo del actual",
+  weight_not_below_current: "peso por encima del actual",
+  trim_too_small: "venta parcial demasiado pequeña",
+  llm_trim: "venta parcial del analista",
+  action_not_sell: "no es una venta",
 };
 
 function lookup(table: Record<string, string>, value: string | null | undefined): string {
@@ -78,6 +84,24 @@ function lookup(table: Record<string, string>, value: string | null | undefined)
 export const cycleStatusLabel = (value: string | null | undefined) => lookup(CYCLE_STATUS, value);
 export const orderStatusLabel = (value: string | null | undefined) => lookup(ORDER_STATUS, value);
 export const actionLabel = (value: string | null | undefined) => lookup(ACTION, value);
+
+/**
+ * What a decision's action means, which depends on what was being judged.
+ *
+ * On a review of an open position `buy` is an add and a `sell` that names a
+ * weight to keep is a partial sale; only a `sell` with no weight closes it all
+ * (`src/risk.py`, `evaluate_trim`). Printing "compra" on a review would read as
+ * a second position in the same name, which the schema does not allow.
+ */
+export function decisionActionLabel(
+  action: string | null | undefined,
+  kind: string | null | undefined,
+  weightPct: number | null | undefined,
+): string {
+  if (kind === "exit" && action === "buy") return "ampliar";
+  if (kind === "exit" && action === "sell" && weightPct != null) return "reducir";
+  return actionLabel(action);
+}
 export const profileStatusLabel = (value: string | null | undefined) =>
   lookup(PROFILE_STATUS, value);
 export const ruleLabel = (value: string | null | undefined) => lookup(RULE, value);

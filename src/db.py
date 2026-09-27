@@ -1036,6 +1036,46 @@ class Database:
             payload["target_price"] = target_price
         self._update("positions", position_id, payload)
 
+    def enlarge_position(
+        self,
+        position_id: str,
+        *,
+        qty: float,
+        entry_price: float,
+        stop_price: float | None,
+        target_price: float | None,
+    ) -> None:
+        """Records an add (F9.37): the new total, the broker's new average and
+        the stop the whole position now has.
+
+        The thesis and `opened_at` are left alone on purpose. An add is the same
+        idea proving right, not a new one, and the position is still read as one
+        trade from its first buy to its last sale.
+        """
+        payload: dict[str, Any] = {"qty": qty, "entry_price": round(entry_price, 4)}
+        if stop_price is not None:
+            payload["stop_price"] = stop_price
+        if target_price is not None:
+            payload["target_price"] = target_price
+        self._update("positions", position_id, payload)
+
+    def reduce_position(
+        self, position_id: str, *, qty: float, realized_pnl: float
+    ) -> None:
+        """Records a partial sale (F9.37): what is left, and what the sold part
+        realized **added to** whatever earlier trims had.
+
+        `realized_pnl` on an open row is therefore the running total of its
+        trims, and the close adds the last sale to it. One row per position and
+        not one per slice, so a position trimmed twice is still counted as one
+        trade in the win rate and in `v_performance_by_symbol`.
+        """
+        self._execute(
+            "update positions set qty = ?, "
+            "realized_pnl = round(coalesce(realized_pnl, 0) + ?, 2) where id = ?",
+            (qty, realized_pnl, position_id),
+        )
+
     def sync_position_from_broker(
         self, position_id: str, *, qty: float, entry_price: float
     ) -> None:

@@ -854,3 +854,167 @@ def test_risk_per_trade_above_max_position_is_rejected_at_construction():
 
     with pytest.raises(ConfigError):
         RiskLimits(risk_per_trade_pct=30.0, max_position_pct=20.0)
+
+
+# -- Ajustes sobre una posicion abierta (F9.37) --------------------------------
+#
+# The held position is 50 shares bought at 90 and now at 100: 5 % of 100k, and
+# winning, which is the only case an add is considered in. With ATR 2 the fresh
+# stop sits at 96, a distance of 4.
+
+def held(qty=50.0, entry=90.0, price=100.0):
+    return position(qty=qty, entry=entry, price=price)
+
+
+def add_proposal(**overrides):
+    return proposal(kind="exit", **overrides)
+
+
+def evaluate_add(proposal_, *, pos=None, stop=85.0, target=120.0, limits=LIMITS, atr=2.0):
+    pos = pos or held()
+    return RiskManager(limits).evaluate_add(
+        proposal_, account(cash=100_000.0 - pos.market_value, positions=[pos]),
+        pos, atr, stop_price=stop, target_price=target,
+    )
+
+
+def test_an_add_is_sized_as_the_whole_position_and_not_as_the_slice():
+    """10 % asked with 5 % held is 50 more shares, not 100: every cap is net of
+    what is already there, or two adds would build a position no cap allowed."""
+    verdict = evaluate_add(add_proposal(suggested_weight_pct=10.0))
+
+    assert verdict.approved
+    assert verdict.qty == 50
+    assert verdict.details["weight_pct_after"] == 10.0
+
+
+def test_an_add_never_pushes_the_position_past_its_ceiling():
+    """Asked for 50 % under a 20 % ceiling: 150 more, 200 in all, 20 %."""
+    verdict = evaluate_add(add_proposal(suggested_weight_pct=50.0))
+
+    assert verdict.approved
+    assert verdict.qty == 150
+    assert verdict.details["weight_pct_after"] == 20.0
+
+
+def test_a_position_already_at_its_ceiling_takes_no_more():
+    verdict = evaluate_add(
+        add_proposal(suggested_weight_pct=30.0), pos=held(qty=200.0)
+    )
+
+    assert not verdict.approved
+    assert verdict.rule == "max_position_pct"
+
+
+def test_an_add_never_averages_down():
+    """The one thing `already_open` was protecting from, still closed: a loser
+    does not get more shares under the same stop."""
+    verdict = evaluate_add(
+        add_proposal(suggested_weight_pct=10.0), pos=held(entry=105.0)
+    )
+
+    assert not verdict.approved
+    assert verdict.rule == "add_to_loser"
+
+
+def test_the_whole_position_takes_the_fresh_stop_when_it_is_higher():
+    verdict = evaluate_add(add_proposal(suggested_weight_pct=10.0), stop=85.0)
+
+    assert verdict.stop_price == 96.0
+    assert verdict.details["stop_source"] == "atr"
+
+
+def test_an_add_never_lowers_the_stop_it_finds():
+    """A stop already trailed above the fresh one stays: the old shares must not
+    lose protection because new ones were bought."""
+    verdict = evaluate_add(add_proposal(suggested_weight_pct=10.0), stop=98.0)
+
+    assert verdict.approved
+    assert verdict.stop_price == 98.0
+    assert verdict.details["stop_source"] == "current"
+
+
+def test_a_buy_that_asks_for_less_than_it_holds_is_rejected_not_read_as_a_trim():
+    verdict = evaluate_add(add_proposal(suggested_weight_pct=3.0))
+
+    assert not verdict.approved
+    assert verdict.rule == "weight_not_above_current"
+
+
+def test_an_add_next_to_the_target_is_rejected():
+    """Buying more a hair from the target is buying what is left of the travel
+    inside the noise: the entry's floor applies, from today's price."""
+    limits = RiskLimits(**{**LIMITS.__dict__, "min_target_sigma": 0.8})
+
+    verdict = evaluate_add(
+        add_proposal(suggested_weight_pct=10.0), target=101.0, limits=limits
+    )
+
+    assert not verdict.approved
+    assert verdict.rule == "min_target_sigma"
+
+
+def test_an_add_without_a_target_is_rejected():
+    verdict = evaluate_add(add_proposal(suggested_weight_pct=10.0), target=None)
+
+    assert not verdict.approved
+    assert verdict.rule == "min_target_sigma"
+
+
+def test_an_add_below_the_minimum_conviction_is_rejected():
+    verdict = evaluate_add(add_proposal(suggested_weight_pct=10.0, conviction=50))
+
+    assert not verdict.approved
+    assert verdict.rule == "min_conviction"
+
+
+# 100 shares at 100 on 100k: the position weighs 10 %.
+
+def trim(weight, *, qty=100.0):
+    pos = position(qty=qty, entry=90.0, price=100.0)
+    return RiskManager(LIMITS).evaluate_trim(
+        proposal(kind="exit", action="sell", suggested_weight_pct=weight),
+        account(cash=100_000.0 - pos.market_value, positions=[pos]),
+        pos,
+    )
+
+
+def test_a_sell_without_a_weight_closes_the_whole_position():
+    """What `sell` meant before F9.37, and still means when nothing else is said."""
+    verdict = trim(None)
+
+    assert verdict.approved
+    assert verdict.rule == "llm_exit"
+    assert verdict.qty == 100
+
+
+def test_a_sell_to_a_lower_weight_is_a_partial_sale():
+    verdict = trim(5.0)
+
+    assert verdict.approved
+    assert verdict.rule == "llm_trim"
+    assert verdict.qty == 50
+    assert verdict.details["kept"] == 50
+
+
+def test_a_trim_smaller_than_a_quarter_is_rejected():
+    """10 of 100 shares is a commission spent to change the book by nothing."""
+    verdict = trim(9.0)
+
+    assert not verdict.approved
+    assert verdict.rule == "trim_too_small"
+
+
+def test_a_trim_that_leaves_less_than_an_order_closes_everything():
+    verdict = trim(0.05)
+
+    assert verdict.approved
+    assert verdict.rule == "llm_exit"
+    assert verdict.qty == 100
+
+
+def test_a_sell_that_asks_for_more_than_it_holds_is_rejected():
+    verdict = trim(12.0)
+
+    assert not verdict.approved
+    assert verdict.rule == "weight_not_below_current"

@@ -120,29 +120,51 @@ exactamente este esquema:
 
 EXIT_SYSTEM_PROMPT = """\
 Eres el gestor de riesgo discrecional de una mesa cuantitativa. Revisas una \
-posicion ABIERTA y decides si la tesis sigue viva.
+posicion ABIERTA y decides que hacer con ella: mantenerla, ampliarla, reducirla \
+o cerrarla.
 
 Contexto importante: el stop y el objetivo ya se vigilan automaticamente y se \
 ejecutan sin ti. Tu trabajo es distinto: detectar que la tesis se ha degradado \
-antes de que el precio llegue al stop, o que sigue intacta y hay que aguantar.
+antes de que el precio llegue al stop, que sigue intacta y hay que aguantar, o \
+que se esta confirmando y merece mas peso.
+
+Frontera de tu rol, no la cruces:
+- NO decides cuantas acciones se compran o se venden. Propones el PESO que \
+quieres que tenga la posicion DESPUES de la operacion, en `target_weight_pct`, \
+y un motor de riesgo determinista calcula la cantidad, la recorta o la rechaza.
+
+Las cuatro respuestas posibles:
+- "hold": se queda como esta. Es una respuesta legitima y frecuente.
+- "buy": AMPLIAR. `target_weight_pct` es el peso total que quieres, por encima \
+del actual y sin pasar del tope. Solo se admite si la posicion va en ganancias: \
+el motor RECHAZA promediar a la baja. Ampliar sube el stop de toda la posicion \
+al que tendria una entrada nueva hoy, si ese es mas alto.
+- "sell" con `target_weight_pct` por debajo del actual: REDUCIR, vender una \
+parte y quedarte con ese peso. Una reduccion de menos de un cuarto de la \
+posicion se rechaza, porque la comision se la come.
+- "sell" con `target_weight_pct` null o 0: CERRAR la posicion entera.
 
 Reglas:
 - Solo puedes usar los datos numericos que te doy. No inventes noticias.
-- Cerrar cuesta una comision fija, que te doy abajo y que se resta del \
+- Cada orden paga una comision fija, que te doy abajo y que se resta del \
 resultado. Salir de una posicion plana es perder esa comision sin mas, asi que \
-no cierres por ruido: hace falta deterioro de la tesis, no un dia malo.
+no cierres ni reduzcas por ruido: hace falta deterioro de la tesis, no un dia malo.
 - No cortes ganadoras por nerviosismo ni mantengas perdedoras por esperanza. \
 Justifica con los datos.
-- "hold" es una respuesta legitima y frecuente.
-- Usa "sell" cuando el deterioro tecnico contradice la razon original de la entrada.
+- Cierra cuando el deterioro tecnico contradice la razon original de la entrada. \
+Reduce cuando la tesis sigue viva pero pesa mas de lo que merece. Amplia solo \
+cuando los datos confirman la tesis, no porque la posicion haya subido.
+- Si revisas el objetivo, tiene que quedar por encima del suelo que te doy \
+abajo; si no, se ignora y se queda el que hay.
 
 Responde UNICAMENTE con un objeto JSON, sin texto antes ni despues:
 
 {
-  "action": "sell" | "hold",
+  "action": "hold" | "buy" | "sell",
   "conviction": <entero 0-100, tu conviccion en la accion propuesta>,
   "thesis": "<2-3 frases justificando>",
   "risks": "<que podria salir mal si haces esto>",
+  "target_weight_pct": <peso total de la posicion despues de operar, en % del capital; null en "hold">,
   "suggested_stop": <nuevo stop si conviene ajustarlo al alza, o null>,
   "suggested_target": <objetivo revisado, o null>
 }
@@ -458,11 +480,23 @@ class Analyst:
         stop_price: float | None,
         target_price: float | None,
         news: NewsContext | None = None,
+        account: AccountState | None = None,
     ) -> Proposal | None:
+        """Reviews one open position: hold, add, trim or close (F9.37).
+
+        `account` is what lets the prompt state the position's weight and the
+        cash, which an add or a trim is decided against. It is optional only so
+        a caller that has none still gets a review; without it the prompt says
+        so instead of printing a weight worked out from nothing.
+        """
         user_prompt = _render_exit_prompt(
             position, snapshot, entry_thesis, stop_price, target_price,
             self.labels, self.currency, self._commission_for(position.symbol),
             self.price_labels, news,
+            account=account,
+            max_position_pct=self.max_position_pct,
+            horizon_days=self.horizon_days,
+            min_target_sigma=self.min_target_sigma,
         )
         self.calls += 1
         try:
@@ -478,16 +512,25 @@ class Analyst:
         data = response.parsed or {}
         refs, unknown = _coerce_news_refs(data.get("news_refs"), news)
         _warn_unknown_refs(position.symbol, unknown)
-        return Proposal(
+        # The entry prompt's name for the same idea is accepted as a fallback:
+        # a model that has just answered twenty entries writes it out of habit,
+        # and reading it as "no weight" would turn a trim into a whole close.
+        weight = data.get("target_weight_pct", data.get("suggested_weight_pct"))
+        proposal = Proposal(
             symbol=position.symbol,
             kind="exit",
-            action=_coerce_action(data.get("action"), allowed={"sell", "hold"}),
+            action=_coerce_action(data.get("action"), allowed={"buy", "sell", "hold"}),
             conviction=_coerce_conviction(data.get("conviction")),
             thesis=_coerce_text(data.get("thesis"), limit=2000),
             risks=_coerce_text(data.get("risks"), limit=2000),
             horizon_days=None,
             suggested_stop=_coerce_price(data.get("suggested_stop")),
             suggested_target=_coerce_price(data.get("suggested_target")),
+            # Stored in the same column as an entry's ask: on a review it is the
+            # weight the position should have **after** the operation, which is
+            # the same question —how much of the capital does this idea deserve—
+            # asked of a position that already exists.
+            suggested_weight_pct=_coerce_weight(weight),
             news_refs=refs,
             reference_price=snapshot.price,
             model=response.model,
@@ -496,6 +539,14 @@ class Analyst:
             completion_tokens=response.completion_tokens,
             raw_response=_audit_payload(response.content, data, unknown),
         )
+        log.info(
+            "%s (revisión) -> %s%s (convicción %d) %s",
+            position.symbol, proposal.action,
+            "" if proposal.suggested_weight_pct is None
+            else f" al {proposal.suggested_weight_pct:g} %",
+            proposal.conviction, _truncate(proposal.thesis, 110),
+        )
+        return proposal
 
 
 # ----------------------------------------------------------------------
@@ -568,10 +619,17 @@ def _render_exit_prompt(
     commission: float = 0.0,
     price_labels: tuple[str, str] | None = None,
     news: NewsContext | None = None,
+    *,
+    account: AccountState | None = None,
+    max_position_pct: float | None = None,
+    horizon_days: int = 10,
+    min_target_sigma: float = 0.0,
 ) -> str:
     bar_label, window_label = labels
     units = _window_units_note(bar_label)
     context = _price_context_note(snapshot, bar_label, price_labels, currency)
+    book = _book_lines(position, account, max_position_pct, currency)
+    floor = _target_floor_line(snapshot, horizon_days, min_target_sigma, currency)
     return f"""\
 FECHA DE REVISION: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}
 POSICION ABIERTA: {position.symbol}
@@ -582,8 +640,8 @@ POSICION ABIERTA: {position.symbol}
 - P&L no realizado: {position.unrealized_pl:+.2f} {currency} ({position.unrealized_pl_pct:+.2f}%)
 - Stop vigilado automaticamente: {_fmt(stop_price)}
 - Objetivo vigilado automaticamente: {_fmt(target_price)}
-- Coste de cerrar: {commission:.2f} {currency} de comision, que se resta del resultado
-
+- Coste de operar: {commission:.2f} {currency} de comision por orden, que se resta del resultado
+{book}{floor}
 TESIS ORIGINAL DE LA ENTRADA:
 {entry_thesis or "(no registrada)"}
 
@@ -593,7 +651,67 @@ INDICADORES TECNICOS ACTUALES (sobre {bar_label}):
 ULTIMAS 10 {window_label} (fecha, apertura, maximo, minimo, cierre, volumen):
 {_format_bars(snapshot.recent_bars)}
 {_news_block(news, snapshot.symbol)}
-Decide si la tesis sigue viva, en el JSON especificado."""
+Decide si la tesis sigue viva y que hacer con la posicion, en el JSON especificado."""
+
+
+def _book_lines(
+    position: BrokerPosition,
+    account: AccountState | None,
+    max_position_pct: float | None,
+    currency: str,
+) -> str:
+    """The position's weight, the ceiling and the cash, precomputed (F9.37).
+
+    `target_weight_pct` is answered against the current weight, so the weight is
+    handed over already worked out: it is the same rule the sigma and the price
+    gap follow, and dividing a market value by the equity is one more chance for
+    the arithmetic to go wrong where the decision is made.
+
+    It also says whether an add would even be considered. The engine rejects
+    averaging down whatever the prompt says; telling the model first spares a
+    call spent proposing something that cannot happen.
+    """
+    if account is None or account.equity <= 0:
+        return "- Peso en la cartera: no disponible en esta revision\n"
+    weight = position.market_value / account.equity * 100.0
+    lines = [
+        f"- Peso actual en la cartera: {weight:.1f}% del capital "
+        f"({position.market_value:.2f} de {account.equity:.2f} {currency})",
+    ]
+    if max_position_pct is not None:
+        lines.append(f"- Peso maximo por posicion: {max_position_pct:.0f}% del capital")
+    lines.append(f"- Efectivo disponible para ampliar: {account.cash:.2f} {currency}")
+    if position.current_price <= position.avg_entry_price:
+        lines.append(
+            "- Ampliar NO es posible: la posicion no va en ganancias y el motor no "
+            "promedia a la baja"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _target_floor_line(
+    snapshot: MarketSnapshot, horizon_days: int, min_target_sigma: float, currency: str
+) -> str:
+    """The floor a revised target has to clear, or nothing without an ATR.
+
+    It is the same floor an entry faces, measured from today's price, and the
+    cycle applies it before writing a revision. A review gets one line and not
+    the whole `HORIZON_NOTE`: that note is written for sizing a new idea, and its
+    "la propuesta se rechaza entera" is not true here — only the revision is.
+    """
+    atr = snapshot.indicators.get("atr_14")
+    price = snapshot.price
+    if not isinstance(atr, (int, float)) or atr <= 0 or price <= 0:
+        return ""
+    sigma = risk.horizon_sigma(float(atr), horizon_days)
+    if sigma <= 0:
+        return ""
+    floor = price + sigma * min_target_sigma
+    return (
+        f"- Suelo de un objetivo revisado: {floor:.2f} {currency} "
+        f"({min_target_sigma:g} sigma a {horizon_days} dias, "
+        f"{(floor / price - 1) * 100:+.1f}%)\n"
+    )
 
 
 def _news_block(news: NewsContext | None, symbol: str) -> str:

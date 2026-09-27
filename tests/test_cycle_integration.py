@@ -551,3 +551,139 @@ def test_a_request_left_over_from_an_earlier_cycle_does_not_stop_this_one(db, tm
     # Cleared on registering: at that instant no pending request can be for this
     # cycle, so leaving it would only wait to stop the wrong one.
     assert stop_signal.pending(settings.db_path) is None
+
+
+# ----------------------------------------------------------------------
+# Ajustes sobre una posicion abierta (F9.37)
+# ----------------------------------------------------------------------
+#
+# 100k and a 5 % risk budget, so the minimum order and the risk budget stay out
+# of the way and each test is about the adjustment it names. The first cycle
+# opens AAPL; the second one, one bar later and a little higher, reviews it.
+
+def _adjust_settings(**risk):
+    return make_settings(
+        watchlist=("AAPL",), initial_budget=100_000.0,
+        risk=RiskLimits(**{
+            "min_conviction": 65, "max_open_positions": 5, "risk_per_trade_pct": 5.0,
+            **risk,
+        }),
+    )
+
+
+def _open_then_review(db, settings, review: dict):
+    make_cycle(
+        db, settings, StubLLM(entry=BUY, exit_=HOLD_EXIT),
+        StubMarketData({"AAPL": rising()}),
+    ).run()
+    llm = StubLLM(entry=BUY, exit_=review)
+    report = make_cycle(db, settings, llm, StubMarketData({"AAPL": rising(81)})).run()
+    return report, llm
+
+
+def _held(db) -> float:
+    return float(db.query("select qty from sim_positions")[0]["qty"])
+
+
+def test_the_analyst_can_add_to_a_winner_even_with_the_book_full(db):
+    """An add takes no slot, so a full book —one position out of one— still
+    reviews it, and asks nothing about entries."""
+    settings = _adjust_settings(max_open_positions=1)
+    make_cycle(
+        db, settings, StubLLM(entry=BUY, exit_=HOLD_EXIT),
+        StubMarketData({"AAPL": rising()}),
+    ).run()
+    before = _held(db)
+    stop_before = db.query("select stop_price from positions")[0]["stop_price"]
+
+    add = {
+        "action": "buy", "conviction": 90, "thesis": "La tendencia se confirma.",
+        "target_weight_pct": 20, "suggested_target": 175.0,
+    }
+    llm = StubLLM(entry=BUY, exit_=add)
+    report = make_cycle(db, settings, llm, StubMarketData({"AAPL": rising(81)})).run()
+
+    assert report.additions == 1
+    assert llm.calls == ["exit"]
+    after = _held(db)
+    assert after > before
+    row = db.query("select * from positions where status = 'open'")[0]
+    # Both books agree, and the whole position carries the raised stop.
+    assert row["qty"] == after
+    assert row["stop_price"] >= stop_before
+    assert row["target_price"] == 175.0
+    account = db.query("select * from sim_accounts")[0]
+    value = after * 132.0
+    assert value / (account["cash"] + value) * 100 <= 20.0 + 0.5
+
+
+def test_a_trim_sells_part_and_the_close_carries_the_whole_trade(db):
+    settings = _adjust_settings()
+    trim = {
+        "action": "sell", "conviction": 80, "thesis": "Pesa mas de lo que merece.",
+        "target_weight_pct": 5,
+    }
+    report, _ = _open_then_review(db, settings, trim)
+
+    assert report.reductions == 1
+    assert report.exits_discretionary == 0
+    row = db.query("select * from positions")[0]
+    assert row["status"] == "open"
+    assert row["qty"] == _held(db)
+    partial = row["realized_pnl"]
+    assert partial and partial > 0
+
+    # A third cycle closes what is left: the closed row adds the last sale to
+    # the trim instead of forgetting it.
+    make_cycle(
+        db, settings, StubLLM(entry=BUY, exit_=SELL_EXIT),
+        StubMarketData({"AAPL": rising(82)}),
+    ).run()
+    closed = db.query("select * from positions")[0]
+    assert closed["status"] == "closed"
+    assert closed["realized_pnl"] > partial
+
+
+def test_a_sell_to_zero_weight_closes_the_position(db):
+    report, _ = _open_then_review(
+        db, _adjust_settings(),
+        {"action": "sell", "conviction": 80, "thesis": "Agotada.", "target_weight_pct": 0},
+    )
+
+    assert report.exits_discretionary == 1
+    assert db.query("select * from sim_positions") == []
+
+
+def test_a_rejected_trim_leaves_the_position_and_says_why(db):
+    report, _ = _open_then_review(
+        db, _adjust_settings(),
+        {"action": "sell", "conviction": 80, "thesis": "Un poco menos.", "target_weight_pct": 14},
+    )
+
+    assert report.reductions == 0
+    rules = {r["rule"] for r in db.query("select rule from risk_events")}
+    assert "trim_too_small" in rules
+
+
+def test_a_revised_target_above_the_floor_is_applied(db):
+    _open_then_review(
+        db, _adjust_settings(), {**HOLD_EXIT, "suggested_target": 180.0}
+    )
+
+    assert db.query("select target_price from positions")[0]["target_price"] == 180.0
+
+
+def test_a_revised_target_inside_the_noise_is_ignored(db):
+    settings = _adjust_settings()
+    make_cycle(
+        db, settings, StubLLM(entry=BUY, exit_=HOLD_EXIT),
+        StubMarketData({"AAPL": rising()}),
+    ).run()
+    before = db.query("select target_price from positions")[0]["target_price"]
+
+    make_cycle(
+        db, settings, StubLLM(entry=BUY, exit_={**HOLD_EXIT, "suggested_target": 133.0}),
+        StubMarketData({"AAPL": rising(81)}),
+    ).run()
+
+    assert db.query("select target_price from positions")[0]["target_price"] == before

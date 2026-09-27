@@ -46,6 +46,19 @@ CONVICTION_FLOOR = 0.5
 #: and exactly the kind of unit slip F9.14 spent a day on.
 SESSIONS_PER_CALENDAR_DAY = 5.0 / 7.0
 
+#: Smallest share of a position a partial sale may take (F9.37).
+#:
+#: **It is the commission, not taste.** Every sale pays the fixed tariff, 3,00 EUR
+#: to 4,11 EUR, and the position still pays another one when it finally closes,
+#: so a trim is one extra leg the trade would not otherwise have had. On a 3.000
+#: EUR position a 10 % trim is 300 EUR sold for 4 EUR: 1,4 % of the sale gone to
+#: friction to change the book by almost nothing. A quarter is the smallest cut
+#: that is still a decision about the position rather than noise on it.
+#:
+#: A constant and not a profile column: it does not change what the experiment
+#: measures, only how much noise a model may turn into orders.
+MIN_TRIM_FRACTION = 0.25
+
 
 def horizon_sigma(atr: float, horizon_days: int) -> float:
     """One standard deviation of price over `horizon_days`, in currency.
@@ -552,6 +565,418 @@ class RiskManager:
             },
         )
 
+    # -- Ajustes sobre una posicion abierta (F9.37) ------------------------
+
+    def evaluate_add(
+        self,
+        proposal: Proposal,
+        account: AccountState,
+        position: BrokerPosition,
+        atr: float | None,
+        *,
+        stop_price: float | None,
+        target_price: float | None,
+    ) -> RiskVerdict:
+        """Turns a proposal to enlarge an open position into a number of extra
+        shares, or rejects it.
+
+        **The add is sized as if it were an entry at today's price, and the limits
+        are applied to the whole position, not to the slice.** Otherwise two adds
+        of 20 % each would build a 60 % position under a 40 % ceiling, and the
+        risk budget could be spent twice on the same name. So every cap below
+        subtracts what is already held.
+
+        Four decisions, each with what it rules out:
+
+          * **No averaging down.** An add is only considered when the reference
+            price is above the average entry. Adding to a loser is how a stop
+            that should have been taken becomes a bigger position with the same
+            stop, and it was the one thing `already_open` was protecting from.
+            Adding to a winner is the opposite bet — the thesis is being proven
+            right — and that is the only one allowed.
+          * **The whole position gets the new stop, and it only ever moves up.**
+            The stop is `max(current, price − k·ATR)`: the slice being bought gets
+            the same distance a fresh entry would, and the old shares inherit it
+            when it is higher. Keeping the old stop for the combined position
+            would put the new shares at a distance nobody sized them for; widening
+            it for everyone would unprotect the shares already held.
+          * **The target is the position's, and it has to still be far enough.**
+            Buying more when the price is a hair from the target is buying what is
+            left of the travel inside the noise, so the same `min_target_sigma`
+            floor an entry faces is measured from today's price. The analyst can
+            revise the target in the same answer; the cycle applies that revision
+            first, so this sees the target that will actually be watched.
+          * **It takes no slot.** `max_open_positions` and the per-cycle entry cap
+            count positions, and an add opens none. It does compete for cash with
+            the new entries, in the same conviction ranking (see `cycle.py`).
+
+        @param proposal: The analyst's `buy` on an open position. Its
+            `suggested_weight_pct` is the **total** weight asked for the position.
+        @param account: Account state, refreshed after this cycle's exits.
+        @param position: The position as the broker reports it.
+        @param atr: Daily ATR, for the stop of the added slice and the sigma.
+        @param stop_price: The stop currently watched on the position, if any.
+        @param target_price: The target currently watched, after any revision.
+        @return: The verdict; `qty` is the number of **extra** shares.
+        """
+        limits = self.limits
+        symbol = proposal.symbol
+        price = proposal.reference_price
+        symbol_ccy = self.currency_symbol
+
+        def money(value: float) -> str:
+            return fmt_money(value, symbol_ccy)
+
+        if proposal.action != "buy":
+            return _reject("action_not_buy", f"La acción propuesta es «{proposal.action}», no una compra.")
+
+        if proposal.conviction < limits.min_conviction:
+            return _reject(
+                "min_conviction",
+                f"Convicción {proposal.conviction}, por debajo del mínimo de {limits.min_conviction}.",
+            )
+
+        if price <= 0:
+            return _reject("invalid_price", f"Precio de referencia no válido: {number(price)}.")
+
+        if account.equity <= 0:
+            return _reject("no_equity", "El valor de la cuenta es cero o negativo.")
+
+        if price <= position.avg_entry_price:
+            return _reject(
+                "add_to_loser",
+                f"No se promedia a la baja: el precio ({number(price)}) no supera la "
+                f"entrada media ({number(position.avg_entry_price)}).",
+                details={
+                    "price": round(price, 4),
+                    "avg_entry_price": round(position.avg_entry_price, 4),
+                },
+            )
+
+        if atr is None or atr <= 0:
+            return _reject(
+                "atr_unavailable",
+                "Sin ATR no se puede dimensionar la ampliación ni situar su stop.",
+            )
+
+        atr_stop = price - atr * limits.stop_atr_multiple
+        if atr_stop <= 0:
+            return _reject(
+                "stop_below_zero",
+                f"El stop por ATR ({number(atr_stop)}) cae por debajo de cero: el valor es demasiado volátil.",
+            )
+        stop = max(atr_stop, stop_price or 0.0)
+        stop_source = "atr" if stop == atr_stop else "current"
+        risk_per_share = price - stop
+        if risk_per_share <= 0:
+            return _reject("non_positive_risk", "La distancia hasta el stop no es positiva.")
+
+        held = position.qty
+        held_value = held * price
+        current_weight = held_value / account.equity * 100.0
+
+        commission = self._commission_for(symbol)
+        round_trip = commission * 2
+
+        # --- Sizing, every cap net of what is already held -----------------
+        risk_budget = account.equity * limits.risk_per_trade_pct / 100.0
+        qty = math.floor(risk_budget / risk_per_share - held)
+        binding_rule = "risk_per_trade"
+
+        max_position_qty = math.floor(
+            (account.equity * limits.max_position_pct / 100.0) / price - held
+        )
+        if max_position_qty < qty:
+            qty, binding_rule = max_position_qty, "max_position_pct"
+
+        exposure_cap = account.equity * limits.max_total_exposure_pct / 100.0
+        remaining_exposure = exposure_cap - account.positions_value
+        if remaining_exposure <= 0:
+            return _reject(
+                "max_total_exposure_pct",
+                f"La exposición actual ({money(account.positions_value)}) ya cubre el "
+                f"límite de {money(exposure_cap)}.",
+            )
+        exposure_qty = math.floor(remaining_exposure / price)
+        if exposure_qty < qty:
+            qty, binding_rule = exposure_qty, "max_total_exposure_pct"
+
+        affordable = account.cash - commission
+        cash_qty = math.floor(affordable / price) if affordable > 0 else 0
+        if cash_qty < qty:
+            qty, binding_rule = cash_qty, "insufficient_cash"
+
+        # The weight is the **total** the analyst wants the position to weigh,
+        # not the size of the slice: it is the figure the prompt shows next to
+        # the current weight, and the one that stays comparable with an entry's.
+        weight = proposal.suggested_weight_pct
+        allowed: float | None = None
+        if weight is not None:
+            # Compared unclamped: asking for 30 % with 20 % held under a 20 %
+            # ceiling is an add the ceiling stops, not an answer that contradicts
+            # itself, and the rule that says so is `max_position_pct`.
+            if weight <= current_weight:
+                # A `buy` that asks for less than it holds contradicts itself.
+                # Rejected rather than read as a trim: guessing which half of the
+                # answer the model meant is exactly what this module does not do.
+                return _reject(
+                    "weight_not_above_current",
+                    f"Se pide ampliar a un {percent(weight)} del capital y la "
+                    f"posición ya pesa un {percent(current_weight)}.",
+                    details={
+                        "suggested_weight_pct": weight,
+                        "current_weight_pct": round(current_weight, 2),
+                    },
+                )
+            allowed = min(weight, limits.max_position_pct)
+            weight_qty = math.floor((account.equity * allowed / 100.0) / price - held)
+            if weight_qty < qty:
+                qty, binding_rule = weight_qty, "suggested_weight"
+
+        span = 100.0 - limits.min_conviction
+        reach = (proposal.conviction - limits.min_conviction) / span if span > 0 else 1.0
+        conviction_factor = CONVICTION_FLOOR + (1.0 - CONVICTION_FLOOR) * min(1.0, reach)
+        if weight is None and qty > 0:
+            scaled = math.floor(qty * conviction_factor)
+            if scaled < qty:
+                qty, binding_rule = scaled, "conviction"
+
+        if qty < 1:
+            return _reject(
+                binding_rule if binding_rule != "risk_per_trade" else "qty_below_one",
+                f"No cabe ninguna acción más de {symbol} (limita "
+                f"{_BINDING_LABELS.get(binding_rule, binding_rule)}): la posición ya "
+                f"pesa un {percent(current_weight)} del capital.",
+                details={
+                    "held": held,
+                    "current_weight_pct": round(current_weight, 2),
+                    "risk_budget": round(risk_budget, 2),
+                    "risk_per_share": round(risk_per_share, 4),
+                    "cash": round(account.cash, 2),
+                },
+            )
+
+        notional = qty * price
+        if notional < limits.min_order_notional:
+            return _reject(
+                "min_order_notional",
+                f"Ampliación de {money(notional)}, por debajo del mínimo de "
+                f"{money(limits.min_order_notional)}.",
+                details={"qty": qty, "price": round(price, 4)},
+            )
+
+        sigma = horizon_sigma(atr, self.horizon_days)
+        target_floor = price + sigma * limits.min_target_sigma
+        target = target_price
+        if target is None or target < target_floor:
+            return _reject(
+                "min_target_sigma",
+                f"El objetivo de la posición ({_or_none(target)}) queda a menos de "
+                f"{compact(limits.min_target_sigma)} σ del precio ({number(target_floor)}): "
+                f"ampliar ahí es comprar lo que queda de recorrido dentro del ruido.",
+                details={
+                    "target": round(target, 4) if target is not None else None,
+                    "target_floor": round(target_floor, 4),
+                    "horizon_days": self.horizon_days,
+                    "horizon_sigma_pct": round(sigma / price * 100, 2),
+                    "min_target_sigma": limits.min_target_sigma,
+                },
+            )
+
+        # The ratio of the slice, with its own round trip: it is the slice the
+        # commission is paid for, and the old shares' ratio was judged when they
+        # were bought.
+        gain = (target - price) * qty - round_trip
+        loss = risk_per_share * qty + round_trip
+        reward_risk = gain / loss
+        if reward_risk < limits.min_reward_risk:
+            return _reject(
+                "min_reward_risk",
+                f"Beneficio/riesgo de la ampliación de {number(reward_risk)}, por debajo "
+                f"del mínimo de {number(limits.min_reward_risk)}, contando "
+                f"{money(round_trip)} de comisiones de compra y venta.",
+                details={
+                    "target": round(target, 4),
+                    "stop": round(stop, 4),
+                    "qty": qty,
+                    "round_trip_commission": round(round_trip, 2),
+                    "reward_risk_gross": round((target - price) / risk_per_share, 2),
+                },
+            )
+
+        total_weight = (held + qty) * price / account.equity * 100.0
+        return RiskVerdict(
+            approved=True,
+            reason=(
+                f"Aprobada la ampliación de {symbol} en {qty} acciones por "
+                f"{money(notional)} (limita "
+                f"{_BINDING_LABELS.get(binding_rule, binding_rule)}), de un "
+                f"{percent(current_weight)} a un {percent(total_weight)} del capital. "
+                f"Stop de toda la posición en {number(stop)} "
+                f"({_STOP_SOURCE_LABELS.get(stop_source, stop_source)}), objetivo en "
+                f"{number(target)}, beneficio/riesgo {number(reward_risk)}."
+            ),
+            rule=binding_rule,
+            qty=float(qty),
+            notional=round(notional, 2),
+            stop_price=round(stop, 4),
+            target_price=round(target, 4),
+            details={
+                "adjustment": "add",
+                "held": held,
+                "current_weight_pct": round(current_weight, 2),
+                "weight_pct_after": round(total_weight, 2),
+                "suggested_weight_pct": weight,
+                "weight_pct_allowed": allowed,
+                "risk_budget": round(risk_budget, 2),
+                "risk_per_share": round(risk_per_share, 4),
+                "risk_amount": round((held + qty) * risk_per_share + round_trip, 2),
+                "reward_risk": round(reward_risk, 2),
+                "round_trip_commission": round(round_trip, 2),
+                "conviction_factor": round(conviction_factor, 3),
+                "stop_source": stop_source,
+                "horizon_days": self.horizon_days,
+                "horizon_sigma_pct": round(sigma / price * 100, 2) if sigma else None,
+                "target_sigmas": round((target - price) / sigma, 2) if sigma else None,
+                "stop_sigmas": round(risk_per_share / sigma, 2) if sigma else None,
+                "binding_rule": binding_rule,
+                "conviction": proposal.conviction,
+            },
+        )
+
+    def evaluate_trim(
+        self,
+        proposal: Proposal,
+        account: AccountState,
+        position: BrokerPosition,
+    ) -> RiskVerdict:
+        """Turns a `sell` on an open position into how many shares leave.
+
+        `suggested_weight_pct` is the weight the analyst wants the position to
+        **keep**: absent or zero means close it all, which is what a `sell` meant
+        before F9.37 and still means when the model says nothing else. Below the
+        current weight it is a trim.
+
+        The verdict's `rule` tells the cycle which one it is: `llm_exit` for a
+        whole close —the same rule and the same path as always— and `llm_trim`
+        for a partial sale.
+
+        **A trim that leaves a remainder too small to be an order becomes a
+        close.** Keeping 80 EUR of a name is a position that costs a commission to
+        get rid of and does not move the book; the analyst asked to get most of
+        the way out, and all the way is the honest reading of that.
+
+        Nothing here can add risk, so the only limits that apply are the ones
+        that keep the sale from being friction: the minimum order and
+        `MIN_TRIM_FRACTION`.
+        """
+        limits = self.limits
+        symbol = proposal.symbol
+        price = proposal.reference_price or position.current_price
+        symbol_ccy = self.currency_symbol
+
+        def money(value: float) -> str:
+            return fmt_money(value, symbol_ccy)
+
+        if proposal.action != "sell":
+            return _reject("action_not_sell", f"La acción propuesta es «{proposal.action}», no una venta.")
+
+        if proposal.conviction < limits.min_conviction:
+            return _reject(
+                "min_conviction",
+                f"Convicción {proposal.conviction}, por debajo del mínimo de {limits.min_conviction}.",
+            )
+
+        held = math.floor(position.qty)
+        if held < 1 or price <= 0:
+            return _reject("invalid_price", f"Sin cantidad o sin precio para vender {symbol}.")
+
+        close = _approval_to_close(held, price)
+        weight = proposal.suggested_weight_pct
+        if weight is None or account.equity <= 0:
+            return close("La tesis se da por agotada: se cierra la posición entera.")
+
+        current_weight = held * price / account.equity * 100.0
+        if weight >= current_weight:
+            return _reject(
+                "weight_not_below_current",
+                f"Se pide vender hasta un {percent(weight)} del capital y la posición "
+                f"ya pesa un {percent(current_weight)}.",
+                details={
+                    "suggested_weight_pct": weight,
+                    "current_weight_pct": round(current_weight, 2),
+                },
+            )
+
+        keep = math.floor((account.equity * weight / 100.0) / price)
+        if keep * price < limits.min_order_notional:
+            return close(
+                f"Quedarían {money(keep * price)}, por debajo de la orden mínima de "
+                f"{money(limits.min_order_notional)}: se cierra entera."
+            )
+
+        qty = held - keep
+        minimum = math.ceil(held * MIN_TRIM_FRACTION)
+        if qty < minimum:
+            return _reject(
+                "trim_too_small",
+                f"Vender {qty} de {held} acciones es menos del "
+                f"{percent(MIN_TRIM_FRACTION * 100, decimals=0)} de la posición: la "
+                f"comisión se come un ajuste así.",
+                details={"qty": qty, "held": held, "min_qty": minimum},
+            )
+
+        notional = qty * price
+        if notional < limits.min_order_notional:
+            return _reject(
+                "min_order_notional",
+                f"Venta parcial de {money(notional)}, por debajo del mínimo de "
+                f"{money(limits.min_order_notional)}.",
+                details={"qty": qty, "price": round(price, 4)},
+            )
+
+        weight_after = keep * price / account.equity * 100.0
+        return RiskVerdict(
+            approved=True,
+            reason=(
+                f"Aprobada la venta de {qty} de {held} acciones de {symbol} por "
+                f"{money(notional)}: la posición pasa de un {percent(current_weight)} "
+                f"a un {percent(weight_after)} del capital."
+            ),
+            rule="llm_trim",
+            qty=float(qty),
+            notional=round(notional, 2),
+            details={
+                "adjustment": "trim",
+                "held": held,
+                "kept": keep,
+                "current_weight_pct": round(current_weight, 2),
+                "weight_pct_after": round(weight_after, 2),
+                "suggested_weight_pct": weight,
+                "conviction": proposal.conviction,
+            },
+        )
+
+
+def _approval_to_close(held: int, price: float) -> Callable[[str], RiskVerdict]:
+    """The verdict for selling everything, with the reason the caller gives."""
+
+    def close(reason: str) -> RiskVerdict:
+        return RiskVerdict(
+            approved=True,
+            reason=reason,
+            rule="llm_exit",
+            qty=float(held),
+            notional=round(held * price, 2),
+            details={"adjustment": "close", "held": held},
+        )
+
+    return close
+
+
+def _or_none(value: float | None) -> str:
+    return "ninguno" if value is None else number(value)
+
 
 def _target_for_ratio(
     price: float, stop: float, qty: int, round_trip: float, minimum: float
@@ -591,7 +1016,11 @@ _BINDING_LABELS = {
     "suggested_weight": "el peso propuesto por el analista",
     "conviction": "la convicción",
 }
-_STOP_SOURCE_LABELS = {"atr": "por ATR", "llm_wider": "el del analista, más holgado"}
+_STOP_SOURCE_LABELS = {
+    "atr": "por ATR",
+    "llm_wider": "el del analista, más holgado",
+    "current": "el que ya tenía, más alto",
+}
 _TARGET_SOURCE_LABELS = {"llm": "del analista", "derived": "calculado"}
 
 
