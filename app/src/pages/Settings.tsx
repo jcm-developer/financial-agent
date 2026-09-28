@@ -2,6 +2,8 @@ import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 
 import {
+  useCloseExperiment,
+  useCycleControl,
   useLimitsPreview,
   useProfileSettings,
   useUpdateSettings,
@@ -9,6 +11,7 @@ import {
 import type { AgentSettings, DerivedLimits, SettingsUpdate } from "@/api/types";
 import { DerivedLimitsPanel } from "@/components/DerivedLimitsPanel";
 import { Checkbox } from "@/components/Checkbox";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   Alert,
   Button,
@@ -21,6 +24,7 @@ import {
 import { Select } from "@/components/Select";
 import { Section } from "@/components/Section";
 import { useTitle } from "@/layout/useTitle";
+import { cn } from "@/lib/utils";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 
 /**
@@ -75,7 +79,89 @@ export function Settings() {
           />
         )}
       </Section>
+      <CloseExperiment profile={profile.name} />
     </>
+  );
+}
+
+/**
+ * «Cerrar experimento», at the foot of the screen and set apart (F5.8).
+ *
+ * **It used to sit beside «Lanzar ciclo»** on the cycles panel, on the argument
+ * that it is an operation on the book and shares the cycle's lock. Both are
+ * still true, and neither is a reason to put a red, irreversible button one
+ * click from the everyday one. Here it is the last thing on the screen that
+ * defines the experiment, under its own heading, which is where an ending
+ * belongs.
+ *
+ * It asks the cycle control state whether anything is running, from the same
+ * cache the stream writes, so it is disabled for exactly as long as it was on
+ * the cycles panel. Its log still appears there: it writes the cycle's file.
+ *
+ * @param props - Props.
+ * @param props.profile - Profile name, as it travels in the URL.
+ * @return The rendered block, or nothing when the server has the controls off.
+ */
+function CloseExperiment({ profile }: { profile: string }) {
+  const control = useCycleControl();
+  const close = useCloseExperiment(profile);
+  const [open, setOpen] = useState(false);
+
+  const state = control.data;
+  if (!state?.enabled) return null;
+  const live = state.running || state.external;
+
+  return (
+    <section className="mt-12 border-t border-border pt-8">
+      <SectionTitle className="mb-3">Terminar el experimento</SectionTitle>
+      <Card padding="p-6" className="flex flex-wrap items-center justify-between gap-4 border-error/40">
+        <div className="max-w-prose text-body-sm text-text-secondary">
+          <p>
+            Vende todas las posiciones abiertas y da el experimento por terminado. No se puede
+            deshacer y requiere el mercado abierto.
+          </p>
+          {live && (
+            <p className="mt-1 text-caption font-medium text-warning">
+              Hay un ciclo en marcha: se podrá cerrar cuando termine.
+            </p>
+          )}
+        </div>
+        <Button
+          variant="destructive"
+          disabled={live || close.isPending}
+          onClick={() => setOpen(true)}
+        >
+          Cerrar experimento
+        </Button>
+      </Card>
+
+      <ConfirmDialog
+        open={open}
+        title={`Cerrar ${profile}`}
+        confirmLabel="Vender todo y cerrar"
+        danger
+        busy={close.isPending}
+        error={close.error?.message}
+        onConfirm={async () => {
+          try {
+            await close.mutateAsync();
+            setOpen(false);
+          } catch {
+            // The message is on the dialog; it stays open so the reason is read
+            // where the decision was taken.
+          }
+        }}
+        onCancel={() => setOpen(false)}
+      >
+        <p>
+          Vende <strong className="font-semibold">todas las posiciones abiertas</strong> a la
+          apertura de la barra siguiente y da el experimento por terminado.
+        </p>
+        <p className="text-text-muted">
+          El registro de la operación se ve en Ciclos, como el de un ciclo.
+        </p>
+      </ConfirmDialog>
+    </section>
   );
 }
 
@@ -157,14 +243,16 @@ function SettingsForm({
   }
 
   /**
-   * Builds the patch with only what actually changed and sends it.
+   * The patch with only what actually changed.
    *
-   * @param event - The submit event, whose default reload is prevented.
+   * It is computed on every render and not only on submit, because the save bar
+   * needs it too: «cambios sin guardar» has to mean the same thing the save
+   * would send, or moving a slider and moving it back would leave the bar up
+   * over a form with nothing to save.
+   *
+   * @return The changed fields, keyed as they are sent.
    */
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    setSaved(null);
-
+  function pendingChanges(): Record<string, unknown> {
     const changes: Record<string, unknown> = {};
 
     // The slider is compared against what is stored, like everything else:
@@ -180,6 +268,22 @@ function SettingsForm({
       // like any other.
       if (parsed !== stored) changes[field] = parsed;
     }
+
+    return changes;
+  }
+
+  const dirty = Object.keys(pendingChanges()).length > 0;
+
+  /**
+   * Sends the patch.
+   *
+   * @param event - The submit event, whose default reload is prevented.
+   */
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setSaved(null);
+
+    const changes = pendingChanges();
 
     if (Object.keys(changes).length === 0) {
       setSaved([]);
@@ -458,11 +562,42 @@ function SettingsForm({
 
       {save.error && <Alert>{save.error.message}</Alert>}
 
-      <div className="flex flex-wrap items-center gap-4 border-t border-border pt-6">
+      {/* The save bar sticks to the bottom of the window while there is
+          something to save. The button used to be only here, at the end of a
+          screen that is a scroll and a half long with the advanced block open,
+          so a change near the top was made with the save out of sight — and
+          leaving the screen lost it without a word. Pinned, it is in view from
+          the first keystroke and says the form differs from what is stored;
+          saved, it drops back into the page. */}
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-4 border-t border-border pt-6",
+          dirty &&
+            "sticky bottom-0 z-20 -mx-4 rounded-t-lg bg-card px-4 pb-4 pt-4 shadow-xl md:-mx-6 md:px-6",
+        )}
+      >
         <Button type="submit" variant="primary" disabled={save.isPending}>
           {save.isPending ? "Guardando…" : "Guardar cambios"}
         </Button>
-        {saved !== null && !save.error && (
+        {dirty && !save.isPending && (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setRisk(settings.risk_profile);
+                setAdvanced(settings.advanced_overrides);
+                setDraft({});
+              }}
+            >
+              Descartar
+            </Button>
+            <p role="status" className="text-body-sm text-text-secondary">
+              Hay cambios sin guardar.
+            </p>
+          </>
+        )}
+        {!dirty && saved !== null && !save.error && (
           <p role="status" className="text-body-sm text-text-secondary">
             {saved.length === 0
               ? "No había nada que cambiar."

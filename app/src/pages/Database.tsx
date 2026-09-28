@@ -2,10 +2,9 @@ import { useMemo, useState } from "react";
 
 import { useDatabaseSchema } from "@/api/hooks";
 import type { DatabaseSchema, SchemaTable } from "@/api/types";
-import { BlockTitle, Card, PageTitle, Tag } from "@/components/pieces";
+import { BlockTitle, Card, Tag } from "@/components/pieces";
 import { Section } from "@/components/Section";
 import { Row, Table, TableHead, Td, Th } from "@/components/Table";
-import { useTitle } from "@/layout/useTitle";
 import { fileSize, integer, percent } from "@/lib/format";
 import {
   BOX_WIDTH,
@@ -16,7 +15,6 @@ import {
 } from "@/lib/schemaLayout";
 import { cn } from "@/lib/utils";
 
-const TITLE = "Base de datos";
 const UNMEASURED = "El tamaño por tabla no está disponible en este servidor.";
 
 /** Screen words for SQLite's `ON DELETE` actions. Unknown ones pass through. */
@@ -46,19 +44,17 @@ const onDeleteLabel = (action: string) => ON_DELETE[action.toUpperCase()] ?? act
  * @return The rendered screen.
  */
 export function Database() {
-  useTitle(TITLE);
   const schema = useDatabaseSchema();
 
   return (
     <>
-      <PageTitle
-        aside={
-          schema.data &&
-          `${schema.data.tables.length} tablas · ${fileSize(schema.data.file_bytes)}`
-        }
-      >
-        {TITLE}
-      </PageTitle>
+      {/* What used to sit beside the page title, now that the title belongs to
+          Sistema: the size of the file is the first thing this view answers. */}
+      {schema.data && (
+        <p className="mb-6 text-body-sm text-text-secondary">
+          {schema.data.tables.length} tablas · {fileSize(schema.data.file_bytes)}
+        </p>
+      )}
       <Section query={schema}>{(data) => <SchemaView data={data} />}</Section>
     </>
   );

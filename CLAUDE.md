@@ -284,7 +284,10 @@ llega.
   números distintos y no hay un sitio donde arreglarlo. Las claves viven solo en
   [app/src/api/keys.ts](app/src/api/keys.ts).
 - **El evento `ingest` se funde, no reemplaza**: manda 5 campos y el endpoint devuelve 13.
-- **El perfil activo vive en la URL** (`/p/europa-01/positions`), por su nombre y no por id.
+- **El perfil activo vive en la URL** (`/p/europa-01/summary`), por su nombre y no por id.
+- **Ocho entradas en la barra lateral** desde el rediseño del 2026-09-28; las pantallas con
+  varias vistas usan `<ViewTabs>` y `?view=` (Decisiones: decisiones, órdenes, riesgo;
+  Sistema: ingesta, base de datos). Ver DESIGN.md § «Estructura de la interfaz».
 - **Las pantallas se arman con los endpoints tipados.** Todos los endpoints tienen modelo
   Pydantic desde F4.11: el único que no lo tenía, `/api/dashboard`, se retiró con el dashboard
   viejo. Un cambio del backend rompe el build del frontend, no la pantalla en caliente.

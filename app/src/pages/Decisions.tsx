@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { ChevronRight } from "lucide-react";
 
 import { useCycles, useDecisions } from "@/api/hooks";
@@ -6,6 +7,9 @@ import type { DecisionRow } from "@/api/types";
 import { GroupedRows } from "@/components/GroupedRows";
 import { Input, LINK_CLASSES, LinkButton, Loading, Tag, PageTitle } from "@/components/pieces";
 import { Select } from "@/components/Select";
+import { pickView, ViewTabs } from "@/components/ViewTabs";
+import { Orders } from "@/pages/Orders";
+import { Risk } from "@/pages/Risk";
 import { Section, ErrorAlert } from "@/components/Section";
 import {
   TableHead,
@@ -48,6 +52,50 @@ const EMPTY_DECISIONS = "Todavía no hay decisiones: no ha corrido ningún ciclo
 const EMPTY_CYCLE = "Este ciclo no registró ninguna decisión.";
 const EMPTY_FILTERED = "Ninguna decisión cumple estos filtros.";
 
+/** The three views of the screen, the default first. */
+const VIEWS = [
+  ["decisions", "Decisiones"],
+  ["orders", "Órdenes"],
+  ["risk", "Riesgo"],
+] as const;
+
+/** The document title of each view, so a tab left open says which one it is. */
+const VIEW_TITLES: Record<string, string> = {
+  decisions: "Decisiones",
+  orders: "Órdenes",
+  risk: "Riesgo",
+};
+
+/**
+ * Decisiones, Órdenes and Riesgo, as three views of one screen.
+ *
+ * **They were three screens and they tell one story**: the analyst proposes, the
+ * Risk Manager sizes or blocks, the broker fills. The decisions table already
+ * carried the verdict and the order in two of its columns, so three entries in
+ * the sidebar were three doors into the same room. What each view keeps is its
+ * own table, because the columns that matter differ —a fill has a price and a
+ * quantity, a risk event has a rule— and flattening them into one would leave
+ * half of every row in dashes, which is the reason Positions kept two tables.
+ *
+ * The old addresses, `/orders` and `/risk`, redirect here with their view.
+ *
+ * @return The rendered screen.
+ */
+export function Decisions() {
+  const { profile } = useActiveProfile();
+  const [params] = useSearchParams();
+  const view = pickView(params.get("view"), VIEWS);
+  useTitle(VIEW_TITLES[view] ?? "Decisiones", profile?.name);
+
+  return (
+    <>
+      <PageTitle>Decisiones</PageTitle>
+      <ViewTabs label="Vistas de las decisiones" views={VIEWS} current={view} />
+      {view === "orders" ? <Orders /> : view === "risk" ? <Risk /> : <DecisionsView />}
+    </>
+  );
+}
+
 /**
  * What the analyst proposed and what the Risk Manager said (F4.7).
  *
@@ -78,11 +126,10 @@ const EMPTY_FILTERED = "Ninguna decisión cumple estos filtros.";
  * rather than the cycle, and they drop the totals instead of printing one that
  * would be wrong at every page boundary.
  *
- * @return The rendered screen.
+ * @return The rendered view.
  */
-export function Decisions() {
+function DecisionsView() {
   const { profile, ref } = useActiveProfile();
-  useTitle("Decisiones", profile?.name);
   const [offset, setOffset] = useState(0);
   const [symbolFilter, setSymbolFilter] = useState("");
   const [action, setAction] = useState("");
@@ -103,8 +150,6 @@ export function Decisions() {
 
   return (
     <>
-      <PageTitle>Decisiones</PageTitle>
-
       <div className="mb-6 flex flex-wrap items-end gap-4">
         <Input
           label="Símbolo"
@@ -428,11 +473,51 @@ function CycleDecisions({
     );
   }
 
+  return <SplitHolds items={items} symbol={symbol} />;
+}
+
+/**
+ * A cycle's decisions with what it acted on first and the holds folded under.
+ *
+ * **In a cycle of twenty, fifteen are «mantener»**, and they were interleaved in
+ * the order the analyst answered, so the three buys worth reading were somewhere
+ * among them. A hold is a decision too —it is the analyst saying no— so it is
+ * not hidden, only moved under its own fold, one click away and counted.
+ *
+ * The order inside each half is the one the API gave, which is the order the
+ * cycle wrote them in; nothing is re-ranked here.
+ *
+ * Only the browsing tree does this. Under a filter the user has already said
+ * what they want to see, and folding part of it away would second-guess them.
+ *
+ * @param props - Split props.
+ * @param props.items - The cycle's decisions, as the API returned them.
+ * @param props.symbol - Currency symbol of the profile's market, never assumed.
+ * @return The acted-on rows, then the fold with the holds.
+ */
+function SplitHolds({ items, symbol }: { items: DecisionRow[]; symbol: string }) {
+  const [open, setOpen] = useState(false);
+  const acted = items.filter((row) => row.action !== "hold");
+  const holds = items.filter((row) => row.action === "hold");
+
   return (
     <>
-      {items.map((row) => (
+      {acted.map((row) => (
         <DecisionTableRow key={row.id} row={row} symbol={symbol} />
       ))}
+      {holds.length > 0 && (
+        <GroupRow
+          columns={COLUMNS}
+          level="inner"
+          open={open}
+          onToggle={() => setOpen((value) => !value)}
+          title={open ? "Plegar las decisiones de mantener" : "Ver las decisiones de mantener"}
+        >
+          {holds.length} {holds.length === 1 ? "decisión" : "decisiones"} de mantener
+        </GroupRow>
+      )}
+      {open &&
+        holds.map((row) => <DecisionTableRow key={row.id} row={row} symbol={symbol} />)}
     </>
   );
 }
@@ -559,14 +644,16 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
           ) : (
             <span className="font-medium">{row.symbol}</span>
           )}
-          {/* 'entry' or 'exit': the same action means different things depending
-              on whether entering was being evaluated or an open position reviewed. */}
-          <Tag
-            tone="neutral"
-            title={row.kind === "entry" ? "Evaluación de entrada" : "Revisión de una posición abierta"}
-          >
-            {row.kind === "entry" ? "entrada" : "revisión"}
-          </Tag>
+          {/* The same action means different things on an entry and on the review
+              of an open position, so the review is marked. Only the review: an
+              entry is what nineteen rows in twenty are, and a chip repeated on
+              every row stops being read — it is the exception that needs the
+              label. */}
+          {row.kind !== "entry" && (
+            <Tag tone="neutral" title="Revisión de una posición abierta">
+              revisión
+            </Tag>
+          )}
         </Td>
         <Td>
           <span
@@ -599,9 +686,14 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
             </>
           ) : (
             // A hold decision does not go through the Risk Manager: there is
-            // nothing to size.
-            <span className="text-caption text-text-muted">
-              {row.action === "hold" ? "no aplica" : "sin veredicto"}
+            // nothing to size. A dash, like the two columns beside it, with the
+            // reason in the `title`: «no aplica» written on fifteen rows was the
+            // loudest thing in a column meant for verdicts.
+            <span
+              className="text-caption text-text-muted"
+              title={row.action === "hold" ? "Mantener no pasa por el Risk Manager" : undefined}
+            >
+              {row.action === "hold" ? "—" : "sin veredicto"}
             </span>
           )}
         </Td>

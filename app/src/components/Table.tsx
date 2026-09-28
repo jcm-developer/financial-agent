@@ -235,7 +235,8 @@ export function DetailRow({
  *
  * @param props - Group row props.
  * @param props.columns - Columns of the table, so the header spans all of them.
- * @param props.level - Which of the two levels this heads.
+ * @param props.level - Which level this heads. `inner` is a fold inside a
+ *     cycle —the holds of Decisiones— one indent deeper and one step quieter.
  * @param props.open - Whether the group is unfolded, announced as `aria-expanded`.
  * @param props.onToggle - Called when the header is pressed.
  * @param props.title - The whole sentence, since the chevron alone says nothing.
@@ -251,7 +252,7 @@ export function GroupRow({
   children,
 }: {
   columns: number;
-  level?: "day" | "cycle";
+  level?: "day" | "cycle" | "inner";
   open: boolean;
   onToggle: () => void;
   title: string;
@@ -275,7 +276,9 @@ export function GroupRow({
             "transition-colors duration-150 ease-calm",
             level === "day"
               ? "h-12 bg-background text-body-sm font-semibold text-foreground hover:bg-surface-sunken"
-              : "h-10 pl-10 text-caption text-text-secondary hover:bg-background",
+              : level === "cycle"
+                ? "h-10 pl-10 text-caption text-text-secondary hover:bg-background"
+                : "h-10 pl-16 text-caption text-text-muted hover:bg-background",
           )}
         >
           <ChevronRight

@@ -4,7 +4,7 @@ import { ChevronRight } from "lucide-react";
 import { useOrders } from "@/api/hooks";
 import type { OrderRow } from "@/api/types";
 import { GroupedRows } from "@/components/GroupedRows";
-import { Input, LinkButton, PageTitle } from "@/components/pieces";
+import { Input, LinkButton } from "@/components/pieces";
 import { Section } from "@/components/Section";
 import {
   TableHead,
@@ -21,7 +21,6 @@ import { quantity, money, dateTime } from "@/lib/format";
 import { actionLabel, orderStatusLabel } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { useActiveProfile } from "@/profile/useActiveProfile";
-import { useTitle } from "@/layout/useTitle";
 
 const LIMIT = 50;
 
@@ -43,11 +42,13 @@ const COLUMNS = 6;
  * no per-cycle query to be lazy with — which is also why the headers count the
  * page and say so.
  *
+ * It is a view of Decisiones and not a screen of its own: the page title and
+ * the document title belong to the screen that hosts it.
+ *
  * @return The rendered screen.
  */
 export function Orders() {
   const { profile, ref } = useActiveProfile();
-  useTitle("Órdenes", profile?.name);
   const [offset, setOffset] = useState(0);
   const [symbolFilter, setSymbolFilter] = useState("");
 
@@ -61,8 +62,6 @@ export function Orders() {
 
   return (
     <>
-      <PageTitle>Órdenes</PageTitle>
-
       <Input
         label="Símbolo"
         type="search"

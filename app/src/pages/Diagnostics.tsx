@@ -1,10 +1,9 @@
 import { useIngestStatus, useMarkets, useQuotes } from "@/api/hooks";
 import { realAge, useQuotesReceivedAt } from "@/api/stream";
 import type { MarketInfo, QuoteRow } from "@/api/types";
-import { Card, BlockTitle, PageTitle, Stat } from "@/components/pieces";
+import { Card, BlockTitle, Stat } from "@/components/pieces";
 import { Section } from "@/components/Section";
 import { TableHead, Row, Table, Td, Th, Empty } from "@/components/Table";
-import { useTitle } from "@/layout/useTitle";
 import { duration, percent, signClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -19,12 +18,12 @@ const EMPTY_QUOTES = "Todavía no hay cotizaciones.";
  * And they are exactly the two numbers to watch during the first two weeks —
  * "every minute" only holds if the datum is a minute old (F2.1c).
  *
- * It depends on no profile: it is infrastructure, not experiment.
+ * It depends on no profile: it is infrastructure, not experiment. It is a view
+ * of Sistema, which owns the page title.
  *
  * @return The rendered screen.
  */
 export function Diagnostics() {
-  useTitle("Ingesta");
   const markets = useMarkets();
   const ingest = useIngestStatus();
   const quotes = useQuotes();
@@ -34,8 +33,6 @@ export function Diagnostics() {
 
   return (
     <>
-      <PageTitle>Ingesta y mercados</PageTitle>
-
       <Section title="Salud del ingestor" query={ingest}>
         {(data) => (
           <Card>

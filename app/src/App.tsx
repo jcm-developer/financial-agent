@@ -10,16 +10,13 @@ import {
 } from "@/legacyRoutes";
 import { Compare } from "@/pages/Compare";
 import { Cycles } from "@/pages/Cycles";
-import { Database } from "@/pages/Database";
 import { Decisions } from "@/pages/Decisions";
-import { Diagnostics } from "@/pages/Diagnostics";
 import { Home } from "@/pages/Home";
 import { NotFound } from "@/pages/NotFound";
-import { Orders } from "@/pages/Orders";
 import { Profiles } from "@/pages/Profiles";
 import { Settings } from "@/pages/Settings";
-import { Positions } from "@/pages/Positions";
 import { Summary } from "@/pages/Summary";
+import { System } from "@/pages/System";
 
 /**
  * The analytics screen is bundled apart and loaded only when opened.
@@ -32,7 +29,6 @@ import { Summary } from "@/pages/Summary";
 const Analytics = lazy(() =>
   import("@/pages/Analytics").then((m) => ({ default: m.Analytics })),
 );
-import { Risk } from "@/pages/Risk";
 
 /**
  * Routing (F4.3).
@@ -48,6 +44,17 @@ import { Risk } from "@/pages/Risk";
  * that forgot to drag it along would leave the user looking at another
  * experiment with no warning.
  *
+ * **Five screens folded into others in the redesign** of 2026-09-28 —Posiciones
+ * into Resumen, Órdenes and Riesgo into Decisiones, Ingesta and Base de datos
+ * into Sistema— and their addresses stay alive as redirects, for the same
+ * reason F8.10 kept the Spanish ones: a bookmark is state the browser remembers.
+ * The Spanish ones chain through these (`/ordenes` → `/orders` → the view), so
+ * that table did not have to change.
+ *
+ * `../` in a profile redirect resolves **by route**, which is the default: from
+ * `p/:profile/orders` it climbs to `p/:profile` and lands on its `decisions`.
+ * The `relative="path"` trap `legacyRoutes` documents is not in play here.
+ *
  * @return The router with every route of the application.
  */
 export function App() {
@@ -58,8 +65,9 @@ export function App() {
           <Route index element={<Home />} />
           <Route path="profiles" element={<Profiles />} />
           <Route path="compare" element={<Compare />} />
-          <Route path="diagnostics" element={<Diagnostics />} />
-          <Route path="database" element={<Database />} />
+          <Route path="system" element={<System />} />
+          <Route path="diagnostics" element={<Navigate to="/system" replace />} />
+          <Route path="database" element={<Navigate to="/system?view=database" replace />} />
 
           {/*
             The routes F8.8 renamed (F8.10). They are mapped from the tables in
@@ -82,10 +90,10 @@ export function App() {
                 </Suspense>
               }
             />
-            <Route path="positions" element={<Positions />} />
             <Route path="decisions" element={<Decisions />} />
-            <Route path="orders" element={<Orders />} />
-            <Route path="risk" element={<Risk />} />
+            <Route path="positions" element={<Navigate to="../summary" replace />} />
+            <Route path="orders" element={<Navigate to="../decisions?view=orders" replace />} />
+            <Route path="risk" element={<Navigate to="../decisions?view=risk" replace />} />
             <Route path="cycles" element={<Cycles />} />
             <Route path="settings" element={<Settings />} />
             {LEGACY_PROFILE_PATHS.map((path) => (

@@ -81,6 +81,38 @@ script en línea en `app/index.html`, porque desde React habría un fogonazo del
 cada carga. Ese script no puede importar `lib/theme.ts`, así que la clave y los dos
 colores están escritos dos veces y `theme.test.ts` comprueba que coinciden.
 
+### Estructura de la interfaz
+
+Desde el rediseño del 2026-09-28, **ocho entradas en la barra lateral y no doce**:
+
+| Grupo | Entradas |
+|---|---|
+| Experimento | Resumen · Decisiones · Ciclos · Analítica · Ajustes |
+| General | Experimentos · Comparar · Sistema |
+
+- **El selector de experimento encabeza el grupo de arriba**, porque es lo que decide de
+  qué tratan esas cinco entradas. Antes estaba en la cabecera, en la esquina contraria.
+- **Una pantalla con varias vistas usa `<ViewTabs>`**
+  ([app/src/components/ViewTabs.tsx](app/src/components/ViewTabs.tsx)): enlaces que
+  escriben `?view=` y no botones `role="tab"`, porque cada vista es una dirección que se
+  puede guardar y el botón de atrás tiene que deshacerla. Decisiones tiene tres
+  (Decisiones · Órdenes · Riesgo) y Sistema dos (Ingesta · Base de datos). Cada vista
+  conserva su tabla, porque las columnas que importan son distintas.
+- **Resumen incluye las posiciones.** Arriba va una sola tarjeta —capital grande,
+  rentabilidad, P&L del día y la curva de capital en `<Sparkline>`, SVG a mano para no
+  cargar Recharts en la pantalla de entrada— con los recuentos en una línea debajo. Luego
+  van las cifras de la cartera a precio en vivo, las posiciones abiertas, los últimos ciclos
+  y las cerradas. Los dos relojes van en secciones distintas y cada una dice cuál es el suyo.
+- **Por debajo de `md` la barra lateral se pliega** detrás de un botón «Menú» en la
+  cabecera, y el interruptor de tema pasa dentro del panel.
+- **Lo irreversible no va junto a lo cotidiano.** «Cerrar experimento» está al final de
+  Ajustes, en su propia sección, y no junto a «Lanzar ciclo».
+- **Un formulario con cambios sin guardar fija su barra de guardado abajo**, con
+  «Descartar» y el aviso de que hay cambios.
+- Las direcciones antiguas (`/positions`, `/orders`, `/risk`, `/diagnostics`,
+  `/database`) redirigen a su sitio nuevo, y las rutas en español de F8.10 encadenan a través
+  de ellas.
+
 ### Los dos niveles de cada color de estado: marca y tinta
 
 Cada hue de estado tiene **dos valores, y confundirlos es el error fácil**:
@@ -442,8 +474,8 @@ Los nombres siguen la tabla de [CLAUDE.md](CLAUDE.md). Lo que afecta a `app/`:
   la capa base de `index.css`, así que cubre también cualquier control escrito a
   mano.
 - **Enlace de salto:** `.skip-link` es `sr-only` hasta que recibe foco. Sin él,
-  llegar al contenido con teclado obliga a recorrer la cabecera y las once entradas
-  de la barra lateral **en cada página**.
+  llegar al contenido con teclado obliga a recorrer la cabecera, el selector de
+  experimento y las ocho entradas de la barra lateral **en cada página**.
 - **El color nunca es el único portador del significado.** Todo estado con color
   lleva además texto (`activo`, `aprobado`, `datos en vivo`) o un tooltip que lo
   explica. El indicador en vivo tiene tres estados y no dos, porque agrupar

@@ -12,12 +12,15 @@ import { profileStatusLabel } from "@/lib/labels";
  * `/p/other/positions`, not back at the summary: comparing the same screen
  * across two experiments is a central gesture.
  *
- * The dropdown is the shared `<Select>` (`components/pieces.tsx`), in its
- * label-to-the-left variant: there is no height to spend in the header.
+ * The dropdown is the shared `<Select>` (`components/Select.tsx`), with its
+ * label above and the trigger at the sidebar's full width: it heads the group of
+ * links it scopes, so it takes the width of those links.
  *
+ * @param props - Selector props.
+ * @param props.className - Classes for the wrapping block.
  * @return The rendered select, or null while there are no profiles to choose from.
  */
-export function ProfileSelector() {
+export function ProfileSelector({ className }: { className?: string }) {
   const { ref, profiles } = useActiveProfile();
   const navigate = useNavigate();
   const location = useLocation();
@@ -42,8 +45,9 @@ export function ProfileSelector() {
 
   return (
     <Select
-      row
       label="Experimento"
+      fieldClass={className}
+      className="w-full"
       options={options}
       value={ref ?? ""}
       onChange={(name) => navigate(`/p/${encodeURIComponent(name)}/${section}`)}

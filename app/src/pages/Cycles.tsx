@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
 import {
-  useCloseExperiment,
   useCycle,
   useCycleControl,
   useCycles,
@@ -10,7 +9,6 @@ import {
   useStopCycle,
 } from "@/api/hooks";
 import type { CycleControl, CycleRow } from "@/api/types";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CycleStatus } from "@/components/CycleStatus";
 import {
   Alert,
@@ -152,9 +150,7 @@ function Control({
 }) {
   const run = useRunCycle(profile);
   const stop = useStopCycle();
-  const close = useCloseExperiment(profile);
-  const [closing, setClosing] = useState(false);
-  const failure = run.error ?? stop.error ?? close.error;
+  const failure = run.error ?? stop.error;
   // `running` is "the cycle is mine" and `external` is "it is the scheduler's",
   // and the two flags stay separate because they answer different questions
   // (F4.19). For everything the panel says out loud there is only one question —
@@ -224,9 +220,14 @@ function Control({
             Lanzar en seco
           </Button>
           {/* Enabled for the scheduler's cycle too: the request travels through
-              the shared volume, so it reaches the other container. */}
+              the shared volume, so it reaches the other container.
+
+              Red only while there is something to stop. Disabled, the
+              destructive fill at 0.4 opacity came out pink, and a pink button
+              read as an error on a panel where nothing was wrong; the outline
+              variant disabled reads as what it is, a control that is off. */}
           <Button
-            variant="destructive"
+            variant={live ? "destructive" : "secondary"}
             disabled={!live || state.stop_requested || stop.isPending}
             title={
               state.stop_requested
@@ -239,47 +240,17 @@ function Control({
           >
             Parar
           </Button>
-          {/* F5.8. It lives beside the cycle controls and not in the profile
-              actions because it IS an operation on the book —it sells— and it
-              shares the log and the lock with the cycle: only one thing at a
-              time may touch a book. */}
-          <Button
-            variant="destructive"
-            disabled={live || close.isPending || !profile}
-            onClick={() => setClosing(true)}
-          >
-            Cerrar experimento
-          </Button>
+          {/* «Cerrar experimento» used to be here (F5.8), a red button one
+              click from «Lanzar ciclo» — the everyday gesture next to the one
+              that sells the whole book and cannot be undone. It moved to the
+              foot of Ajustes; its log still streams into this panel, because it
+              runs under the cycle's lock and writes the same file. */}
         </div>
       </div>
 
       {failure && <Alert className="mt-3">{failure.message}</Alert>}
 
       <Log lines={state.lines ?? []} />
-
-      <ConfirmDialog
-        open={closing}
-        title={`Cerrar ${profile ?? "el experimento"}`}
-        confirmLabel="Vender todo y cerrar"
-        danger
-        busy={close.isPending}
-        onConfirm={async () => {
-          try {
-            await close.mutateAsync();
-            setClosing(false);
-          } catch {
-            // The message is already on the alert above; the dialog stays open
-            // so the reason is read where the decision was taken.
-          }
-        }}
-        onCancel={() => setClosing(false)}
-      >
-        <p>
-          Vende <strong className="font-semibold">todas las posiciones abiertas</strong> a
-          la apertura de la barra siguiente y da el experimento por terminado.
-        </p>
-        <p className="text-text-muted">No se puede deshacer y requiere el mercado abierto.</p>
-      </ConfirmDialog>
     </Card>
   );
 }

@@ -1,11 +1,13 @@
-import { Link, Outlet } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, Outlet, useLocation } from "react-router";
+import { Menu, X } from "lucide-react";
 
 import { useStream } from "@/api/stream";
 import { LiveIndicator } from "@/components/LiveIndicator";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { buttonClasses, Card, BlockTitle } from "@/components/pieces";
+import { Button, buttonClasses, Card, BlockTitle } from "@/components/pieces";
 import { Sidebar } from "@/layout/Sidebar";
-import { ProfileSelector } from "@/layout/ProfileSelector";
+import { cn } from "@/lib/utils";
 import { useActiveProfile } from "@/profile/useActiveProfile";
 
 /**
@@ -22,11 +24,26 @@ import { useActiveProfile } from "@/profile/useActiveProfile";
  * table of figures lowers the contrast of the text precisely where it is read
  * most. What separates it from the page is the hairline and the sm shadow.
  *
+ * **Below `md` the sidebar folds behind a «Menú» button** (2026-09-28). It used
+ * to stack above the content, so at phone width the header and twelve links
+ * filled the whole first screen and every page began with a scroll past them.
+ * Folded, the content starts under the header; the panel opens in the page flow
+ * rather than as a drawer over it, which keeps it a plain list with nothing to
+ * trap focus in or dismiss. It closes on navigation, since choosing a section
+ * is what it was opened for. The theme switch moves into it at that width,
+ * because the header has room for the name, the live indicator and one button.
+ *
  * @return The rendered frame, with the active screen in its outlet.
  */
 export function Layout() {
   const { ref, profile, notFound } = useActiveProfile();
   const stream = useStream();
+  const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname, location.search]);
 
   return (
     <div className="min-h-dvh">
@@ -35,29 +52,47 @@ export function Layout() {
       </a>
 
       <header className="sticky top-0 z-30 border-b border-border bg-card shadow-sm">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-3">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3 md:px-6">
           <Link
             to="/"
             className="font-headline text-h4 font-bold tracking-tight text-foreground"
           >
             financial-agent
           </Link>
-          <div className="flex flex-wrap items-center gap-4">
-            <ProfileSelector />
+          <div className="flex items-center gap-2 md:gap-4">
             <LiveIndicator
               state={stream.state}
               reconnections={stream.reconnections}
               notice={stream.lastNotice}
             />
-            <ThemeToggle />
+            <div className="hidden md:block">
+              <ThemeToggle />
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="md:hidden"
+              icon={menuOpen ? X : Menu}
+              aria-expanded={menuOpen}
+              aria-controls="sections"
+              onClick={() => setMenuOpen((value) => !value)}
+            >
+              {menuOpen ? "Cerrar" : "Menú"}
+            </Button>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl flex-col gap-8 px-6 py-8 md:flex-row">
-        <aside className="md:w-56 md:shrink-0">
+      <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-6 md:flex-row md:px-6 md:py-8">
+        <aside
+          id="sections"
+          className={cn("md:block md:w-56 md:shrink-0", menuOpen ? "block" : "hidden")}
+        >
           <div className="md:sticky md:top-24">
             <Sidebar profile={profile?.name ?? ref} />
+            <div className="mt-6 border-t border-border pt-4 md:hidden">
+              <ThemeToggle />
+            </div>
           </div>
         </aside>
 

@@ -4,7 +4,7 @@ import { ChevronRight } from "lucide-react";
 import { useRiskEvents } from "@/api/hooks";
 import type { RiskEventRow } from "@/api/types";
 import { GroupedRows } from "@/components/GroupedRows";
-import { Badge, LinkButton, PageTitle, SectionTitle } from "@/components/pieces";
+import { Badge, LinkButton, SectionTitle } from "@/components/pieces";
 import { Select } from "@/components/Select";
 import { Section } from "@/components/Section";
 import {
@@ -21,7 +21,6 @@ import { groupByDayAndCycle } from "@/lib/grouping";
 import { quantity, money, dateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useActiveProfile } from "@/profile/useActiveProfile";
-import { useTitle } from "@/layout/useTitle";
 import { ruleLabel } from "@/lib/labels";
 
 const LIMIT = 50;
@@ -56,11 +55,13 @@ const COLUMNS = 4;
  * cycle hitting the same wall sixteen times rather than a pattern across the
  * week.
  *
- * @return The rendered screen, with the per-rule tally above the table.
+ * It is a view of Decisiones and not a screen of its own: the page title and
+ * the document title belong to the screen that hosts it.
+ *
+ * @return The rendered view, with the per-rule tally above the table.
  */
 export function Risk() {
   const { profile, ref } = useActiveProfile();
-  useTitle("Riesgo", profile?.name);
   const [offset, setOffset] = useState(0);
   const [verdict, setVerdict] = useState("");
 
@@ -75,8 +76,6 @@ export function Risk() {
 
   return (
     <>
-      <PageTitle>Eventos de riesgo</PageTitle>
-
       <Select
         label="Veredicto"
         value={verdict}
