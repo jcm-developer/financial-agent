@@ -14,9 +14,10 @@ tres consecuencias que hay que tener presentes están en
 [Lo que se perdió al adoptarlo](#lo-que-se-perdió-al-adoptarlo), y ninguna es un
 descuido: son el precio acordado.
 
-**Tema único, solo claro.** Verdana no especifica una variante oscura, así que no se
-inventó una. Con el cambio desaparecieron la clase `.dark`, la variante `dark:`, el
-interruptor de tema y el script anti-fogonazo de `app/index.html`.
+**Dos temas, claro y oscuro, con los mismos nombres de token.** El claro es Verdana
+tal cual está escrito y es el que sale por defecto. El oscuro se añadió el
+2026-09-28, porque se pidió: Verdana no especifica una variante oscura, así que se
+**derivó** de él y no se inventó un segundo sistema. Ver [Tema oscuro](#tema-oscuro).
 
 ---
 
@@ -41,6 +42,44 @@ La rampa slate completa (`--slate-50` … `--slate-950`) vive en `:root` de
 media docena de sus valores —`#E2E8F0` en bordes, `#F1F5F9` en divisores, `#475569`
 en texto de ayuda, `#CBD5E1` en controles, `#020617` en el hover del primario— y
 tenerlos sueltos era pedir que se adivinaran.
+
+### Tema oscuro
+
+No es una segunda paleta: son **los mismos tokens redefinidos** bajo
+`html[data-theme="dark"]`, al final de [app/src/index.css](app/src/index.css). Ningún
+componente sabe en qué tema está y **no hay variante `dark:` en ningún `className`**:
+un componente escrito contra los tokens ya está bien en los dos, y uno que se los salta
+está mal en los dos. Esa es la regla que hay que conservar.
+
+Se derivó con tres reglas:
+
+1. **La rampa slate leída desde el otro extremo.** Página en `slate-950`, tarjetas en
+   `slate-900`, paneles elevados (desplegables) en `slate-800`. No entra ningún hue nuevo.
+2. **El primario se invierte.** Navy sobre fondo navy desaparece, así que la acción
+   primaria pasa a ser el extremo claro de la rampa con letra navy: el mismo par de
+   contraste, dado la vuelta. **La franja de cabecera de tarjeta y el velo de los
+   diálogos no se invierten**, y por eso tienen token propio (`--color-strip`,
+   `--color-scrim`): una franja invertida sería una barra blanca atravesando una tarjeta
+   oscura, y un velo claro no oscurece la página.
+3. **Solo se mueve la tinta de los estados.** Las marcas saturadas ya se leen sobre
+   fondo oscuro; las tintas profundas no, así que suben al 400 de cada hue
+   (`#4ADE80`, `#FACC15`, `#F87171`, `#38BDF8`). El corte marca/tinta es el mismo.
+
+La salvia sube dos pasos, a `#34D399`: `#059669` da 4,7:1 sobre tarjeta pero 3,9:1 sobre
+un panel `slate-800`, por debajo del 4,5 que necesita un enlace; `#34D399` da 9,3:1 y
+7,6:1. Las sombras se quedan como están —se proyectan desde el navy y sobre fondo
+oscuro desaparecen—, y está bien así: en superficies oscuras la elevación la llevan el
+borde y el escalón de la rampa.
+
+**El tema se elige a mano y no sigue al sistema operativo.** El claro fue el único
+durante siete semanas, y una máquina en modo oscuro abriendo un día la aplicación en
+negro parecería un fallo. El botón está en la cabecera, junto al indicador de datos en
+vivo, y dice el tema al que lleva («Oscuro» / «Claro»). La elección se guarda en
+`localStorage` con la clave `colorScheme` —no la `theme` del sistema anterior a Verdana,
+que aún puede guardar una elección de agosto— y **se aplica antes de pintar** con un
+script en línea en `app/index.html`, porque desde React habría un fogonazo del claro en
+cada carga. Ese script no puede importar `lib/theme.ts`, así que la clave y los dos
+colores están escritos dos veces y `theme.test.ts` comprueba que coinciden.
 
 ### Los dos niveles de cada color de estado: marca y tinta
 
@@ -433,7 +472,9 @@ Escrito aquí para que nadie lo descubra por su cuenta dentro de seis meses:
 2. **La densidad bajó.** El cuerpo es de 16 px y las filas de 48, contra 13 px y
    ~30 px de antes: en una tabla caben en torno a nueve filas donde cabían quince.
    Es lo que pide la regla 7 de Verdana y es coherente con el resto del sistema.
-3. **No hay tema oscuro.**
+3. **El tema oscuro no es de Verdana.** Se derivó de él con reglas escritas (ver
+   [Tema oscuro](#tema-oscuro)), pero no tiene la ficha de componentes que el claro sí
+   tiene, así que un componente nuevo se diseña en claro y se comprueba en oscuro.
 
 ---
 
@@ -476,7 +517,7 @@ de `index.css` hay que añadirlo también a esa lista.**
 
 | No hay | Por qué |
 |---|---|
-| Tema oscuro | Verdana es un sistema de tema único y no se inventó una variante |
+| Variante `dark:` en un `className` | El oscuro se hace redefiniendo tokens; una clase por tema es un segundo sistema repartido por los componentes |
 | Glassmorfismo (`backdrop-blur`, superficies translúcidas) | Un fondo translúcido bajo una tabla de cifras baja el contraste del texto justo donde más se lee |
 | Sombras duras o de elevación alta | La escala difusa es lo que sostiene el carácter clínico |
 | Radios por encima de 16 px | Comen alto útil |

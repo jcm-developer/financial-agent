@@ -254,7 +254,7 @@ export function CardHeaderStrip({ className, children, ...rest }: ComponentProps
   return (
     <div
       className={cn(
-        "rounded-t-md bg-primary px-6 py-3 text-caption tracking-[0.5px] text-primary-foreground uppercase",
+        "rounded-t-md bg-strip px-6 py-3 text-caption tracking-[0.5px] text-strip-foreground uppercase",
         className,
       )}
       {...rest}

@@ -101,11 +101,11 @@ export function ConfirmDialog({
       // is the rule pieces.tsx exists for. What is added is only what belongs to
       // being a dialog — the width, the centring, the 12 px radius Verdana gives
       // modals and dropdown panels, its lg elevation, and the backdrop. The
-      // scrim is the same navy wash whatever is behind it: it darkens the page,
-      // and a scrim that follows the surface stops doing that.
+      // scrim is its own token and not `primary`: it has to darken the page in
+      // both themes, and in the dark one primary is the light end of the ramp.
       className={cardClasses(
         "p-6",
-        "m-auto w-[min(32rem,calc(100vw-2rem))] rounded-lg text-foreground shadow-xl backdrop:bg-primary/40",
+        "m-auto w-[min(32rem,calc(100vw-2rem))] rounded-lg text-foreground shadow-xl backdrop:bg-scrim/40",
       )}
       onCancel={(event) => {
         // While the request is in flight Esc would leave the dialog closed and

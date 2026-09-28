@@ -6,12 +6,27 @@
     <meta name="color-scheme" content="light" />
     <meta name="theme-color" content="#f8fafc" />
     <title>financial-agent · operativa</title>
-    <!-- Verdana Health es un sistema de tema unico. Aqui habia un script en
-         linea que aplicaba el tema guardado antes de pintar para evitar el
-         fogonazo del tema equivocado; con un solo tema no hay nada que elegir
-         antes de pintar, asi que se fue con la clase `dark` y con el
-         interruptor. La clave `theme` de localStorage queda huerfana a
-         proposito: borrarla no aporta nada y el navegador la descarta solo. -->
+    <!-- The theme is applied here, before the first paint, and not from React:
+         for whoever chose dark, waiting for the bundle would flash the light
+         theme on every load. The key and both colours are also in
+         src/lib/theme.ts, and theme.test.ts checks that they match.
+         `color-scheme` stays "light" above on purpose: "light dark" would let
+         the browser draw its own controls dark on a dark OS under the light
+         theme. The dark theme sets it in index.css instead. -->
+    <script>
+      (function () {
+        var theme = "light";
+        try {
+          if (localStorage.getItem("colorScheme") === "dark") theme = "dark";
+        } catch (e) {}
+        document.documentElement.dataset.theme = theme;
+        if (theme === "dark") {
+          document
+            .querySelector('meta[name="theme-color"]')
+            .setAttribute("content", "#020617");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

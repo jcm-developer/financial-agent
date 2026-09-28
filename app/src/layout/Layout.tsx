@@ -2,6 +2,7 @@ import { Link, Outlet } from "react-router";
 
 import { useStream } from "@/api/stream";
 import { LiveIndicator } from "@/components/LiveIndicator";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { buttonClasses, Card, BlockTitle } from "@/components/pieces";
 import { Sidebar } from "@/layout/Sidebar";
 import { ProfileSelector } from "@/layout/ProfileSelector";
@@ -48,6 +49,7 @@ export function Layout() {
               reconnections={stream.reconnections}
               notice={stream.lastNotice}
             />
+            <ThemeToggle />
           </div>
         </div>
       </header>

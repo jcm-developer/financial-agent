@@ -63,12 +63,14 @@
 
    Deep navy and soft sage over a near-white ground: clinical precision tempered
    by warmth. Everything below is the system as specified in DESIGN.md — there is
-   no second palette and no theme variant.
+   no second palette.
 
-   **Single theme, light only.** Verdana does not specify a dark counterpart, and
-   inventing one would have meant two visual systems arguing over a switch. The
-   `.dark` class, the `dark:` variant and the anti-flash script in `index.html`
-   were all removed with it.
+   **Two themes, one set of names.** The light theme is Verdana as written. The
+   dark one is not a second system: it is the same tokens redefined under
+   `html[data-theme="dark"]` (at the end of this file), so no component knows
+   which theme it is in and there is no `dark:` variant anywhere. That is what
+   keeps the switch cheap — a component written against the tokens is already
+   right in both, and one that reaches past them is wrong in both.
 
    The ramp below is the slate family the component specs already reference
    (#E2E8F0 borders, #F1F5F9 dividers, #475569 helper text, #CBD5E1 control
@@ -208,6 +210,14 @@
   --color-info: var(--info-mark);
   --color-info-ink: var(--info-ink);
 
+  /* The dialog backdrop, which darkens the page whatever the theme: it cannot
+     be `primary`, because in the dark theme primary is the light end. */
+  --color-scrim: var(--slate-900);
+  /* Verdana's navy header strip. Its own token for the same reason as the
+     scrim: an inverted strip would be a bright bar across a dark card. */
+  --color-strip: var(--slate-900);
+  --color-strip-foreground: #ffffff;
+
   --color-grid: var(--slate-100);
   --color-axis: var(--slate-300);
 
@@ -307,7 +317,7 @@
   }
 
   ::selection {
-    background: rgb(15 23 42 / 0.12);
+    background: color-mix(in oklab, var(--color-foreground) 12%, transparent);
   }
 
   /* Scrolling still works everywhere; the bar itself never renders. */
@@ -333,8 +343,8 @@
     border-radius: 9999px;
     background: linear-gradient(
       to right,
-      var(--slate-900) 0 var(--fill, 0%),
-      var(--slate-200) var(--fill, 0%) 100%
+      var(--color-primary) 0 var(--fill, 0%),
+      var(--color-border) var(--fill, 0%) 100%
     );
   }
   .slider::-webkit-slider-thumb {
@@ -344,27 +354,27 @@
     width: 18px;
     height: 18px;
     border-radius: 9999px;
-    background: #ffffff;
-    border: 1.5px solid var(--slate-900);
+    background: var(--color-card);
+    border: 1.5px solid var(--color-primary);
     box-shadow: var(--shadow-md);
     transition: transform 150ms var(--ease-calm);
   }
   .slider::-moz-range-track {
     height: 6px;
     border-radius: 9999px;
-    background: var(--slate-200);
+    background: var(--color-border);
   }
   .slider::-moz-range-progress {
     height: 6px;
     border-radius: 9999px;
-    background: var(--slate-900);
+    background: var(--color-primary);
   }
   .slider::-moz-range-thumb {
     width: 18px;
     height: 18px;
     border-radius: 9999px;
-    background: #ffffff;
-    border: 1.5px solid var(--slate-900);
+    background: var(--color-card);
+    border: 1.5px solid var(--color-primary);
     box-shadow: var(--shadow-md);
   }
   .slider:active::-webkit-slider-thumb {
@@ -420,4 +430,83 @@
   .appear-down {
     transform-origin: top center;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   DARK THEME
+   ---------------------------------------------------------------------------
+
+   The same tokens, redefined. Verdana does not specify a dark variant, so this
+   one is derived from it with three rules, and they are what to keep if a value
+   here ever changes:
+
+   1. **The slate ramp read from the other end.** Page on slate-950, cards on
+      slate-900, raised panels on slate-800. No new hue enters the system.
+   2. **Primary inverts.** Navy on a navy ground disappears, so the committing
+      action becomes the light end of the ramp with navy lettering — the same
+      contrast pair, swapped. The strip and the scrim do not invert, and that is
+      why they have their own tokens.
+   3. **Only the ink tier of the states moves.** The saturated marks already
+      read on a dark ground; the deep inks do not, so they step up to the 400
+      of each hue. Same split as in light: mark for fills, ink for letters.
+
+   It is unlayered and uses `:root[...]` on purpose: `@theme` writes its
+   variables into `@layer theme` on `:root`, and an unlayered rule with one
+   more attribute of specificity beats it without an `!important`.
+
+   Shadows are left as they are. They are cast from the navy and vanish on a
+   dark ground, which is right: on dark surfaces elevation is carried by the
+   border and the step in the ramp, not by a shadow nobody can see.
+
+   The attribute is set before the first paint by the script in `index.html`,
+   and changed afterwards by `lib/theme.ts`.
+   --------------------------------------------------------------------------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --success-ink: #4ade80;
+  --warning-ink: #facc15;
+  --error-ink: #f87171;
+  --info-ink: #38bdf8;
+
+  --color-background: var(--slate-950);
+  --color-foreground: var(--slate-100);
+
+  --color-card: var(--slate-900);
+  --color-card-foreground: var(--slate-100);
+  --color-popover: var(--slate-800);
+  --color-popover-foreground: var(--slate-100);
+
+  --color-primary: var(--slate-100);
+  --color-primary-hover: #ffffff;
+  --color-primary-foreground: var(--slate-900);
+  --color-secondary: var(--slate-800);
+  --color-secondary-foreground: var(--slate-100);
+
+  /* Sage two steps lighter. #059669 measures 4.7:1 on a card but 3.9:1 on a
+     slate-800 panel, under the 4.5 a link needs; #34d399 is 9.3:1 and 7.6:1. */
+  --color-accent: #34d399;
+  --color-accent-hover: #6ee7b7;
+  --color-accent-foreground: var(--slate-950);
+
+  --color-muted: var(--slate-800);
+  --color-muted-foreground: var(--slate-400);
+
+  --color-border: var(--slate-800);
+  --color-border-strong: var(--slate-700);
+  --color-input: var(--slate-700);
+  --color-ring: var(--slate-100);
+
+  --color-surface-sunken: var(--slate-800);
+  --color-text-secondary: var(--slate-300);
+  --color-text-muted: var(--slate-400);
+
+  --color-scrim: #000000;
+  --color-strip: var(--slate-800);
+  --color-strip-foreground: var(--slate-100);
+
+  --color-grid: var(--slate-800);
+  --color-axis: var(--slate-600);
+
+  --color-series-1: var(--slate-200);
 }

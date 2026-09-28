@@ -301,8 +301,11 @@ llega.
   de estado **con sus dos niveles**: el saturado es la *marca* (relleno de gráfica, fondo de
   chip al 8 %) y el profundo es la *tinta* (texto). Confundirlos es el error fácil. Ver
   DESIGN.md.
-- **Tema único, solo claro.** No hay `.dark`, ni variante `dark:`, ni interruptor. Añadir un
-  `dark:` es reabrir un sistema que se cerró a propósito.
+- **Dos temas, un solo juego de tokens.** El claro es Verdana y sale por defecto; el oscuro
+  (2026-09-28) redefine los mismos tokens bajo `html[data-theme="dark"]` en `index.css`.
+  **No se usa la variante `dark:`**: un componente escrito contra los tokens ya está bien en
+  los dos temas. Todo color nuevo es un token con su valor en los dos bloques. Ver DESIGN.md
+  § «Tema oscuro».
 - **Ningún hexadecimal en `className`.** Se usa la utilidad del token; en SVG,
   `var(--color-…)`.
 - **La escala tipográfica son los diez pasos de Verdana** (`text-h1`, `text-body-sm`,
