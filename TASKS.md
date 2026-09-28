@@ -2827,6 +2827,13 @@ Tres retoques pedidos después, y uno encontrado de paso:
   una fila propia bajo el título.
 - De paso: **«Elegir experimento» era una opción elegible** del selector, con su marca de
   seleccionada, y al elegirla se navegaba a `/p//summary`. Pasa a ser el texto de marcador.
+- **Logo y favicon** (`<Logo>`, `public/favicon.svg`): una línea de capital ascendente con
+  su punto final, el mismo dibujo que la curva de Resumen, dentro de un cuadrado redondeado.
+  En la interfaz sale de `--color-strip` y `--color-accent`, así que sigue al tema. El
+  favicon lleva los colores escritos porque no puede leer variables, y la salvia un paso más
+  clara (`#10B981`), porque a 16 px sobre navy la del acento se emborrona. Por debajo de `sm`
+  la marca va sola: con el nombre al lado, la cabecera no cabía en 390 px y saltaba a dos
+  filas.
 
 ### F9 — Futuro (no bloquea)
 

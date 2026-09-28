@@ -105,6 +105,9 @@ Desde el rediseño del 2026-09-28, **ocho entradas en la barra lateral y no doce
   y las cerradas. Los dos relojes van en secciones distintas y cada una dice cuál es el suyo.
 - **Por debajo de `md` la barra lateral se pliega** detrás de un botón «Menú» en la
   cabecera, y el interruptor de tema pasa dentro del panel.
+- **La marca** es `<Logo>`: una línea de capital ascendente en salvia sobre un cuadrado
+  navy de 8 px de radio, pintada con `--color-strip` y `--color-accent` para que siga al
+  tema. El favicon (`app/public/favicon.svg`) es el mismo dibujo con los colores escritos.
 - **Lo irreversible no va junto a lo cotidiano.** «Cerrar experimento» está al final de
   Ajustes, en su propia sección, y no junto a «Lanzar ciclo».
 - **Un formulario con cambios sin guardar fija su barra de guardado abajo**, con

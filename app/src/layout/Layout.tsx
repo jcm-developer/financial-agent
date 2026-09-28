@@ -4,6 +4,7 @@ import { Menu, X } from "lucide-react";
 
 import { useStream } from "@/api/stream";
 import { LiveIndicator } from "@/components/LiveIndicator";
+import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button, buttonClasses, Card, BlockTitle } from "@/components/pieces";
 import { Sidebar } from "@/layout/Sidebar";
@@ -53,11 +54,16 @@ export function Layout() {
 
       <header className="sticky top-0 z-30 border-b border-border bg-card shadow-sm">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3 md:px-6">
+          {/* Below `sm` the mark goes alone: with the wordmark beside it the
+              header needed 38 px more than a 390 px screen has, and wrapped
+              onto two rows. The name stays as the link's label. */}
           <Link
             to="/"
-            className="font-headline text-h4 font-bold tracking-tight text-foreground"
+            aria-label="financial-agent"
+            className="flex items-center gap-2.5 font-headline text-h4 font-bold tracking-tight text-foreground"
           >
-            financial-agent
+            <Logo className="size-7 shrink-0" />
+            <span className="hidden sm:inline">financial-agent</span>
           </Link>
           <div className="flex items-center gap-2 md:gap-4">
             <LiveIndicator
