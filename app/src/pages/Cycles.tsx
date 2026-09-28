@@ -357,7 +357,7 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }) {
                 label="Llamadas al analista"
                 value={
                   (cycle.analyst_calls ?? 0) === 0
-                    ? "ninguna"
+                    ? "Ninguna"
                     : `${cycle.analyst_calls} (${cycle.analyst_failures ?? 0} sin respuesta)`
                 }
               />
@@ -365,7 +365,7 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }) {
                 label="Símbolos analizados"
                 value={String(cycle.symbols_scanned?.length ?? 0)}
               />
-              <Stat label="Mercado" value={cycle.market_open ? "abierto" : "cerrado"} />
+              <Stat label="Mercado" value={cycle.market_open ? "Abierto" : "Cerrado"} />
             </dl>
 
             {cycle.error && <Alert className="mt-3">{cycle.error}</Alert>}
@@ -438,7 +438,7 @@ function CycleTableRow({
       </Td>
       <Td>
         <span className={cycle.market_open ? "text-text-secondary" : "text-text-muted"}>
-          {cycle.market_open ? "abierto" : "cerrado"}
+          {cycle.market_open ? "Abierto" : "Cerrado"}
         </span>
       </Td>
       <Td numeric>{cycle.decisions ?? 0}</Td>

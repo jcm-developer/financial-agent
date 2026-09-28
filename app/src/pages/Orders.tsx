@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 
 import { useOrders } from "@/api/hooks";
@@ -45,9 +45,11 @@ const COLUMNS = 6;
  * It is a view of Decisiones and not a screen of its own: the page title and
  * the document title belong to the screen that hosts it.
  *
- * @return The rendered screen.
+ * @param props - View props.
+ * @param props.tabs - The host's view tabs, placed at the end of the filters.
+ * @return The rendered view.
  */
-export function Orders() {
+export function Orders({ tabs }: { tabs?: ReactNode }) {
   const { profile, ref } = useActiveProfile();
   const [offset, setOffset] = useState(0);
   const [symbolFilter, setSymbolFilter] = useState("");
@@ -62,18 +64,21 @@ export function Orders() {
 
   return (
     <>
-      <Input
-        label="Símbolo"
-        type="search"
-        value={symbolFilter}
-        placeholder="SAN.MC"
-        onChange={(event) => {
-          setSymbolFilter(event.target.value);
-          setOffset(0);
-        }}
-        fieldClass="mb-5 w-fit"
-        className="w-32"
-      />
+      <div className="mb-6 flex flex-wrap items-end gap-4">
+        <Input
+          label="Símbolo"
+          type="search"
+          value={symbolFilter}
+          placeholder="SAN.MC"
+          onChange={(event) => {
+            setSymbolFilter(event.target.value);
+            setOffset(0);
+          }}
+          fieldClass="w-fit"
+          className="w-32"
+        />
+        {tabs}
+      </div>
 
       <Section query={query}>
         {(page) => (

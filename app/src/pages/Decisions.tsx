@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { ChevronRight } from "lucide-react";
 
@@ -79,6 +79,13 @@ const VIEW_TITLES: Record<string, string> = {
  *
  * The old addresses, `/orders` and `/risk`, redirect here with their view.
  *
+ * **The tabs close the row of filters, on the right**, and not a row of their
+ * own under the title. Each view has filters —symbol, action, verdict— and the
+ * tabs are the same kind of thing, a choice of what the table below shows, so
+ * they share the row and its bottom edge. It also gives the table back the 60
+ * px a row of its own took. That is why the hub hands the tabs to the view
+ * instead of drawing them itself.
+ *
  * @return The rendered screen.
  */
 export function Decisions() {
@@ -86,12 +93,25 @@ export function Decisions() {
   const [params] = useSearchParams();
   const view = pickView(params.get("view"), VIEWS);
   useTitle(VIEW_TITLES[view] ?? "Decisiones", profile?.name);
+  const tabs = (
+    <ViewTabs
+      label="Vistas de las decisiones"
+      views={VIEWS}
+      current={view}
+      className="sm:ml-auto"
+    />
+  );
 
   return (
     <>
       <PageTitle>Decisiones</PageTitle>
-      <ViewTabs label="Vistas de las decisiones" views={VIEWS} current={view} />
-      {view === "orders" ? <Orders /> : view === "risk" ? <Risk /> : <DecisionsView />}
+      {view === "orders" ? (
+        <Orders tabs={tabs} />
+      ) : view === "risk" ? (
+        <Risk tabs={tabs} />
+      ) : (
+        <DecisionsView tabs={tabs} />
+      )}
     </>
   );
 }
@@ -126,9 +146,11 @@ export function Decisions() {
  * rather than the cycle, and they drop the totals instead of printing one that
  * would be wrong at every page boundary.
  *
+ * @param props - View props.
+ * @param props.tabs - The screen's view tabs, placed at the end of the filters.
  * @return The rendered view.
  */
-function DecisionsView() {
+function DecisionsView({ tabs }: { tabs: ReactNode }) {
   const { profile, ref } = useActiveProfile();
   const [offset, setOffset] = useState(0);
   const [symbolFilter, setSymbolFilter] = useState("");
@@ -180,6 +202,7 @@ function DecisionsView() {
           ]}
           onChange={(next) => changeFilter(() => setVerdict(next))}
         />
+        {tabs}
       </div>
 
       {filtering ? (
@@ -678,7 +701,7 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
                     : "font-medium text-delta-bad"
                 }
               >
-                {row.verdict === "approved" ? "aprobada" : "rechazada"}
+                {row.verdict === "approved" ? "Aprobada" : "Rechazada"}
               </span>
               {row.rule && (
                 <p className="mt-0.5 text-caption text-text-muted">{ruleLabel(row.rule)}</p>
@@ -693,7 +716,7 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
               className="text-caption text-text-muted"
               title={row.action === "hold" ? "Mantener no pasa por el Risk Manager" : undefined}
             >
-              {row.action === "hold" ? "—" : "sin veredicto"}
+              {row.action === "hold" ? "—" : "Sin veredicto"}
             </span>
           )}
         </Td>

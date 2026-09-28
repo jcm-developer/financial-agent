@@ -34,7 +34,7 @@ export function System() {
   return (
     <>
       <PageTitle>Sistema</PageTitle>
-      <ViewTabs label="Vistas del sistema" views={VIEWS} current={view} />
+      <ViewTabs label="Vistas del sistema" views={VIEWS} current={view} className="mb-6" />
       {view === "database" ? <Database /> : <Diagnostics />}
     </>
   );

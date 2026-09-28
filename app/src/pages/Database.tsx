@@ -19,11 +19,11 @@ const UNMEASURED = "El tamaño por tabla no está disponible en este servidor.";
 
 /** Screen words for SQLite's `ON DELETE` actions. Unknown ones pass through. */
 const ON_DELETE: Record<string, string> = {
-  CASCADE: "en cascada",
-  "SET NULL": "a nulo",
-  "SET DEFAULT": "a valor por defecto",
-  RESTRICT: "impide borrar",
-  "NO ACTION": "sin acción",
+  CASCADE: "En cascada",
+  "SET NULL": "A nulo",
+  "SET DEFAULT": "A valor por defecto",
+  RESTRICT: "Impide borrar",
+  "NO ACTION": "Sin acción",
 };
 
 const onDeleteLabel = (action: string) => ON_DELETE[action.toUpperCase()] ?? action.toLowerCase();
@@ -144,7 +144,7 @@ function Diagram({ layout }: { layout: ReturnType<typeof layoutSchema> }) {
             strokeWidth={touches(edge) ? 2 : 1.25}
             opacity={active === null || touches(edge) ? 1 : 0.25}
           >
-            <title>{`${edge.from}.${edge.column} → ${edge.to} (al borrar: ${onDeleteLabel(edge.onDelete)})`}</title>
+            <title>{`${edge.from}.${edge.column} → ${edge.to} (al borrar: ${onDeleteLabel(edge.onDelete).toLowerCase()})`}</title>
           </path>
         ))}
 

@@ -4,7 +4,7 @@ import type { MarketInfo, QuoteRow } from "@/api/types";
 import { Card, BlockTitle, Stat } from "@/components/pieces";
 import { Section } from "@/components/Section";
 import { TableHead, Row, Table, Td, Th, Empty } from "@/components/Table";
-import { duration, percent, signClass } from "@/lib/format";
+import { duration, percent, sentence, signClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const EMPTY_QUOTES = "Todavía no hay cotizaciones.";
@@ -126,10 +126,10 @@ function MarketCard({ market }: { market: MarketInfo }) {
               : "text-caption text-text-muted"
           }
         >
-          {market.is_operating ? "en ventana" : "fuera de ventana"}
+          {market.is_operating ? "En ventana" : "Fuera de ventana"}
         </span>
       </div>
-      <p className="mt-1 text-body-sm text-text-secondary">{market.status_text}</p>
+      <p className="mt-1 text-body-sm text-text-secondary">{sentence(market.status_text)}</p>
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-body-sm">
         <dt className="text-text-muted">Sesión</dt>
         <dd className="tabular text-right">

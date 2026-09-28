@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 
 import { useRiskEvents } from "@/api/hooks";
@@ -58,9 +58,11 @@ const COLUMNS = 4;
  * It is a view of Decisiones and not a screen of its own: the page title and
  * the document title belong to the screen that hosts it.
  *
+ * @param props - View props.
+ * @param props.tabs - The host's view tabs, placed at the end of the filters.
  * @return The rendered view, with the per-rule tally above the table.
  */
-export function Risk() {
+export function Risk({ tabs }: { tabs?: ReactNode }) {
   const { profile, ref } = useActiveProfile();
   const [offset, setOffset] = useState(0);
   const [verdict, setVerdict] = useState("");
@@ -76,20 +78,23 @@ export function Risk() {
 
   return (
     <>
-      <Select
-        label="Veredicto"
-        value={verdict}
-        options={[
-          ["", "Todos"],
-          ["rejected", "Rechazados"],
-          ["approved", "Aprobados"],
-        ]}
-        onChange={(next) => {
-          setVerdict(next);
-          setOffset(0);
-        }}
-        fieldClass="mb-8 w-fit"
-      />
+      <div className="mb-8 flex flex-wrap items-end gap-4">
+        <Select
+          label="Veredicto"
+          value={verdict}
+          options={[
+            ["", "Todos"],
+            ["rejected", "Rechazados"],
+            ["approved", "Aprobados"],
+          ]}
+          onChange={(next) => {
+            setVerdict(next);
+            setOffset(0);
+          }}
+          fieldClass="w-fit"
+        />
+        {tabs}
+      </div>
 
       {byRule.length > 0 && (
         <section className="mb-6">
@@ -180,7 +185,7 @@ function emptyText(verdict: string): string {
 function countByRule(rows: RiskEventRow[]): [string, number][] {
   const counts = new Map<string, number>();
   for (const row of rows) {
-    const rule = row.rule ?? "sin regla";
+    const rule = row.rule ?? "Sin regla";
     counts.set(rule, (counts.get(rule) ?? 0) + 1);
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1]);
@@ -211,7 +216,7 @@ function RiskEventTableRow({ row, symbol }: { row: RiskEventRow; symbol: string 
   const reason = row.reason?.trim();
 
   // The kill switch belongs to no symbol: it belongs to the whole book.
-  const name = row.symbol ?? "toda la cartera";
+  const name = row.symbol ?? "Toda la cartera";
 
   return (
     <>
@@ -249,7 +254,7 @@ function RiskEventTableRow({ row, symbol }: { row: RiskEventRow; symbol: string 
                 : "font-medium text-delta-bad"
             }
           >
-            {row.verdict === "approved" ? "aprobado" : "rechazado"}
+            {row.verdict === "approved" ? "Aprobado" : "Rechazado"}
           </span>
         </Td>
         <Td>

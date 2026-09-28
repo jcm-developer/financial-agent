@@ -255,8 +255,8 @@ function Overview({ profile }: { profile: ProfileSummary }) {
           </p>
           <p className="mt-1 text-caption text-text-muted">
             {hasEquity
-              ? `de ${money(m.initial_budget, symbol)} inicial${marked ? ` · a precio del ciclo de las ${time(marked)}` : ""}`
-              : "presupuesto inicial"}
+              ? `De ${money(m.initial_budget, symbol)} inicial${marked ? ` · a precio del ciclo de las ${time(marked)}` : ""}`
+              : "Presupuesto inicial"}
           </p>
 
           <dl className="mt-5 grid grid-cols-2 gap-4">

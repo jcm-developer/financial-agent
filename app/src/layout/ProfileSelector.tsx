@@ -33,12 +33,15 @@ export function ProfileSelector({ className }: { className?: string }) {
 
   // The name is unique and it is what travels in the URL, so it serves as both
   // value and key.
+  //
+  // «Elegir experimento» is the placeholder and not an option. As an option it
+  // sat in the list with the check beside it, and choosing it navigated to
+  // `/p//summary` — a profile with an empty name.
   const options: [string, string][] = [
-    ...(ref ? [] : ([["", "Elegir experimento"]] as [string, string][])),
     ...profiles.map(
       (row): [string, string] => [
         row.name,
-        row.status === "active" ? row.name : `${row.name} (${profileStatusLabel(row.status)})`,
+        row.status === "active" ? row.name : `${row.name} (${profileStatusLabel(row.status).toLowerCase()})`,
       ],
     ),
   ];
@@ -46,6 +49,7 @@ export function ProfileSelector({ className }: { className?: string }) {
   return (
     <Select
       label="Experimento"
+      placeholder="Elegir experimento"
       fieldClass={className}
       className="w-full"
       options={options}

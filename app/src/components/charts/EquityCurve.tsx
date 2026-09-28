@@ -74,7 +74,7 @@ export function EquityCurve({ points, symbol, budget }: Props) {
               y={budget}
               stroke={COLORS.neutral}
               strokeDasharray="4 4"
-              label={{ value: "inicial", position: "insideTopRight", fontSize: 10, fill: COLORS.faint }}
+              label={{ value: "Inicial", position: "insideTopRight", fontSize: 10, fill: COLORS.faint }}
             />
           ) : null}
           <Tooltip

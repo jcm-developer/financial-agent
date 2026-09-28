@@ -196,9 +196,9 @@ describe("splitExitReason", () => {
 
 describe("exitRuleLabel", () => {
   it("translates the rules the backend writes", () => {
-    expect(exitRuleLabel("stop_loss_hit")).toBe("stop");
-    expect(exitRuleLabel("take_profit_hit")).toBe("objetivo");
-    expect(exitRuleLabel("llm_exit")).toBe("decisión del analista");
+    expect(exitRuleLabel("stop_loss_hit")).toBe("Stop");
+    expect(exitRuleLabel("take_profit_hit")).toBe("Objetivo");
+    expect(exitRuleLabel("llm_exit")).toBe("Decisión del analista");
   });
 
   it("lets an unknown rule through unchanged", () => {

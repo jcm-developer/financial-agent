@@ -296,9 +296,14 @@
      fixing the recipe would have fixed the ones that go through the recipe and
      left the rest. The `:disabled` reset comes right after because a disabled
      control must not invite the click, and here that beats specificity games in
-     the variants. */
+     the variants.
+
+     `role="option"` is in the list because the `<Select>` panel's rows are
+     `<div>`s, not buttons, and they were the one clickable surface left showing
+     the arrow; the panel's own class said `cursor-default` on top. */
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
+  [role="option"]:not([aria-disabled="true"]),
   label[for],
   summary {
     cursor: pointer;

@@ -175,10 +175,10 @@ export function splitExitReason(text: string | null | undefined): ExitReason {
  * shows up instead of vanishing.
  */
 const EXIT_RULES: Record<string, string> = {
-  stop_loss_hit: "stop",
-  take_profit_hit: "objetivo",
-  llm_exit: "decisión del analista",
-  experiment_closed: "cierre del experimento",
+  stop_loss_hit: "Stop",
+  take_profit_hit: "Objetivo",
+  llm_exit: "Decisión del analista",
+  experiment_closed: "Cierre del experimento",
 };
 
 /**

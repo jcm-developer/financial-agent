@@ -20,21 +20,32 @@ import { cn } from "@/lib/utils";
  * @param props.label - What the group of views is, for the `<nav>`'s name.
  * @param props.views - `[key, text]` pairs, the default first.
  * @param props.current - The key of the view on screen.
+ * @param props.className - Placement, which is the caller's: on a screen with
+ *     filters the tabs close their row on the right, and without them they sit
+ *     under the title.
  * @return The rendered row of links.
  */
 export function ViewTabs({
   label,
   views,
   current,
+  className,
 }: {
   label: string;
   views: readonly (readonly [string, string])[];
   current: string;
+  className?: string;
 }) {
   const [fallback] = views[0] ?? [""];
 
   return (
-    <nav aria-label={label} className="mb-6 flex flex-wrap gap-1 rounded-md border border-border bg-card p-1 sm:w-fit">
+    <nav
+      aria-label={label}
+      className={cn(
+        "flex flex-wrap gap-1 rounded-md border border-border bg-card p-1 sm:w-fit",
+        className,
+      )}
+    >
       {views.map(([key, text]) => {
         const active = key === current;
         return (

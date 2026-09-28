@@ -83,7 +83,7 @@ export function Calibration({
             y={50}
             stroke={COLORS.neutral}
             strokeDasharray="4 4"
-            label={{ value: "azar", position: "insideTopRight", fontSize: 10, fill: COLORS.faint }}
+            label={{ value: "Azar", position: "insideTopRight", fontSize: 10, fill: COLORS.faint }}
           />
           <Tooltip
             content={<ChartTooltip format={(v) => percent(v)} />}

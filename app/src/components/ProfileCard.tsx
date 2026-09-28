@@ -71,7 +71,7 @@ export function ProfileCard({ profile, actions }: Props) {
 
       <dl className="grid grid-cols-2 gap-x-6 gap-y-4 border-t border-border pt-4 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Capital" value={money(m.equity, symbol)}>
-          de {money(m.initial_budget, symbol)}
+          De {money(m.initial_budget, symbol)}
         </Stat>
         <Stat
           label="Rentabilidad"
@@ -91,11 +91,11 @@ export function ProfileCard({ profile, actions }: Props) {
             ? "text-text-muted"
             : undefined}
         >
-          {closed === 0 ? "sin operaciones cerradas" : `de ${closed} cerradas`}
+          {closed === 0 ? "Sin operaciones cerradas" : `De ${closed} cerradas`}
         </Stat>
         <Stat label="Último ciclo" value={dateTime(m.last_cycle_at)}>
           <span className={m.last_cycle_status === "failed" ? "text-delta-bad" : undefined}>
-            {m.last_cycle_status ? cycleStatusLabel(m.last_cycle_status) : "ninguno"}
+            {m.last_cycle_status ? cycleStatusLabel(m.last_cycle_status) : "Ninguno"}
           </span>
         </Stat>
       </dl>

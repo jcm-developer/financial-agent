@@ -2811,6 +2811,23 @@ perfiles `eu-0x-*` de agosto. La verificación con datos encontró dos fallos, y
 - **La cabecera del móvil saltaba a dos filas al abrir el menú**, porque «Cerrar» es más
   ancho que «Menú». El rótulo es siempre «Menú»; el icono y `aria-expanded` dicen el estado.
 
+Tres retoques pedidos después, y uno encontrado de paso:
+
+- **Las etiquetas salen con mayúscula inicial.** «En cascada», «Compra», «Rechazada»,
+  «Completado» y los demás valores sueltos se leían como texto al que le faltaba la primera
+  letra. Se capitaliza en origen, en `lookup` de `lib/labels.ts`, porque casi todos los usos
+  pintan la etiqueta sola. Los dos que la meten a mitad de frase, el «(pausado)» del
+  selector y el tooltip del diagrama, la bajan ellos mismos. Los textos escritos a mano se
+  cambiaron uno a uno, localizados recorriendo las pantallas en el navegador y no con grep.
+  Se dejan en minúscula los identificadores (`eu-luna-base`) y «no nulo», que va en línea
+  junto a «PK» como marca de columna.
+- **Las opciones del desplegable no enseñaban la mano.** Son `<div role="option">`, no
+  botones, y además llevaban `cursor-default`. Se añade `role="option"` a la regla base.
+- **Las pestañas de Decisiones cierran la fila de filtros por la derecha**, en vez de ocupar
+  una fila propia bajo el título.
+- De paso: **«Elegir experimento» era una opción elegible** del selector, con su marca de
+  seleccionada, y al elegirla se navegaba a `/p//summary`. Pasa a ser el texto de marcador.
+
 ### F9 — Futuro (no bloquea)
 
 - [ ] **F9.1** Modelo premium cuando el experimento dé señales.

@@ -6,7 +6,16 @@
  * prints is another matter, and printing the raw value left English words in a
  * Spanish interface. An unknown value falls through unchanged rather than
  * vanishing, so a status added to the schema later still shows up.
+ *
+ * **They come out with a capital**, because nearly every place prints one on
+ * its own —a cell, a verdict, a chip— and a column of «compra», «rechazada»,
+ * «en cascada» read as text that had lost its first letter. The tables stay
+ * lower case so they read as the words they are, and `lookup` capitalises. The
+ * two places that put a label in the middle of a sentence —the selector's
+ * «(pausado)» and a diagram tooltip— lower it themselves.
  */
+
+import { sentence } from "@/lib/format";
 
 const CYCLE_STATUS: Record<string, string> = {
   running: "en curso",
@@ -78,7 +87,7 @@ const RULE: Record<string, string> = {
 
 function lookup(table: Record<string, string>, value: string | null | undefined): string {
   if (!value) return "";
-  return table[value] ?? value;
+  return sentence(table[value] ?? value);
 }
 
 export const cycleStatusLabel = (value: string | null | undefined) => lookup(CYCLE_STATUS, value);
@@ -98,8 +107,8 @@ export function decisionActionLabel(
   kind: string | null | undefined,
   weightPct: number | null | undefined,
 ): string {
-  if (kind === "exit" && action === "buy") return "ampliar";
-  if (kind === "exit" && action === "sell" && weightPct != null) return "reducir";
+  if (kind === "exit" && action === "buy") return "Ampliar";
+  if (kind === "exit" && action === "sell" && weightPct != null) return "Reducir";
   return actionLabel(action);
 }
 export const profileStatusLabel = (value: string | null | undefined) =>

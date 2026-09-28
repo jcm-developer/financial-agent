@@ -429,7 +429,7 @@ export function Select({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => choose(index)}
                 className={cn(
-                  "flex cursor-default items-center gap-2 rounded-md px-3 py-2 text-body-sm",
+                  "flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-body-sm",
                   index === active ? "bg-surface-sunken" : "bg-transparent",
                   optionValue === value && "font-medium",
                 )}
