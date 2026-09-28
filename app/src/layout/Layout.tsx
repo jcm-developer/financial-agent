@@ -75,9 +75,14 @@ export function Layout() {
               icon={menuOpen ? X : Menu}
               aria-expanded={menuOpen}
               aria-controls="sections"
+              title={menuOpen ? "Cerrar el menú" : "Abrir el menú"}
               onClick={() => setMenuOpen((value) => !value)}
             >
-              {menuOpen ? "Cerrar" : "Menú"}
+              {/* The same word open and closed: «Cerrar» is wider than «Menú»,
+                  and at 390 px that difference was enough to wrap the header
+                  onto two rows the moment the panel opened. The icon and
+                  `aria-expanded` carry the state. */}
+              Menú
             </Button>
           </div>
         </div>

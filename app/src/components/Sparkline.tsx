@@ -1,3 +1,6 @@
+/** The narrowest range the vertical scale may show, as a share of the level. */
+const MIN_SPAN_RATIO = 0.04;
+
 /**
  * A bare line of values, for the equity curve on Resumen.
  *
@@ -41,17 +44,25 @@ export function Sparkline({
   if (values.length === 0) return null;
 
   const all = baseline === null || baseline === undefined ? values : [...values, baseline];
-  const min = Math.min(...all);
-  const max = Math.max(...all);
-  // A flat series would divide by zero; centring it is the honest drawing of
-  // "nothing moved".
-  const span = max - min || 1;
+  // **The scale never spans less than 4 % of the level**, centred on the data.
+  // Fitted to the data alone, a first day at -0.08 % filled the whole height —
+  // the budget at the top edge and the one mark at the bottom— and read as a
+  // crash. Four per cent is roughly a quiet week of a stock portfolio: moves
+  // smaller than that look small, and larger ones still get the full height.
+  // It also covers the flat series, which would otherwise divide by zero.
+  const low = Math.min(...all);
+  const high = Math.max(...all);
+  const minSpan = Math.abs((low + high) / 2) * MIN_SPAN_RATIO || 1;
+  const middle = (low + high) / 2;
+  const min = high - low >= minSpan ? low : middle - minSpan / 2;
+  const max = high - low >= minSpan ? high : middle + minSpan / 2;
+  const span = max - min;
   const width = 320;
   const height = 80;
   const pad = 6;
 
   const y = (value: number) =>
-    max === min ? height / 2 : pad + (1 - (value - min) / span) * (height - 2 * pad);
+    pad + (1 - (value - min) / span) * (height - 2 * pad);
   const x = (index: number) =>
     values.length === 1 ? width / 2 : pad + (index / (values.length - 1)) * (width - 2 * pad);
 

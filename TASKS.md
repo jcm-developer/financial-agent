@@ -2801,11 +2801,15 @@ pantallas hay, qué va en cada una y cómo se ve en el móvil.
 - Descartado: la primera línea cortada del registro de Ciclos no es un fallo, es el
   desplazamiento automático al final que pidió F10.8.
 
-⚠️ **Verificado a medias.** Las redirecciones y la barra de guardado se probaron en el
-navegador. Las capturas con datos no se pudieron hacer contra Sol y Luna porque Docker
-Desktop estaba parado, y se descartó a propósito servir una copia vieja de la base: traía los
-cinco perfiles `eu-0x-*` de agosto. Falta mirar Resumen y Decisiones con datos reales, y la
-vista de móvil, en cuanto la API vuelva.
+Verificado corriendo en Docker contra Sol y Luna, en escritorio y a 390 px. Mientras Docker
+estuvo parado se descartó a propósito servir una copia vieja de la base: traía los cinco
+perfiles `eu-0x-*` de agosto. La verificación con datos encontró dos fallos, ya arreglados:
+
+- **La curva exageraba.** Ajustada solo a los datos, el −0,08 % del primer día ocupaba toda
+  la altura, con el capital inicial arriba y la única marca abajo, y parecía un desplome. La
+  escala no baja ahora del 4 % del nivel, centrada en los datos.
+- **La cabecera del móvil saltaba a dos filas al abrir el menú**, porque «Cerrar» es más
+  ancho que «Menú». El rótulo es siempre «Menú»; el icono y `aria-expanded` dicen el estado.
 
 ### F9 — Futuro (no bloquea)
 
