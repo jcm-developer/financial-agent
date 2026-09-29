@@ -193,6 +193,24 @@ def test_the_lookup_goes_without_reasoning_and_the_answer_with_the_profiles(
     assert "FASE DE CONSULTA" not in final["messages"][0]["content"]
 
 
+def test_the_lookup_sees_an_index_and_the_answer_the_whole_prose(db_path, seeded):
+    """The lookup only picks what to fetch, and resending every thesis on each of
+    its rounds is what cost 43.642 input tokens for one answer."""
+    llm = ScriptedLLM(text("LISTO"), text("Respuesta."))
+    settings = settings_of(db_path, seeded["profile_id"])
+    with Database(path=db_path, read_only=True) as db:
+        chat.reply(
+            llm, db, settings=settings, portfolio_id=seeded["portfolio_id"],
+            history=[], question="¿Por qué no compraste SAP?", focus_ids=["d-sap"],
+        )
+
+    lookup, final = (call["messages"][0]["content"] for call in llm.calls)
+    thesis = "El objetivo exigido supera el máximo anual."
+    assert thesis not in lookup and "El BCE mantiene los tipos" not in lookup
+    assert '"id": "d-sap"' in lookup
+    assert thesis in final and "El BCE mantiene los tipos" in final
+
+
 def test_a_tool_result_goes_back_to_the_model_before_it_answers(db_path, seeded):
     llm = ScriptedLLM(
         asks("decision_data", decision_id="d-sap"), text("LISTO"), text("Vi un RSI de 48."),

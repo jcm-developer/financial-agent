@@ -4898,6 +4898,15 @@ Tres retoques pedidos después, y uno encontrado de paso:
       la de SAP—, 26 s y 43.642 tokens de entrada con 1.864 de salida. La entrada es alta
       porque el contexto viaja en cada vuelta de la consulta y otra vez en la respuesta.
 
+      **Abaratado el mismo día.** La fase de consulta recibe ahora un índice del último ciclo
+      —id, símbolo, acción, convicción y veredicto, sin tesis ni titulares—, que es el 17-18 %
+      del contexto entero, y la respuesta sigue recibiendo la prosa completa. El techo de la
+      consulta baja de 800 a 300 tokens: una ronda que contestaba en vez de decir LISTO
+      escribía 595 que se tiraban. La misma pregunta pasó a **27.412 tokens de entrada**
+      (−37 %), de los que 12.367 son la respuesta, que es lo que tiene que leer. No se tocó
+      el número de rondas: las consultas son lo que hace que conteste con datos y no de
+      memoria.
+
       **Lo encontró el propio chat, y se corrigió el mismo día:** SAP.DE no fue un `hold`.
       Fue un `buy` de convicción 57 que `entry_cap` rechazó, y BKT.MC, que entró, tenía
       también 57. El desempate **sí estaba escrito** —`sorted` es estable, así que a igual

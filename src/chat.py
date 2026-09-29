@@ -73,9 +73,12 @@ MAX_TOOL_ROUNDS = 4
 HISTORY_MESSAGES = 20
 
 #: The lookup phase runs without reasoning (see `reply`) and only picks tools,
-#: so its ceiling is small: a few calls' worth of arguments.
+#: so its ceiling is small: a few calls' worth of arguments. Measured with Luna
+#: on the 2026-09-29, four tool calls in one round took 96 tokens, and a round
+#: that answered instead of saying LISTO wrote 595 that were thrown away — which
+#: is what this ceiling cuts.
 LOOKUP_EFFORT = "none"
-LOOKUP_MAX_TOKENS = 800
+LOOKUP_MAX_TOKENS = 300
 
 LOOKUP_INSTRUCTION = """
 
@@ -232,15 +235,18 @@ def reply(
     @raise LLMError: if the model does not answer.
     """
     market = market_calendar.get_market(settings.market)
-    context = build_context(db, portfolio_id, settings, focus_ids or [])
-    system = SYSTEM_PROMPT.format(
-        profile=settings.portfolio_name,
-        model=settings.llm_model,
-        currency=market.currency,
-        horizon=settings.horizon_days,
-        now=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-        context=context,
-    )
+
+    def prompt(*, brief: bool) -> str:
+        return SYSTEM_PROMPT.format(
+            profile=settings.portfolio_name,
+            model=settings.llm_model,
+            currency=market.currency,
+            horizon=settings.horizon_days,
+            now=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            context=build_context(db, portfolio_id, settings, focus_ids or [], brief=brief),
+        )
+
+    system = prompt(brief=False)
     conversation: list[dict[str, Any]] = [
         {"role": message["role"], "content": message["content"]}
         for message in history[-HISTORY_MESSAGES:]
@@ -264,7 +270,7 @@ def reply(
     # it writes instead of a tool call is thrown away: it was produced without
     # reasoning, and the answer is phase two's job.
     lookup = [
-        {"role": "system", "content": system + LOOKUP_INSTRUCTION},
+        {"role": "system", "content": prompt(brief=True) + LOOKUP_INSTRUCTION},
         *conversation,
     ]
     lookups: list[dict[str, Any]] = []
@@ -370,12 +376,19 @@ def _limit(value: Any, default: int) -> int:
 # ----------------------------------------------------------------------
 
 def build_context(
-    db: Database, portfolio_id: str, settings: Settings, focus_ids: list[str]
+    db: Database, portfolio_id: str, settings: Settings, focus_ids: list[str],
+    *, brief: bool = False,
 ) -> str:
     """The part of the experiment that travels in every call, as JSON blocks.
 
     JSON and not prose: the model reads it well, and every figure keeps the
     exact value the screens show instead of a rounded paraphrase.
+
+    `brief` is the lookup phase's version: every decision of the last cycle as
+    an index line —id, symbol, action, conviction, verdict— without its thesis,
+    and no headlines. That phase only chooses what to look up, and it was being
+    sent the whole prose once per round: measured on the 2026-09-29 with Luna,
+    43.642 input tokens for one answer with four lookups.
     """
     market = market_calendar.get_market(settings.market)
     last_cycle = _latest_cycle(db, portfolio_id)
@@ -390,29 +403,47 @@ def build_context(
             "reglas_de_riesgo": settings.risk_summary,
         },
         "cartera": _book(db, portfolio_id),
-        "posiciones_abiertas": _positions(db, portfolio_id, "open"),
+        "posiciones_abiertas": [
+            {key: row[key] for key in _BRIEF_POSITION if key in row} if brief else row
+            for row in _positions(db, portfolio_id, "open")
+        ],
     }
+    if brief:
+        blocks["experimento"].pop("reglas_de_riesgo")
     if last_cycle is None:
         blocks["ultimo_ciclo"] = "Todavía no ha corrido ningún ciclo."
     else:
+        decisions = _search_decisions(db, portfolio_id, cycle_id=last_cycle["id"], limit=100)
         blocks["ultimo_ciclo"] = {
             **last_cycle,
-            "decisiones": _search_decisions(
-                db, portfolio_id, cycle_id=last_cycle["id"], limit=100
-            ),
-            "titulares_de_mercado": _news(db, portfolio_id, cycle_id=last_cycle["id"]),
+            "decisiones": [
+                {key: row[key] for key in _BRIEF_DECISION} for row in decisions
+            ] if brief else decisions,
         }
-    focus = [
-        detail
-        for detail in (_decision_data(db, portfolio_id, d) for d in focus_ids[-3:])
-        if detail
-    ]
-    if focus:
-        blocks["decisiones_por_las_que_se_pregunta"] = focus
+        if not brief:
+            blocks["ultimo_ciclo"]["titulares_de_mercado"] = _news(
+                db, portfolio_id, cycle_id=last_cycle["id"]
+            )
+    if brief:
+        if focus_ids:
+            blocks["decisiones_por_las_que_se_pregunta"] = focus_ids[-3:]
+    else:
+        focus = [
+            detail
+            for detail in (_decision_data(db, portfolio_id, d) for d in focus_ids[-3:])
+            if detail
+        ]
+        if focus:
+            blocks["decisiones_por_las_que_se_pregunta"] = focus
     return "\n\n".join(
         f"## {name}\n{json.dumps(value, ensure_ascii=False, default=str)}"
         for name, value in blocks.items()
     )
+
+
+#: What the lookup phase sees of each decision and position (see `build_context`).
+_BRIEF_DECISION = ("id", "date", "symbol", "kind", "action", "conviction", "verdict", "rule")
+_BRIEF_POSITION = ("symbol", "qty", "entry_price", "opened_at", "last_price")
 
 
 def _latest_cycle(db: Database, portfolio_id: str) -> dict[str, Any] | None:
