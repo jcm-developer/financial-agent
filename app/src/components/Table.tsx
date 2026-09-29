@@ -195,6 +195,12 @@ export function Row({
  * height and its alignment: `align-top` over a cell that is four lines tall
  * leaves every figure floating at the top of the row.
  *
+ * **`pb-5` and not the `py-2` of a cell** because the gap to match is the one
+ * above the text, not the cell's padding: a 48 px row with one line of 21 px
+ * set 8 px from the top leaves 19 px under it, and that is what the eye reads as
+ * the margin between the symbol and its thesis. With the 12 px it had, the
+ * paragraph looked glued to the row below instead of to its own.
+ *
  * @param props - Detail props.
  * @param props.columns - Columns of the table, so the cell spans all of them.
  *     Passing fewer would leave the row short and break the hover band.
@@ -210,7 +216,7 @@ export function DetailRow({
 }) {
   return (
     <tr className="border-b border-surface-sunken transition-colors duration-150 last:border-0 hover:bg-background">
-      <td colSpan={columns} className="px-4 pt-0 pb-3">
+      <td colSpan={columns} className="px-4 pt-0 pb-5">
         {children}
       </td>
     </tr>

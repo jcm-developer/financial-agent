@@ -473,7 +473,7 @@ function CycleDecisions({
   if (query.isPending) {
     return (
       <DetailRow columns={COLUMNS}>
-        <Loading className="pt-2" />
+        <Loading className="pt-5" />
       </DetailRow>
     );
   }
@@ -481,7 +481,7 @@ function CycleDecisions({
   if (query.error) {
     return (
       <DetailRow columns={COLUMNS}>
-        <div className="pt-2">
+        <div className="pt-5">
           <ErrorAlert error={query.error} />
         </div>
       </DetailRow>
@@ -494,7 +494,7 @@ function CycleDecisions({
     return (
       <DetailRow columns={COLUMNS}>
         {/* Said explicitly so an empty fold does not read as a loading failure. */}
-        <p className="pt-2 text-caption text-text-secondary">{EMPTY_CYCLE}</p>
+        <p className="pt-5 text-caption text-text-secondary">{EMPTY_CYCLE}</p>
       </DetailRow>
     );
   }
