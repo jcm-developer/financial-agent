@@ -8,6 +8,7 @@ import {
   LEGACY_TOP_PATHS,
   LegacyRedirect,
 } from "@/legacyRoutes";
+import { Chat } from "@/pages/Chat";
 import { Compare } from "@/pages/Compare";
 import { Cycles } from "@/pages/Cycles";
 import { Decisions } from "@/pages/Decisions";
@@ -95,6 +96,7 @@ export function App() {
             <Route path="orders" element={<Navigate to="../decisions?view=orders" replace />} />
             <Route path="risk" element={<Navigate to="../decisions?view=risk" replace />} />
             <Route path="cycles" element={<Cycles />} />
+            <Route path="chat" element={<Chat />} />
             <Route path="settings" element={<Settings />} />
             {LEGACY_PROFILE_PATHS.map((path) => (
               <Route key={path} path={path} element={<LegacyRedirect />} />

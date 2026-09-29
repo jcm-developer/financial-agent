@@ -38,7 +38,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from src.db import Database, DatabaseError
 
 from .deps import ApiConfig, is_loopback
-from .routes import control, database, market, profiles, stream, trading
+from .routes import chat, control, database, market, profiles, stream, trading
 from .runner import CycleRunner
 
 log = logging.getLogger(__name__)
@@ -82,6 +82,7 @@ def create_app(config: ApiConfig | None = None) -> FastAPI:
     app.include_router(control.router)
     app.include_router(stream.router)
     app.include_router(database.router)
+    app.include_router(chat.router)
 
     _mount_frontend(app, settings.app_dist)
     return app

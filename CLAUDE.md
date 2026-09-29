@@ -247,9 +247,16 @@ registro `MARKETS`).
 Las lecturas abren SQLite en modo `ro`. Las escrituras pasan por
 [api/guard.py](api/guard.py), que usa el **autorizador de SQLite**: un `insert into decisions`
 falla con «not authorized» al compilar la sentencia. Escribibles solo `profiles`,
-`agent_settings`, `agent_settings_history`, `profile_universe` y `portfolios`. La API tampoco
-ejecuta SQL libre. Por eso lanzar un ciclo es un subproceso ([api/runner.py](api/runner.py)) y
-no una llamada en proceso.
+`agent_settings`, `agent_settings_history`, `profile_universe`, `portfolios` y, desde F9.39,
+las dos tablas del chat (`chat_threads`, `chat_messages`). La API tampoco ejecuta SQL libre.
+Por eso lanzar un ciclo es un subproceso ([api/runner.py](api/runner.py)) y no una llamada en
+proceso.
+
+**El chat es la única llamada al modelo desde la API** ([src/chat.py](src/chat.py), F9.39), y
+puede serlo porque no escribe nada que el experimento lea: sus herramientas son lecturas y
+ninguna conversación vuelve a entrar en un ciclo. Cada respuesta son dos llamadas —consulta con
+herramientas y sin razonamiento, respuesta con razonamiento y sin herramientas— porque GPT-6 no
+admite las dos cosas juntas en `/chat/completions`.
 
 **Los dos ficheros del volumen compartido.** El ciclo y la API no comparten
 proceso —ni contenedor, si lo lanzó el planificador—, así que lo que tienen que
@@ -285,7 +292,8 @@ llega.
   [app/src/api/keys.ts](app/src/api/keys.ts).
 - **El evento `ingest` se funde, no reemplaza**: manda 5 campos y el endpoint devuelve 13.
 - **El perfil activo vive en la URL** (`/p/europa-01/summary`), por su nombre y no por id.
-- **Ocho entradas en la barra lateral** desde el rediseño del 2026-09-28; las pantallas con
+- **Nueve entradas en la barra lateral**: las ocho del rediseño del 2026-09-28 y Conversación
+  (F9.39); las pantallas con
   varias vistas usan `<ViewTabs>` y `?view=` (Decisiones: decisiones, órdenes, riesgo;
   Sistema: ingesta, base de datos). Ver DESIGN.md § «Estructura de la interfaz».
 - **Las pantallas se arman con los endpoints tipados.** Todos los endpoints tienen modelo

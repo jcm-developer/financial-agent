@@ -553,6 +553,50 @@ create table if not exists profile_universe (
 
 create index if not exists profile_universe_symbol_idx on profile_universe (symbol);
 
+-- ---------------------------------------------------------------------------
+-- chat_threads / chat_messages: las conversaciones con el modelo de cada
+-- experimento (F9.39).
+--
+-- No son historico del experimento y por eso las escribe la API: nada de lo que
+-- se hable aqui vuelve a entrar en un ciclo. Si el modelo "recordara" una
+-- conversacion al decidir, el duelo entre perfiles dejaria de comparar una sola
+-- variable. Cuelgan del perfil, no de la cartera, y se borran con el.
+--
+-- `decision_id` es la decision por la que se pregunto, si la hay; sin
+-- `references` a proposito, porque la decision es del historico y la
+-- conversacion no debe impedir ni seguir su borrado.
+-- ---------------------------------------------------------------------------
+create table if not exists chat_threads (
+    id          text primary key,
+    profile_id  text not null references profiles (id) on delete cascade,
+    title       text not null,
+    created_at  text not null,
+    updated_at  text not null
+);
+
+create index if not exists chat_threads_profile_idx
+    on chat_threads (profile_id, updated_at desc);
+
+create table if not exists chat_messages (
+    id                integer primary key autoincrement,
+    thread_id         text not null references chat_threads (id) on delete cascade,
+    role              text not null check (role in ('user', 'assistant')),
+    content           text not null,
+    decision_id       text,
+    -- Lo que el modelo consulto para contestar: [{"name", "arguments"}].
+    tools_json        text,
+    llm_model         text,
+    latency_ms        integer,
+    prompt_tokens     integer,
+    completion_tokens integer,
+    -- Una respuesta que no llego se guarda igual, con el motivo: una pregunta
+    -- sin contestar que desaparece de la conversacion es peor que un fallo.
+    error             text,
+    created_at        text not null
+);
+
+create index if not exists chat_messages_thread_idx on chat_messages (thread_id, id);
+
 -- ===========================================================================
 -- Datos de mercado en vivo (ingestor, cada minuto)
 --

@@ -77,6 +77,11 @@ WRITABLE: MappingProxyType[str, frozenset[str]] = MappingProxyType({
     "profile_universe": frozenset({"insert", "delete"}),
     # See the header: created with the profile and deleted with the profile.
     "portfolios": frozenset({"insert", "delete"}),
+    # The experiment chat (F9.39). Not history: what is said there never reaches
+    # a cycle. A thread is renamed and touched on every message; a message is
+    # appended and deleted with its thread, never edited.
+    "chat_threads": frozenset({"insert", "update", "delete"}),
+    "chat_messages": frozenset({"insert", "delete"}),
 })
 
 #: Columns that may be updated in a table that is otherwise not updatable. The

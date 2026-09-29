@@ -5,6 +5,9 @@ import { keys } from "@/api/keys";
 import type {
   ActionResult,
   Analytics,
+  ChatAsk,
+  ChatThread,
+  ChatThreadDetail,
   CycleControl,
   CycleDetail,
   DatabaseSchema,
@@ -573,5 +576,81 @@ export function useDeleteProfile() {
     // cycles, positions, orders and decisions, and any table still cached would
     // be showing the history of an experiment that no longer exists.
     onSuccess: () => client.invalidateQueries(),
+  });
+}
+
+// ----------------------------------------------------------------------
+// The experiment chat (F9.39)
+// ----------------------------------------------------------------------
+
+/**
+ * An experiment's conversations, most recently used first.
+ *
+ * @param profile - Profile name. Undefined leaves the query disabled.
+ * @return The query for `GET /api/chat/threads`.
+ */
+export function useChatThreads(profile: string | undefined) {
+  return useQuery({
+    queryKey: keys.chatThreads(profile ?? ""),
+    queryFn: ({ signal }) =>
+      api.get<ChatThread[]>("/api/chat/threads", { profile }, signal),
+    enabled: Boolean(profile),
+  });
+}
+
+/**
+ * One conversation with its messages.
+ *
+ * @param id - Thread id. Undefined leaves the query disabled.
+ * @return The query for `GET /api/chat/threads/:id`.
+ */
+export function useChatThread(id: string | undefined) {
+  return useQuery({
+    queryKey: keys.chatThread(id ?? ""),
+    queryFn: ({ signal }) =>
+      api.get<ChatThreadDetail>(
+        `/api/chat/threads/${encodeURIComponent(id!)}`, undefined, signal,
+      ),
+    enabled: Boolean(id),
+  });
+}
+
+/**
+ * Asks the experiment's model a question and waits for the answer.
+ *
+ * The answer comes back with the whole thread, which is written straight into
+ * its cache entry: asking for it again would be a second request for what the
+ * response already carries.
+ *
+ * @param profile - Profile name, for invalidating the thread list.
+ * @return The mutation for `POST /api/chat/messages`.
+ */
+export function useAskChat(profile: string | undefined) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Omit<ChatAsk, "profile">) =>
+      api.post<ChatThreadDetail>("/api/chat/messages", { ...body, profile }),
+    onSuccess: (detail) => {
+      client.setQueryData(keys.chatThread(detail.thread.id), detail);
+      client.invalidateQueries({ queryKey: keys.chatThreads(profile ?? "") });
+    },
+  });
+}
+
+/**
+ * Deletes a conversation. The experiment's history is not touched.
+ *
+ * @param profile - Profile name, for invalidating the thread list.
+ * @return The mutation for `DELETE /api/chat/threads/:id`.
+ */
+export function useDeleteChatThread(profile: string | undefined) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.delete<void>(`/api/chat/threads/${encodeURIComponent(id)}`),
+    onSuccess: (_, id) => {
+      client.removeQueries({ queryKey: keys.chatThread(id) });
+      client.invalidateQueries({ queryKey: keys.chatThreads(profile ?? "") });
+    },
   });
 }

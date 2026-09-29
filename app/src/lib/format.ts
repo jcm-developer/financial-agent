@@ -229,6 +229,45 @@ export function longDate(iso: string | null | undefined): string {
 }
 
 /**
+ * The separator between days of a chat: «Hoy», «Ayer» or the date written out.
+ *
+ * Days are counted on the local calendar and not in 24-hour spans: a message
+ * at 23:50 is «Ayer» ten minutes after midnight, which is how a person reads it.
+ * The year only appears when it is not this one.
+ *
+ * @param iso - ISO-8601 UTC timestamp as returned by the API.
+ * @param now - The reference moment, passed in so the function stays pure.
+ * @return The label, or the input unchanged when it is not a parsable date.
+ */
+export function chatDay(iso: string, now: Date = new Date()): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((midnight(now) - midnight(date)) / 86_400_000);
+  if (days === 0) return "Hoy";
+  if (days === 1) return "Ayer";
+  return sentence(
+    date.toLocaleDateString("es-ES", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+    }),
+  );
+}
+
+/**
+ * The local calendar day of a timestamp, as a key to group messages by.
+ *
+ * @param iso - ISO-8601 UTC timestamp.
+ * @return `YYYY-M-D` in local time.
+ */
+export function localDayKey(iso: string): string {
+  const date = new Date(iso);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+/**
  * Formats an elapsed time as `2 min 14 s`.
  *
  * @param seconds - Elapsed seconds. Null or undefined renders as an em dash.

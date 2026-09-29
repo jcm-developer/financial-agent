@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { ChevronRight } from "lucide-react";
 
 import { useCycles, useDecisions } from "@/api/hooks";
@@ -152,8 +152,11 @@ export function Decisions() {
  */
 function DecisionsView({ tabs }: { tabs: ReactNode }) {
   const { profile, ref } = useActiveProfile();
+  const [params] = useSearchParams();
   const [offset, setOffset] = useState(0);
-  const [symbolFilter, setSymbolFilter] = useState("");
+  // `?symbol=` seeds the filter once: it is how a citation in the chat lands
+  // here (F9.39). After that the field is the user's, not the URL's.
+  const [symbolFilter, setSymbolFilter] = useState(params.get("symbol") ?? "");
   const [action, setAction] = useState("");
   const [verdict, setVerdict] = useState("");
 
@@ -635,6 +638,7 @@ function Filtered({
  * @return The rendered row, plus its detail row when unfolded.
  */
 function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string }) {
+  const { ref: profile } = useActiveProfile();
   const [open, setOpen] = useState(false);
 
   const thesis = row.thesis?.trim();
@@ -784,8 +788,34 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
             {row.horizon_days ? ` · horizonte ${row.horizon_days} d` : ""}
             {` · ${row.llm_model ?? "modelo desconocido"}`}
           </p>
+          {profile && (
+            <p className="mt-2 text-caption">
+              <Link to={askAboutDecision(profile, row)} className={LINK_CLASSES}>
+                Preguntar al modelo por esta decisión
+              </Link>
+            </p>
+          )}
         </DetailRow>
       )}
     </>
   );
+}
+
+/**
+ * The link from a decision to a new conversation about it (F9.39), with the
+ * question already drafted so it only has to be sent — or rewritten.
+ *
+ * @param profile - Profile name.
+ * @param row - The decision.
+ * @return The chat's address, carrying the decision, its symbol and the draft.
+ */
+function askAboutDecision(profile: string, row: DecisionRow): string {
+  const day = longDate(row.created_at);
+  const verb =
+    row.action === "buy"
+      ? row.kind === "entry" ? "propusiste comprar" : "propusiste ampliar"
+      : row.action === "sell" ? "propusiste vender" : "decidiste mantenerte con";
+  const question = `¿Por qué ${verb} ${row.symbol} el ${day}? ¿Lo harías igual hoy?`;
+  const query = new URLSearchParams({ decision: row.id, symbol: row.symbol, q: question });
+  return `/p/${encodeURIComponent(profile)}/chat?${query.toString()}`;
 }

@@ -517,3 +517,55 @@ def test_reasoning_effort_is_sent_only_when_set_and_dropped_if_refused():
     assert sent_body(seen[0])["reasoning_effort"] == "medium"
     assert "reasoning_effort" not in sent_body(seen[1])
     assert "response_format" in sent_body(seen[1])  # the JSON mode survives
+
+
+# -- La conversacion del chat (F9.39) ----------------------------------------
+
+def test_a_tool_call_is_reassembled_from_its_fragments():
+    """The id and the name come in the first piece and the arguments in slices,
+    keyed by `index`; the chat needs them whole."""
+    events = [
+        '{"model":"m","choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1",'
+        '"function":{"name":"search_decisions","arguments":"{\\"sym"}}]}}]}',
+        '{"choices":[{"delta":{"tool_calls":[{"index":0,'
+        '"function":{"arguments":"bol\\": \\"SAP.DE\\"}"}}]}}]}',
+        "[DONE]",
+    ]
+    client, seen = stub(httpx.Response(
+        200, content=sse(*[f"data: {e}" for e in events]), headers=SSE_CONTENT_TYPE,
+    ))
+
+    response = client.complete_chat(
+        messages=[{"role": "user", "content": "hola"}], tools=[{"type": "function"}]
+    )
+
+    [call] = response.tool_calls
+    assert (call.id, call.name) == ("c1", "search_decisions")
+    assert json.loads(call.arguments) == {"symbol": "SAP.DE"}
+    body = sent_body(seen[0])
+    assert "response_format" not in body and body["tools"] == [{"type": "function"}]
+
+
+def test_a_model_that_refuses_tools_still_gets_the_conversation(no_espera):
+    client, seen = stub(
+        httpx.Response(400, json={"error": {"message": "tools is not supported"}}),
+        ok_stream("Respuesta sin herramientas."),
+    )
+
+    response = client.complete_chat(
+        messages=[{"role": "user", "content": "hola"}], tools=[{"type": "function"}]
+    )
+
+    assert response.content == "Respuesta sin herramientas."
+    assert "tools" not in sent_body(seen[1])
+
+
+def test_a_per_call_effort_overrides_the_profiles():
+    """The chat's lookup asks for `none` while the profile says `high`."""
+    client, seen = stub(ok_stream("LISTO"), reasoning_effort="high")
+
+    client.complete_chat(messages=[{"role": "user", "content": "hola"}], reasoning_effort="none")
+    client.complete_chat(messages=[{"role": "user", "content": "hola"}])
+
+    assert sent_body(seen[0])["reasoning_effort"] == "none"
+    assert sent_body(seen[1])["reasoning_effort"] == "high"

@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { decimal, fileSize, money, percent, sentence, signClass, signedMoney } from "@/lib/format";
+import {
+  chatDay,
+  decimal,
+  fileSize,
+  localDayKey,
+  money,
+  percent,
+  sentence,
+  signClass,
+  signedMoney,
+} from "@/lib/format";
 
 /**
  * The signs, which had a bug on screen and therefore have tests now.
@@ -143,5 +153,25 @@ describe("fileSize", () => {
 
   it("says unknown rather than zero", () => {
     expect(fileSize(null)).toBe("—");
+  });
+});
+
+describe("chatDay", () => {
+  const now = new Date(2026, 8, 29, 0, 10);
+
+  it("counts calendar days, not 24-hour spans", () => {
+    expect(chatDay(new Date(2026, 8, 29, 0, 5).toISOString(), now)).toBe("Hoy");
+    expect(chatDay(new Date(2026, 8, 28, 23, 50).toISOString(), now)).toBe("Ayer");
+  });
+
+  it("writes older days out, with the year only when it is not this one", () => {
+    expect(chatDay(new Date(2026, 8, 26, 12).toISOString(), now)).toBe("Sábado, 26 de septiembre");
+    expect(chatDay(new Date(2025, 11, 31, 12).toISOString(), now)).toContain("2025");
+  });
+
+  it("groups by the local day", () => {
+    expect(localDayKey(new Date(2026, 8, 29, 0, 5).toISOString())).toBe(
+      localDayKey(new Date(2026, 8, 29, 23, 55).toISOString()),
+    );
   });
 });

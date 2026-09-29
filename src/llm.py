@@ -123,6 +123,20 @@ def resolve_provider(name: str) -> Provider:
     )
 
 
+@dataclass(frozen=True)
+class ToolCall:
+    """One function the model asked to run, with its arguments still as text.
+
+    The arguments stay a string on purpose: they arrive in fragments over the
+    stream and are the model's output, so parsing them —and failing— belongs to
+    whoever runs the tool, which can hand the error back to the model.
+    """
+
+    id: str
+    name: str
+    arguments: str
+
+
 @dataclass
 class LLMResponse:
     content: str
@@ -132,6 +146,8 @@ class LLMResponse:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     raw: dict[str, Any] = field(default_factory=dict)
+    #: Only a conversation with tools fills it (`complete_chat`).
+    tool_calls: list[ToolCall] = field(default_factory=list)
 
 
 class LLMClient:
@@ -179,6 +195,10 @@ class LLMClient:
         #: with a WARNING, because from then on the profile says one thing and
         #: the model runs with another.
         self._supports_reasoning_effort = True
+        #: Tools are only sent by `complete_chat`. A deployment that refuses them
+        #: gets the conversation without them: the chat still answers from the
+        #: context it is given, it just cannot look further back.
+        self._supports_tools = True
         if not api_key:
             raise LLMError(
                 f"Falta la clave de API de {self.provider.label}. "
@@ -219,7 +239,11 @@ class LLMClient:
         would rather skip the symbol than trade on a guess.
         """
         response = self._post_chat(
-            system=system, user=user, max_tokens=max_tokens or self.max_tokens
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            max_tokens=max_tokens or self.max_tokens,
         )
         if response.parsed is None:
             raise LLMError(
@@ -228,13 +252,52 @@ class LLMClient:
             )
         return response
 
-    def _post_chat(self, *, system: str, user: str, max_tokens: int) -> LLMResponse:
+    def complete_chat(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        max_tokens: int | None = None,
+        reasoning_effort: str | None = None,
+    ) -> LLMResponse:
+        """One turn of a free-text conversation, which may end in tool calls.
+
+        It is the experiment chat's call and not the cycle's: no JSON mode, and
+        the whole message list goes in. Raises `LLMError` if the model returns
+        neither text nor a tool call.
+
+        `reasoning_effort` overrides the profile's for this call only. The chat
+        needs it because OpenAI's GPT-6 refuse function tools on
+        `/chat/completions` unless the effort is `none` —measured on the
+        2026-09-29 with `gpt-6-luna`: «Function tools with reasoning_effort are
+        not supported»—, so the lookup is asked for without reasoning and the
+        answer with it.
+        """
+        response = self._post_chat(
+            messages=messages,
+            max_tokens=max_tokens or self.max_tokens,
+            json_mode=False,
+            tools=tools,
+            reasoning_effort=reasoning_effort,
+        )
+        response.content = strip_reasoning(response.content)
+        if not response.content and not response.tool_calls:
+            raise LLMError(f"El modelo {self.model} devolvió una respuesta vacía.")
+        return response
+
+    def _post_chat(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        max_tokens: int,
+        json_mode: bool = True,
+        tools: list[dict[str, Any]] | None = None,
+        reasoning_effort: str | None = None,
+    ) -> LLMResponse:
+        effort = (reasoning_effort or "").strip().lower() or self.reasoning_effort
         payload: dict[str, Any] = {
             "model": self.model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
+            "messages": messages,
             "stream": True,
         }
 
@@ -249,10 +312,13 @@ class LLMClient:
             body[self._token_field] = max_tokens
             if self._supports_temperature:
                 body["temperature"] = self.temperature
-            if self.reasoning_effort and self._supports_reasoning_effort:
-                body["reasoning_effort"] = self.reasoning_effort
-            if self._supports_json_mode:
+            effort_sent = bool(effort and self._supports_reasoning_effort)
+            if effort_sent:
+                body["reasoning_effort"] = effort
+            if json_mode and self._supports_json_mode:
                 body["response_format"] = {"type": "json_object"}
+            if tools and self._supports_tools:
+                body["tools"] = tools
             if self._supports_usage_in_stream:
                 # Without this the final chunk brings no `usage` and the tokens
                 # of every decision would be written as zero.
@@ -290,7 +356,9 @@ class LLMClient:
             latency_ms = int((time.monotonic() - started) * 1000)
 
             if status in (400, 422):
-                disabled = self._disable_rejected_option(error_body)
+                disabled = self._disable_rejected_option(
+                    error_body, effort=effort if effort_sent else None
+                )
                 if disabled is not None:
                     log.info(
                         "El modelo %s no admite el parámetro %s (%d); se quita y se reintenta al momento.",
@@ -319,7 +387,7 @@ class LLMClient:
             # A stream that breaks halfway —an `error` event, or a 200 that
             # carries nothing— is a transport failure, not an answer, so it is
             # retried instead of being handed upstairs as an empty response.
-            if stream.error or not stream.text:
+            if stream.error or not (stream.text or stream.tool_calls):
                 attempt += 1
                 last_error = LLMError(
                     f"{self.provider.label} cortó la respuesta a medio generar: "
@@ -344,6 +412,7 @@ class LLMClient:
                 # here is what was reassembled, which is what one would want to
                 # look at while debugging.
                 raw={"model": stream.model, "usage": stream.usage},
+                tool_calls=stream.tool_calls,
             )
 
         raise LLMError(
@@ -351,7 +420,9 @@ class LLMClient:
             f"{self.max_retries} intentos: {last_error}"
         )
 
-    def _disable_rejected_option(self, error_body: str) -> str | None:
+    def _disable_rejected_option(
+        self, error_body: str, *, effort: str | None = None
+    ) -> str | None:
         """Switches off, for the rest of the session, the optional field the
         server has just rejected. Returns its name, or None if there is nothing
         left to turn off —and then the 400 is a real error, not a negotiation.
@@ -375,16 +446,12 @@ class LLMClient:
         ):
             self._token_field = "max_completion_tokens"
             return "max_tokens"
-        if (
-            "reasoning_effort" in lowered
-            and self.reasoning_effort
-            and self._supports_reasoning_effort
-        ):
+        if "reasoning_effort" in lowered and effort and self._supports_reasoning_effort:
             self._supports_reasoning_effort = False
             log.warning(
                 "El modelo %s no acepta el esfuerzo de razonamiento %s: funciona con "
                 "el suyo por defecto, que no es el que indica el perfil.",
-                self.model, self.reasoning_effort,
+                self.model, effort,
             )
             return "reasoning_effort"
         if "temperature" in lowered and self._supports_temperature:
@@ -395,6 +462,13 @@ class LLMClient:
                 self.model, compact(self.temperature, 2),
             )
             return "temperature"
+        if "tools" in lowered and self._supports_tools:
+            self._supports_tools = False
+            log.warning(
+                "El modelo %s no acepta herramientas: la conversación sigue sin ellas.",
+                self.model,
+            )
+            return "tools"
         named = [n for n in ("response_format", "stream_options") if n in lowered]
         for name in named or ["response_format", "stream_options"]:
             if name == "response_format" and self._supports_json_mode:
@@ -424,6 +498,8 @@ class _Stream:
     model: str = ""
     usage: dict[str, Any] = field(default_factory=dict)
     error: str = ""
+    #: Tool calls in the order the model numbered them, already reassembled.
+    tool_calls: list[ToolCall] = field(default_factory=list)
 
     @property
     def text(self) -> str:
@@ -441,6 +517,9 @@ def _read_sse(lines: Iterable[str]) -> _Stream:
     the stream running out is ending enough.
     """
     stream = _Stream()
+    # A tool call arrives in pieces keyed by `index`: the first carries the id
+    # and the name, the rest carry slices of the arguments.
+    calls: dict[int, dict[str, str]] = {}
     for line in lines:
         line = line.strip()
         if not line or not line.startswith("data:"):
@@ -477,6 +556,21 @@ def _read_sse(lines: Iterable[str]) -> _Stream:
                 continue
             stream.content += _delta_text(delta.get("content"))
             stream.reasoning += _delta_text(delta.get("reasoning_content"))
+            for piece in delta.get("tool_calls") or []:
+                if not isinstance(piece, dict):
+                    continue
+                call = calls.setdefault(
+                    int(piece.get("index") or 0), {"id": "", "name": "", "arguments": ""}
+                )
+                function = piece.get("function") or {}
+                call["id"] = call["id"] or str(piece.get("id") or "")
+                call["name"] = call["name"] or str(function.get("name") or "")
+                call["arguments"] += str(function.get("arguments") or "")
+    stream.tool_calls = [
+        ToolCall(id=call["id"] or f"call_{index}", name=call["name"], arguments=call["arguments"])
+        for index, call in sorted(calls.items())
+        if call["name"]
+    ]
     return stream
 
 

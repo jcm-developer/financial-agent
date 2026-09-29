@@ -49,6 +49,13 @@ export const keys = {
   decisions: (profile: string) => ["decisions", profile] as const,
   orders: (profile: string) => ["orders", profile] as const,
   riskEvents: (profile: string) => ["risk-events", profile] as const,
+
+  /**
+   * The experiment chat (F9.39). Not in `HISTORY_PREFIXES`: a cycle ending
+   * changes nothing in a conversation that has already happened.
+   */
+  chatThreads: (profile: string) => ["chat", "threads", profile] as const,
+  chatThread: (id: string) => ["chat", "thread", id] as const,
 } as const;
 
 /**

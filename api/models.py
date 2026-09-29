@@ -820,3 +820,51 @@ class DatabaseSchema(BaseModel):
     tables: list[SchemaTable]
     #: The file's size, pages in use and free pages included.
     file_bytes: int
+
+
+# ----------------------------------------------------------------------
+# Conversacion con el modelo (F9.39)
+# ----------------------------------------------------------------------
+
+class ChatThread(BaseModel):
+    id: str
+    title: str
+    created_at: str
+    updated_at: str
+    messages: int = 0
+
+
+class ChatToolUse(BaseModel):
+    """One lookup the model made to answer: which tool, with which arguments."""
+
+    name: str
+    arguments: dict[str, Any] = {}
+
+
+class ChatMessage(BaseModel):
+    id: int
+    role: Literal["user", "assistant"]
+    content: str
+    #: The decision the question was about, when it came from Decisiones.
+    decision_id: str | None = None
+    tools: list[ChatToolUse] = []
+    llm_model: str | None = None
+    latency_ms: int | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    #: Why the answer did not arrive. The question stays in the thread anyway.
+    error: str | None = None
+    created_at: str
+
+
+class ChatThreadDetail(BaseModel):
+    thread: ChatThread
+    messages: list[ChatMessage]
+
+
+class ChatAsk(BaseModel):
+    profile: str = Field(description="Id o nombre del perfil.")
+    content: str = Field(min_length=1, max_length=4000)
+    #: Empty = a new thread, titled after this question.
+    thread_id: str | None = None
+    decision_id: str | None = None

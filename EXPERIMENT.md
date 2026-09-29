@@ -630,6 +630,7 @@ Para no volver a preguntárselo:
 | Cerrar por horizonte cumplido (`horizon_days` fija la escala del objetivo y del suelo, pero no cierra ninguna posición al expirar) | — |
 | Comparar posiciones entre sí: cada una se revisa por separado, así que el modelo no puede decir «vende parte de esta para comprar aquella» (puede reducir, y la caja liberada entra en el reparto) | — |
 | Usar `cash_reserve_pct`, que está en el esquema y en la interfaz y no lo lee nadie | **F9.17** (apuntado, no arreglado) |
+| Tener en cuenta lo hablado en Conversación: el chat lee el histórico y escribe solo sus dos tablas, que el ciclo no lee nunca, así que una conversación no puede cambiar una decisión | **nunca**, a propósito (F9.39): contaminaría el duelo entre perfiles |
 | Convertir divisa | **nunca**, es una restricción del diseño (D8) |
 | Operar con dinero real | **nunca**, el único broker es el simulador |
 

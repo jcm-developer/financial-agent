@@ -6,6 +6,7 @@ import {
   GitCompare,
   ChartLine,
   LayoutDashboard,
+  MessageSquare,
   Server,
   Sliders,
 } from "lucide-react";
@@ -24,13 +25,14 @@ import { cn } from "@/lib/utils";
  *
  * **The experiment selector heads the upper group** (2026-09-28). It used to sit
  * in the header, at the opposite corner of the screen from the links it scopes,
- * so the one relation the sidebar exists to show —these five sections belong to
+ * so the one relation the sidebar exists to show —these sections belong to
  * *this* experiment— was split across the page. Now the selector is the group's
  * caption: what you choose is visibly what the links below are about.
  *
  * **Twelve entries became eight** in the same redesign: Posiciones went into
  * Resumen, Órdenes and Riesgo into Decisiones as views, and Ingesta and Base de
- * datos into Sistema. Each merge is argued where it happened.
+ * datos into Sistema. Each merge is argued where it happened. Conversación made
+ * it nine (F9.39): it is not a view of anything already here.
  */
 
 const PROFILE_LINKS = [
@@ -38,6 +40,9 @@ const PROFILE_LINKS = [
   { to: "decisions", text: "Decisiones", Icon: ClipboardList },
   { to: "cycles", text: "Ciclos", Icon: Activity },
   { to: "analytics", text: "Analítica", Icon: ChartLine },
+  // The ninth entry (F9.39). It is the experiment's own model, so it belongs to
+  // the upper group: a conversation with Sol is about Sol's decisions.
+  { to: "chat", text: "Conversación", Icon: MessageSquare },
   { to: "settings", text: "Ajustes", Icon: Sliders },
 ] as const;
 

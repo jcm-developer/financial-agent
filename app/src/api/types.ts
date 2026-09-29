@@ -114,6 +114,49 @@ export interface CalibrationBucket {
   win_rate_pct?: number | null;
 }
 
+export interface ChatAsk {
+  /** Id o nombre del perfil. */
+  profile: string;
+  content: string;
+  thread_id?: string | null;
+  decision_id?: string | null;
+}
+
+export interface ChatMessage {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  decision_id?: string | null;
+  tools?: Array<ChatToolUse>;
+  llm_model?: string | null;
+  latency_ms?: number | null;
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
+  error?: string | null;
+  created_at: string;
+}
+
+export interface ChatThread {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  messages?: number;
+}
+
+export interface ChatThreadDetail {
+  thread: ChatThread;
+  messages: Array<ChatMessage>;
+}
+
+/**
+ * One lookup the model made to answer: which tool, with which arguments.
+ */
+export interface ChatToolUse {
+  name: string;
+  arguments?: Record<string, unknown>;
+}
+
 export interface ConvictionBucket {
   bucket: number;
   buys?: number;
@@ -688,6 +731,14 @@ export interface ValidationError {
 export interface ApiOperations {
   /** Analytics */
   "GET /api/analytics": Analytics;
+  /** Ask */
+  "POST /api/chat/messages": ChatThreadDetail;
+  /** Threads */
+  "GET /api/chat/threads": Array<ChatThread>;
+  /** Delete Thread */
+  "DELETE /api/chat/threads/{thread_id}": unknown;
+  /** Thread Detail */
+  "GET /api/chat/threads/{thread_id}": ChatThreadDetail;
   /** Cycles */
   "GET /api/cycles": Page_CycleRow;
   /** Close Experiment */

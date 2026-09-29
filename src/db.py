@@ -645,6 +645,83 @@ class Database:
 
         return {code: sorted(symbols) for code, symbols in sorted(por_mercado.items())}
 
+    # -- Conversaciones con el modelo (F9.39) ------------------------------
+
+    def create_chat_thread(self, profile_id: str, *, title: str) -> str:
+        thread_id = _new_id()
+        now = _now()
+        self._insert(
+            "chat_threads",
+            {
+                "id": thread_id,
+                "profile_id": profile_id,
+                "title": title.strip() or "Conversación",
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        return thread_id
+
+    def get_chat_thread(self, thread_id: str) -> dict[str, Any] | None:
+        rows = self.query("select * from chat_threads where id = ?", (thread_id,))
+        return rows[0] if rows else None
+
+    def list_chat_threads(self, profile_id: str) -> list[dict[str, Any]]:
+        """Most recently used first, with how many messages each one holds."""
+        return self.query(
+            "select t.*, (select count(1) from chat_messages m "
+            "             where m.thread_id = t.id) as messages "
+            "from chat_threads t where t.profile_id = ? "
+            "order by t.updated_at desc",
+            (profile_id,),
+        )
+
+    def chat_messages(self, thread_id: str) -> list[dict[str, Any]]:
+        rows = self.query(
+            "select * from chat_messages where thread_id = ? order by id", (thread_id,)
+        )
+        for row in rows:
+            row["tools"] = json.loads(row.pop("tools_json") or "[]")
+        return rows
+
+    def add_chat_message(
+        self,
+        thread_id: str,
+        *,
+        role: str,
+        content: str,
+        decision_id: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        llm_model: str | None = None,
+        latency_ms: int | None = None,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
+        error: str | None = None,
+    ) -> int:
+        """Appends a message and moves the thread to the top of the list."""
+        now = _now()
+        cursor = self._insert(
+            "chat_messages",
+            {
+                "thread_id": thread_id,
+                "role": role,
+                "content": content,
+                "decision_id": decision_id,
+                "tools_json": _dumps(tools) if tools else None,
+                "llm_model": llm_model,
+                "latency_ms": latency_ms,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "error": error,
+                "created_at": now,
+            },
+        )
+        self._update("chat_threads", thread_id, {"updated_at": now})
+        return int(cursor.lastrowid or 0)
+
+    def delete_chat_thread(self, thread_id: str) -> None:
+        self._execute("delete from chat_threads where id = ?", (thread_id,))
+
     # -- Carteras ----------------------------------------------------------
 
     def ensure_portfolio(

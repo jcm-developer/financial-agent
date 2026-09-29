@@ -83,11 +83,12 @@ colores están escritos dos veces y `theme.test.ts` comprueba que coinciden.
 
 ### Estructura de la interfaz
 
-Desde el rediseño del 2026-09-28, **ocho entradas en la barra lateral y no doce**:
+Desde el rediseño del 2026-09-28, **ocho entradas en la barra lateral y no doce**, y nueve desde
+que llegó Conversación (F9.39, 2026-09-29):
 
 | Grupo | Entradas |
 |---|---|
-| Experimento | Resumen · Decisiones · Ciclos · Analítica · Ajustes |
+| Experimento | Resumen · Decisiones · Ciclos · Analítica · Conversación · Ajustes |
 | General | Experimentos · Comparar · Sistema |
 
 - **El selector de experimento encabeza el grupo de arriba**, porque es lo que decide de
@@ -108,6 +109,14 @@ Desde el rediseño del 2026-09-28, **ocho entradas en la barra lateral y no doce
 - **La marca** es `<Logo>`: una línea de capital ascendente en salvia sobre un cuadrado
   navy de 8 px de radio, pintada con `--color-strip` y `--color-accent` para que siga al
   tema. El favicon (`app/public/favicon.svg`) es el mismo dibujo con los colores escritos.
+- **Conversación** es una entrada propia y no una vista de Decisiones, porque también se
+  pregunta por el mercado y no solo por una decisión. Cada decisión desplegada lleva el enlace
+  «Preguntar al modelo por esta decisión», que abre una conversación nueva con la pregunta ya
+  redactada. Las respuestas se pintan con `<Markdown>`
+  ([app/src/components/Markdown.tsx](app/src/components/Markdown.tsx)), un intérprete propio
+  que **devuelve elementos de React y nunca HTML**: el texto es del modelo, así que nada en él
+  puede interpretarse como marcado. Una cita `[SAP.DE 2026-09-29]` enlaza con Decisiones
+  filtrada por ese símbolo.
 - **Lo irreversible no va junto a lo cotidiano.** «Cerrar experimento» está al final de
   Ajustes, en su propia sección, y no junto a «Lanzar ciclo».
 - **Un formulario con cambios sin guardar fija su barra de guardado abajo**, con
@@ -478,7 +487,7 @@ Los nombres siguen la tabla de [CLAUDE.md](CLAUDE.md). Lo que afecta a `app/`:
   mano.
 - **Enlace de salto:** `.skip-link` es `sr-only` hasta que recibe foco. Sin él,
   llegar al contenido con teclado obliga a recorrer la cabecera, el selector de
-  experimento y las ocho entradas de la barra lateral **en cada página**.
+  experimento y las nueve entradas de la barra lateral **en cada página**.
 - **El color nunca es el único portador del significado.** Todo estado con color
   lleva además texto (`activo`, `aprobado`, `datos en vivo`) o un tooltip que lo
   explica. El indicador en vivo tiene tres estados y no dos, porque agrupar
