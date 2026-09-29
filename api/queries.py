@@ -809,6 +809,8 @@ def analytics(db: Database, portfolio_id: str) -> dict[str, Any]:
     so the console and the web cannot end up telling different stories: each
     number has one single definition, and it is in the schema.
     """
+    from src.outcomes import score_portfolio, summarize
+
     curva = db.query(
         "select as_of, equity, cash, positions_value, open_positions, day_pnl_pct "
         "from equity_snapshots where portfolio_id = ? order by as_of asc",
@@ -843,6 +845,9 @@ def analytics(db: Database, portfolio_id: str) -> dict[str, Any]:
             "from decisions where portfolio_id = ? group by bucket order by bucket",
             (portfolio_id,),
         ),
+        # Computed and not a view: it walks each decision's bars in order to find
+        # which level came first, which SQL would only say badly (F9.27).
+        "outcomes": summarize(score_portfolio(db, portfolio_id)),
     }
 
 

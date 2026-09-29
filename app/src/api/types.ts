@@ -99,6 +99,7 @@ export interface Analytics {
   rejections?: Array<RejectionCount>;
   by_symbol?: Array<SymbolPerformance>;
   conviction_histogram?: Array<ConvictionBucket>;
+  outcomes?: DecisionOutcomes | null;
 }
 
 /**
@@ -235,6 +236,17 @@ export interface CycleRunRequest {
 export interface DatabaseSchema {
   tables: Array<SchemaTable>;
   file_bytes: number;
+}
+
+/**
+ * Whether each decision was right, `hold` included (F9.27).
+ */
+export interface DecisionOutcomes {
+  horizons: Array<number>;
+  decisions: number;
+  judged: number;
+  groups: Array<OutcomeGroup>;
+  ladder: Array<OutcomeRung>;
 }
 
 export interface DecisionRow {
@@ -398,6 +410,37 @@ export interface OrderRow {
   target_price?: number | null;
   broker_order_id?: string | null;
   error?: string | null;
+}
+
+/**
+ * One group of decisions judged at one horizon (F9.27).
+ */
+export interface OutcomeCell {
+  sessions: number;
+  judged: number;
+  right: number;
+  hit_rate_pct?: number | null;
+  avg_return_pct?: number | null;
+}
+
+export interface OutcomeGroup {
+  kind: string;
+  action: string;
+  label: string;
+  decisions: number;
+  horizons: Array<OutcomeCell>;
+  stops?: number;
+  targets?: number;
+}
+
+/**
+ * One step of the conviction ladder, for entry decisions.
+ */
+export interface OutcomeRung {
+  bucket: number;
+  action: string;
+  decisions: number;
+  horizons: Array<OutcomeCell>;
 }
 
 export interface Page_CycleRow {

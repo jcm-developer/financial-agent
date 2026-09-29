@@ -2,6 +2,7 @@ import { useAnalytics } from "@/api/hooks";
 import { Calibration, ConvictionHistogram } from "@/components/charts/Calibration";
 import { EquityCurve, Drawdown } from "@/components/charts/EquityCurve";
 import { PnlBySymbol, RejectionsByRule } from "@/components/charts/BySymbol";
+import { Outcomes } from "@/components/Outcomes";
 import { PageTitle } from "@/components/pieces";
 import { Section } from "@/components/Section";
 import { useActiveProfile } from "@/profile/useActiveProfile";
@@ -33,8 +34,13 @@ export function Analytics() {
       <Section query={query}>
         {(data) => (
           <div className="grid gap-4 xl:grid-cols-2">
-            {/* Calibration goes first and takes the full width: it is the one
-                that answers the experiment's question, not one of the six. */}
+            {/* The scorecard and the calibration go first and take the full
+                width: they answer the experiment's question. The scorecard
+                leads because it judges every decision, `hold` included, while
+                the calibration only has the trades that closed (F9.27). */}
+            <div className="xl:col-span-2">
+              <Outcomes outcomes={data.outcomes} />
+            </div>
             <div className="xl:col-span-2">
               <Calibration buckets={data.calibration ?? []} symbol={symbol} />
             </div>

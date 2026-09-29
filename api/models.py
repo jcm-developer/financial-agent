@@ -662,6 +662,52 @@ class ConvictionBucket(BaseModel):
     total: int = 0
 
 
+class OutcomeCell(BaseModel):
+    """One group of decisions judged at one horizon (F9.27)."""
+
+    #: 0 = up to the last completed close, whatever the number of sessions.
+    sessions: int
+    #: How many already have that many completed sessions behind them.
+    judged: int
+    right: int
+    hit_rate_pct: float | None = None
+    #: Mean price change from what the model saw. For the ones that stayed out,
+    #: positive means they missed a rise.
+    avg_return_pct: float | None = None
+
+
+class OutcomeGroup(BaseModel):
+    kind: str
+    action: str
+    #: How the screen names it: «Comprar», «Quedarse fuera»…
+    label: str
+    decisions: int
+    horizons: list[OutcomeCell]
+    #: For buys with levels: how many touched the stop first, and the target.
+    stops: int = 0
+    targets: int = 0
+
+
+class OutcomeRung(BaseModel):
+    """One step of the conviction ladder, for entry decisions."""
+
+    bucket: int
+    action: str
+    decisions: int
+    horizons: list[OutcomeCell]
+
+
+class DecisionOutcomes(BaseModel):
+    """Whether each decision was right, `hold` included (F9.27)."""
+
+    horizons: list[int]
+    decisions: int
+    #: Of those, how many can be judged at the shortest horizon.
+    judged: int
+    groups: list[OutcomeGroup]
+    ladder: list[OutcomeRung]
+
+
 class Analytics(BaseModel):
     """The five chart series (F4.6), in a single trip.
 
@@ -675,6 +721,7 @@ class Analytics(BaseModel):
     rejections: list[RejectionCount] = Field(default_factory=list)
     by_symbol: list[SymbolPerformance] = Field(default_factory=list)
     conviction_histogram: list[ConvictionBucket] = Field(default_factory=list)
+    outcomes: DecisionOutcomes | None = None
 
 
 class QuoteRow(BaseModel):

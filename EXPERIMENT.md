@@ -580,6 +580,17 @@ Que `cycles.settings_json` lleve copia de los parámetros es lo que permite leer
 histórico meses después: sin eso, cambiar un deslizador haría ininterpretable todo
 lo anterior.
 
+**Si cada decisión acertó no se registra: se calcula** (F9.27,
+[src/outcomes.py](src/outcomes.py)), a partir de `decisions` y de las barras diarias de
+`bar_cache`, así que cubre todo el histórico hacia atrás. Se mide desde el precio que vio
+el modelo, a 5 y a 20 sesiones cerradas y hasta el último cierre, contando el cierre del
+propio día de la decisión como la primera. **Comprar, ampliar y mantener una posición
+aciertan si el precio sube; quedarse fuera y vender, si no sube**: es la única lectura
+que pone los `hold` en la misma escala que las compras. En una compra con niveles se
+mira además qué tocó antes, el stop o el objetivo; si una barra abarca los dos, cuenta
+como stop. El ciclo no lo lee: un modelo que viera su propio marcador dejaría de ser el
+mismo experimento.
+
 ---
 
 ## 9. Ciclo de vida: arrancar, mirar, cerrar
