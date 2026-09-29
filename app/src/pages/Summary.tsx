@@ -466,7 +466,7 @@ function OpenPositionTableRow({ row, symbol }: { row: PositionRow; symbol: strin
           {thesis ? (
             <LinkButton
               variant="subtle"
-              className="inline-flex items-center gap-1 font-medium"
+              className="inline-flex items-center gap-1 align-top font-medium"
               aria-expanded={open}
               title={open ? "Ocultar la tesis" : "Ver la tesis"}
               onClick={() => setOpen((value) => !value)}
@@ -560,7 +560,7 @@ function ClosedPositionTableRow({ row, symbol }: { row: PositionRow; symbol: str
           {detail ? (
             <LinkButton
               variant="subtle"
-              className="inline-flex items-center gap-1 font-medium"
+              className="inline-flex items-center gap-1 align-top font-medium"
               aria-expanded={open}
               title={open ? "Ocultar el motivo del cierre" : "Ver el motivo del cierre"}
               onClick={() => setOpen((value) => !value)}

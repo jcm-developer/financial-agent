@@ -473,7 +473,7 @@ function CycleDecisions({
   if (query.isPending) {
     return (
       <DetailRow columns={COLUMNS}>
-        <Loading className="pt-5" />
+        <Loading className="pt-3.5" />
       </DetailRow>
     );
   }
@@ -481,7 +481,7 @@ function CycleDecisions({
   if (query.error) {
     return (
       <DetailRow columns={COLUMNS}>
-        <div className="pt-5">
+        <div className="pt-3.5">
           <ErrorAlert error={query.error} />
         </div>
       </DetailRow>
@@ -494,7 +494,7 @@ function CycleDecisions({
     return (
       <DetailRow columns={COLUMNS}>
         {/* Said explicitly so an empty fold does not read as a loading failure. */}
-        <p className="pt-5 text-caption text-text-secondary">{EMPTY_CYCLE}</p>
+        <p className="pt-3.5 text-caption text-text-secondary">{EMPTY_CYCLE}</p>
       </DetailRow>
     );
   }
@@ -654,7 +654,7 @@ function DecisionTableRow({ row, symbol }: { row: DecisionRow; symbol: string })
           {hasDetail ? (
             <LinkButton
               variant="subtle"
-              className="inline-flex items-center gap-1 font-medium"
+              className="inline-flex items-center gap-1 align-top font-medium"
               aria-expanded={open}
               title={open ? "Ocultar la tesis" : "Ver la tesis y los riesgos"}
               onClick={() => setOpen((value) => !value)}

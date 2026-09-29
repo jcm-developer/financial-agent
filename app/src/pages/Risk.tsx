@@ -226,7 +226,7 @@ function RiskEventTableRow({ row, symbol }: { row: RiskEventRow; symbol: string 
             <LinkButton
               variant="subtle"
               className={cn(
-                "inline-flex items-center gap-1",
+                "inline-flex items-center gap-1 align-top",
                 row.symbol ? "font-medium" : "text-text-muted",
               )}
               aria-expanded={open}

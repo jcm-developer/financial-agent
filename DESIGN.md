@@ -350,8 +350,13 @@ entera, y la sirve como tooltip de Verdana en vez de como `title` del navegador.
 
 ### Listas y tablas — [app/src/components/Table.tsx](app/src/components/Table.tsx)
 
-Filas de 48 px, 8×16 de relleno, divisor de 1 px en `#F1F5F9` y `#F8FAFC` al pasar
-por encima. La cabecera es el único sitio fuera de un chip donde se usan mayúsculas
+Filas de 48 px, divisor de 1 px en `#F1F5F9` y `#F8FAFC` al pasar por encima. Las
+celdas del cuerpo llevan **14×16** y no los 8×16 de Verdana: van alineadas arriba, y
+con 8 una línea de 21 px quedaba a 8 del borde de arriba y a 19 del de abajo. La fila
+que se despliega debajo (`<DetailRow>`) repite esos 14 debajo del texto y se ilumina
+junto con su fila, así que de borde a borde se lee 14 · fila · 14 · detalle · 14. El
+botón con chevron que la abre va con `align-top`: como `inline-flex`, su línea base
+es el pie del icono y estiraba la fila 2,5 px por abajo. La cabecera es el único sitio fuera de un chip donde se usan mayúsculas
 e interletraje: es lo que separa las etiquetas de las cifras sin gastar una regla.
 
 - `<Table title>` — el título es el `<caption class="sr-only">`, obligatorio. El

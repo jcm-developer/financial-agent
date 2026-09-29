@@ -176,7 +176,7 @@ function OrderTableRow({ row, symbol }: { row: OrderRow; symbol: string }) {
           {error ? (
             <LinkButton
               variant="subtle"
-              className="inline-flex items-center gap-1 font-medium"
+              className="inline-flex items-center gap-1 align-top font-medium"
               aria-expanded={open}
               title={open ? "Ocultar el motivo" : "Ver el motivo"}
               onClick={() => setOpen((value) => !value)}

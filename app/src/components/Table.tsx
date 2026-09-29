@@ -81,6 +81,15 @@ export function Th({
 /**
  * Body cell.
  *
+ * **14 px of vertical padding, not Verdana's 8**, because the cell is
+ * top-aligned: one 21 px line with 8 px above it in a 48 px row left 19 px
+ * below, and under the hover band the text read as pushed against the top.
+ * With 14 a single line is centred (14 + 21 + 14, one pixel over the 48), and a
+ * cell of two lines still ends 14 px from the edge — which is the gap a
+ * `DetailRow` has to repeat underneath. `align-middle` was discarded: it centres
+ * a single line just as well, but in a row with a two-line verdict it leaves the
+ * last line 8 px from the edge and the gap to the detail changes row by row.
+ *
  * @param props - Cell props.
  * @param props.children - The cell content.
  * @param props.numeric - Right-aligns and puts the figure in Fira Code.
@@ -110,7 +119,7 @@ export function Td({
   title?: string;
 }) {
   const classes = cn(
-    "px-4 py-2 align-top",
+    "px-4 py-3.5 align-top",
     numeric && "tabular text-right whitespace-nowrap",
     header && "text-left font-normal",
     className,
@@ -171,9 +180,13 @@ export function Row({
 }) {
   return (
     <tr
+      data-expanded={expanded || undefined}
       className={cn(
         "h-12 border-b border-surface-sunken transition-colors duration-150 last:border-0 hover:bg-background",
-        expanded && "border-b-0",
+        // Lit together with its detail, from either half: with two bands the
+        // thesis started flush against the edge of one and the row looked
+        // padded 14 px on one side and 0 on the other.
+        expanded && "border-b-0 [&:has(+tr:hover)]:bg-background",
       )}
     >
       {children}
@@ -195,11 +208,11 @@ export function Row({
  * height and its alignment: `align-top` over a cell that is four lines tall
  * leaves every figure floating at the top of the row.
  *
- * **`pb-5` and not the `py-2` of a cell** because the gap to match is the one
- * above the text, not the cell's padding: a 48 px row with one line of 21 px
- * set 8 px from the top leaves 19 px under it, and that is what the eye reads as
- * the margin between the symbol and its thesis. With the 12 px it had, the
- * paragraph looked glued to the row below instead of to its own.
+ * **`pt-0 pb-3.5`**: the row above already ends 14 px under its last line, so
+ * that is the gap to the text here, and the same 14 closes it underneath. The
+ * row and its detail share one hover band, so the eye measures 14 · text · 14 ·
+ * text · 14 from edge to edge. When it follows a `GroupRow` instead —the
+ * loading and empty states of a fold— the content brings its own `pt-3.5`.
  *
  * @param props - Detail props.
  * @param props.columns - Columns of the table, so the cell spans all of them.
@@ -215,8 +228,8 @@ export function DetailRow({
   children: ReactNode;
 }) {
   return (
-    <tr className="border-b border-surface-sunken transition-colors duration-150 last:border-0 hover:bg-background">
-      <td colSpan={columns} className="px-4 pt-0 pb-5">
+    <tr className="border-b border-surface-sunken transition-colors duration-150 last:border-0 hover:bg-background [tr[data-expanded]:hover+&]:bg-background">
+      <td colSpan={columns} className="px-4 pt-0 pb-3.5">
         {children}
       </td>
     </tr>
