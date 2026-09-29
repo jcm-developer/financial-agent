@@ -279,8 +279,6 @@ function Overview({ profile }: { profile: ProfileSummary }) {
           <div className="mb-2 flex items-baseline justify-between gap-3">
             <p className="text-caption text-text-muted">
               Curva de capital
-              {curve.length > 0 &&
-                ` · ${curve.length} ${curve.length === 1 ? "marca" : "marcas"}, la línea discontinua es el capital inicial`}
             </p>
             <Link
               to={`/p/${encodeURIComponent(profile.name)}/analytics`}
