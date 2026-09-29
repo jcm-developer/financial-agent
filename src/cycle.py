@@ -1029,6 +1029,11 @@ class TradingCycle:
         # Cuantas puede abrir este ciclo (F9.18). 0 = sin tope.
         per_cycle_cap = self.settings.max_new_positions_per_cycle
         opened_this_cycle = 0
+        # Who took each slot, so a `buy` left out can be told why: the ranking
+        # decides, and a rejection that cannot name who beat it reads as arbitrary.
+        opened: list[tuple[str, int]] = []
+        # The screener's order, 1-based, which breaks ties in conviction.
+        screener_rank = {symbol: index + 1 for index, symbol in enumerate(candidates)}
 
         # ⚠️ **Dos pasadas: primero se analiza todo, y solo entonces se reparte**
         # (F9.19). Hasta el 2026-09-26 el ciclo analizaba y ejecutaba en la misma
@@ -1091,7 +1096,11 @@ class TradingCycle:
             log.info(
                 "Propuestas de compra por convicción: %s",
                 ", ".join(
-                    f"{p.symbol} ({p.conviction}{', ampliar' if p.kind == 'exit' else ''})"
+                    f"{p.symbol} ({p.conviction}"
+                    + (", ampliar" if p.kind == "exit"
+                       else f", {screener_rank[p.symbol]}.º del screener"
+                       if p.symbol in screener_rank else "")
+                    + ")"
                     for p, _, _ in ranked
                 ),
             )
@@ -1116,8 +1125,7 @@ class TradingCycle:
                 reason = (
                     "Sin plaza: la cartera ha llegado a su máximo de posiciones."
                     if full else
-                    f"Sin plaza: el ciclo ya ha abierto {opened_this_cycle} entradas, "
-                    f"su tope. Había propuestas con más convicción."
+                    _no_slot_reason(proposal, opened, screener_rank)
                 )
                 self._save_risk_event(
                     cycle_id, portfolio_id, symbol, _rejection("entry_cap", reason),
@@ -1153,6 +1161,7 @@ class TradingCycle:
                 decision_id, risk_event_id,
             ):
                 opened_this_cycle += 1
+                opened.append((symbol, proposal.conviction))
                 # Refreshed so the limits for the following proposals account for
                 # the position just opened.
                 account = self.broker.get_account_state()
@@ -1946,6 +1955,36 @@ class TradingCycle:
 
 
 # ----------------------------------------------------------------------
+
+def _no_slot_reason(
+    proposal: Proposal, opened: list[tuple[str, int]], rank: dict[str, int]
+) -> str:
+    """Why a `buy` got no slot, naming the entries that took them.
+
+    Until 2026-09-29 it always said «Había propuestas con más convicción», and
+    on the 28th that was false: SAP.DE lost its slot to BKT.MC at the same
+    conviction, 57, because BKT.MC was 2nd in the screener and SAP.DE 5th. The
+    tie-break was right —`sorted` is stable and F9.19 wrote it down— and the
+    sentence explaining it was not, so the rejection read as a coin toss.
+    """
+    winners = ", ".join(f"{symbol} ({conviction})" for symbol, conviction in opened)
+    reason = (
+        f"Sin plaza: el ciclo ya ha abierto {len(opened)} "
+        f"{'entrada' if len(opened) == 1 else 'entradas'}, su tope: {winners}."
+    )
+    tied = [symbol for symbol, conviction in opened if conviction == proposal.conviction]
+    if tied:
+        mine = rank.get(proposal.symbol)
+        theirs = ", ".join(
+            f"{symbol} {rank[symbol]}.º" for symbol in tied if symbol in rank
+        )
+        where = f" ({theirs}, frente a {mine}.º)" if mine and theirs else ""
+        reason += (
+            f" A igual convicción ({proposal.conviction}) entra la mejor situada en "
+            f"el screener{where}."
+        )
+    return reason
+
 
 def _rejection(rule: str, reason: str):
     from .models import RiskVerdict

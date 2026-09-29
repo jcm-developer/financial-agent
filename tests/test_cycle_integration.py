@@ -326,6 +326,31 @@ def test_a_buy_left_without_a_slot_says_so(db):
     assert [(e["symbol"], e["verdict"]) for e in events] == [("MSFT", "rejected")]
 
 
+def test_a_buy_left_without_a_slot_names_who_took_it(db):
+    """The rejection used to say «Había propuestas con más convicción» even
+    when the winner had the same conviction; now it names the winner and, on a
+    tie, the screener order that broke it."""
+    settings = make_settings(
+        watchlist=("AAPL", "MSFT", "NVDA"), max_new_positions_per_cycle=1
+    )
+    market = StubMarketData({s: rising() for s in ("AAPL", "MSFT", "NVDA")})
+    llm = StubLLM(entry={**BUY, "conviction": 70}, exit_=HOLD_EXIT)
+
+    report = make_cycle(db, settings, llm, market).run()
+
+    reasons = [
+        e["reason"] for e in db.query(
+            "select reason from risk_events where cycle_id = ? and rule = 'entry_cap' "
+            "order by created_at", (report.cycle_id,),
+        )
+    ]
+    assert len(reasons) == 2
+    assert all("AAPL (70)" in reason for reason in reasons)
+    assert all("A igual convicción (70)" in reason for reason in reasons)
+    assert "AAPL 1.º, frente a 2.º" in reasons[0]
+    assert "más convicción" not in " ".join(reasons)
+
+
 def test_a_full_book_asks_the_model_nothing(db):
     """The quota-saving cut stays where it does save: with no free slot there is
     nothing to choose between."""

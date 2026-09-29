@@ -4870,10 +4870,13 @@ Tres retoques pedidos después, y uno encontrado de paso:
       la de SAP—, 26 s y 43.642 tokens de entrada con 1.864 de salida. La entrada es alta
       porque el contexto viaja en cada vuelta de la consulta y otra vez en la respuesta.
 
-      ⚠️ **Lo encontró el propio chat y no está arreglado:** SAP.DE no fue un `hold`. Fue un
-      `buy` de convicción 57 que `entry_cap` rechazó, y BKT.MC, que entró, tenía también 57.
-      F9.19 reparte de más a menos convicción, pero **el desempate a igual convicción no está
-      escrito en ningún sitio** que se lea desde fuera.
+      **Lo encontró el propio chat, y se corrigió el mismo día:** SAP.DE no fue un `hold`.
+      Fue un `buy` de convicción 57 que `entry_cap` rechazó, y BKT.MC, que entró, tenía
+      también 57. El desempate **sí estaba escrito** —`sorted` es estable, así que a igual
+      convicción manda el screener, y BKT.MC iba 2.º frente al 5.º de SAP.DE—; lo que mentía
+      era el motivo, que decía siempre «Había propuestas con más convicción». Ahora nombra
+      las entradas que se llevaron las plazas y, si empatan, el puesto de cada una en el
+      screener. Los rechazos ya escritos conservan la frase vieja.
 
 ---
 

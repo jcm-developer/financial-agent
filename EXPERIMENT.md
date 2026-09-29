@@ -303,7 +303,10 @@ preguntaban, así que la convicción del modelo no decidía qué se compraba.
 candidatos, y solo entonces se reparte entre los que dijeron `buy`, **de más a
 menos convicción** —a igual convicción, en el orden del screener—. Las que se
 quedan fuera por el tope quedan registradas con la regla `entry_cap`, «sin plaza en
-el ciclo». Dos consecuencias:
+el ciclo», y el motivo nombra las entradas que se llevaron las plazas; si alguna tenía
+la misma convicción, dice además el puesto de cada una en el screener. Hasta el
+2026-09-29 decía siempre «Había propuestas con más convicción», también cuando era un
+empate, y un desempate que no se explica se lee como azar. Dos consecuencias:
 
 - **Con plazas libres se analizan siempre los veinte**, en vez de cortar al llenar
   el tope. Con la cartera llena no se pregunta nada, que es donde el corte sí
